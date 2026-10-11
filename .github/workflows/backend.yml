@@ -1,0 +1,43 @@
+name: backend
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Backend check and build
+        run: ./gradlew check build --console=plain --no-daemon
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-verification-reports
+          path: |
+            build/test-results/test/*.xml
+            build/reports/tests/test/
+            build/reports/pmd/*.xml
+          if-no-files-found: error
+          retention-days: 7

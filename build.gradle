@@ -1,0 +1,97 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.diffplug.spotless' version '8.10.4'
+}
+
+group = 'com.mirinae'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    pmdTool
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    pmdTool 'net.sourceforge.pmd:pmd-cli:7.28.0'
+    pmdTool 'net.sourceforge.pmd:pmd-java:7.28.0'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Werror']
+}
+
+spotless {
+    java {
+        // Spotless 8.10.4는 JDK 21에서 GJF 1.28.0을 권장한다. 1.37.0은
+        // jdk.compiler/com.sun.tools.javac.util export 부재로 JDK 21에서 실행되지 않는다.
+        googleJavaFormat('1.28.0')
+    }
+}
+
+// Gradle 기본 PMD 연동은 잘못된 ruleset을 로그만 남기고 성공 처리할 수 있다.
+// 공식 CLI의 오류·위반 종료 코드를 JavaExec가 그대로 gate 실패로 전달한다.
+sourceSets.each { sourceSet ->
+    def reportFile = layout.buildDirectory.file("reports/pmd/${sourceSet.name}.xml")
+    def pmdLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    tasks.register("pmd${sourceSet.name.capitalize()}", JavaExec) {
+        group = 'verification'
+        description = "${sourceSet.name} Java 소스의 PMD 오류와 규칙 위반을 검사한다."
+        dependsOn tasks.named(sourceSet.classesTaskName)
+        classpath = configurations.pmdTool
+        mainClass = 'net.sourceforge.pmd.cli.PmdCli'
+        javaLauncher = pmdLauncher
+        inputs.files(sourceSet.allJava).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.files(sourceSet.compileClasspath)
+        inputs.file('config/pmd/pmd-ruleset.xml')
+        outputs.file(reportFile)
+        doFirst {
+            reportFile.get().asFile.parentFile.mkdirs()
+            // 선택한 Java 21 런처의 jrt-fs.jar를 명시하고, 존재하지 않는 classpath 항목은 제외한다.
+            def jrtFs = pmdLauncher.get().metadata.installationPath.file('lib/jrt-fs.jar').asFile
+            def auxClasspath =
+                (sourceSet.runtimeClasspath.files + [jrtFs])
+                    .findAll { it.exists() }
+                    .collect { it.absolutePath }
+                    .join(File.pathSeparator)
+            args = [
+                'check', '--dir', sourceSet.allJava.srcDirs.collect { it.absolutePath }.join(','),
+                '--rulesets', file('config/pmd/pmd-ruleset.xml').absolutePath,
+                '--aux-classpath', auxClasspath,
+                '--use-version', 'java-21', '--format', 'xml',
+                '--report-file', reportFile.get().asFile.absolutePath,
+                '--fail-on-error', '--fail-on-violation', '--no-progress', '--no-cache'
+            ]
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn 'pmdMain', 'pmdTest'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

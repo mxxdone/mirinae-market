@@ -1,0 +1,34 @@
+# Build outputs
+build/
+bin/
+out/
+
+# Gradle caches (wrapper jar itself must be tracked)
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local evidence, caches, downloaded tools (retained locally, never tracked)
+.local/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+.sts4-cache
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Browser / Playwright artifacts
+node_modules/
+playwright-report/
+blob-report/
+test-results/
+.cache/ms-playwright/

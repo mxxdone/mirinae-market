@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: mirinae-market
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs

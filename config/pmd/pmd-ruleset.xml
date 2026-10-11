@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="mirinae-market-backend"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+    <description>미사용·오류 가능성·동시성에 한정한 PMD 검사.</description>
+
+    <!-- 구조 위반을 의도적으로 담은 ArchUnit fixture는 PMD 대상에서 제외한다. -->
+    <exclude-pattern>.*[\\/]architecture[\\/]fixture[\\/].*</exclude-pattern>
+
+    <!-- 미사용 코드 -->
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/bestpractices.xml/UnusedFormalParameter"/>
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryImport"/>
+
+    <!-- 오류 가능성 -->
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock"/>
+    <rule ref="category/java/errorprone.xml/AvoidCatchingGenericException"/>
+    <rule ref="category/java/errorprone.xml/CloseResource"/>
+    <rule ref="category/java/errorprone.xml/AssignmentToNonFinalStatic"/>
+    <rule ref="category/java/errorprone.xml/CompareObjectsWithEquals"/>
+    <rule ref="category/java/errorprone.xml/DoNotThrowExceptionInFinally"/>
+    <rule ref="category/java/errorprone.xml/ProperCloneImplementation"/>
+    <rule ref="category/java/errorprone.xml/UnconditionalIfStatement"/>
+
+    <!-- 동시성 -->
+    <rule ref="category/java/multithreading.xml"/>
+</ruleset>

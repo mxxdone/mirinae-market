@@ -2,6 +2,7 @@ package com.mirinae.market;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.mirinae.market.support.PostgresTestConfig;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -9,8 +10,10 @@ import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 
 /** 서버 기동과 핵심 HTTP 엔드포인트 응답을 검증한다. */
+@Import(PostgresTestConfig.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class MirinaeMarketApplicationTests {
 
@@ -38,7 +41,14 @@ class MirinaeMarketApplicationTests {
     HttpResponse<String> response = get("/v3/api-docs");
 
     assertThat(response.statusCode()).isEqualTo(200);
-    assertThat(response.body()).contains("미리내 마켓 API");
+    assertThat(response.body())
+        .contains(
+            "미리내 마켓 API",
+            "/api/auth/login",
+            "/api/auth/logout",
+            "application/x-www-form-urlencoded",
+            "X-CSRF-TOKEN",
+            "DUPLICATE_ACCOUNT");
   }
 
   @Test

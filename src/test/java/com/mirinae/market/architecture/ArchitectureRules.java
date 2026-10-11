@@ -14,9 +14,9 @@ import com.tngtech.archunit.library.dependencies.SliceIdentifier;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
 
 /**
- * 백엔드 3계층·모듈 경계·타입 격리 규칙을 ArchUnit으로 정의한다. Phase 1에는 생산 모듈이 없으므로 모듈 관련
- * 선택자(moduleBoundaries·noModuleCycles·noClassCycles·webTypesNotInBusiness)는 생산 코드에서 비어 있고, 전용
- * fixture로 검출을 검증한다.
+ * 백엔드 3계층·모듈 경계·타입 격리 규칙을 ArchUnit으로 정의한다. 생산 모듈 선택자가 비면 실패하며 모듈 관련
+ * 선택자(moduleBoundaries·noModuleCycles·noClassCycles·webTypesNotInBusiness)의 허용·금지 의존성은 전용 fixture로
+ * 검출을 검증한다.
  */
 final class ArchitectureRules {
 
@@ -38,8 +38,7 @@ final class ArchitectureRules {
     return com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes()
         .that()
         .resideInAPackage("..modules..")
-        .should(new ModuleBoundariesCondition())
-        .allowEmptyShould(true);
+        .should(new ModuleBoundariesCondition());
   }
 
   /**
@@ -74,8 +73,7 @@ final class ArchitectureRules {
         .should()
         .dependOnClassesThat()
         .resideInAnyPackage(
-            "jakarta.servlet..", "org.springframework.web..", "org.springframework.http..")
-        .allowEmptyShould(true);
+            "jakarta.servlet..", "org.springframework.web..", "org.springframework.http..");
   }
 
   /** 기능·계층 코드가 애플리케이션 진입점을 역참조하지 못하게 한다. */
@@ -95,17 +93,12 @@ final class ArchitectureRules {
         .resideInAPackage("..modules..")
         .should()
         .dependOnClassesThat()
-        .resideInAPackage(COMPOSITION_ROOT_CONFIG_PACKAGE + "..")
-        .allowEmptyShould(true);
+        .resideInAPackage(COMPOSITION_ROOT_CONFIG_PACKAGE + "..");
   }
 
   /** 기능 모듈 간 순환 의존을 금지한다. */
   static ArchRule noModuleCycles() {
-    return SlicesRuleDefinition.slices()
-        .matching("..modules.(*)..")
-        .should()
-        .beFreeOfCycles()
-        .allowEmptyShould(true);
+    return SlicesRuleDefinition.slices().matching("..modules.(*)..").should().beFreeOfCycles();
   }
 
   /** 클래스 간 순환 의존을 금지한다. */
@@ -123,11 +116,7 @@ final class ArchitectureRules {
             return "각 클래스";
           }
         };
-    return SlicesRuleDefinition.slices()
-        .assignedFrom(classes)
-        .should()
-        .beFreeOfCycles()
-        .allowEmptyShould(true);
+    return SlicesRuleDefinition.slices().assignedFrom(classes).should().beFreeOfCycles();
   }
 
   private static String featureOf(JavaClass javaClass) {

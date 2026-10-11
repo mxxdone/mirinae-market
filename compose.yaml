@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:17.10
+    environment:
+      POSTGRES_DB: mirinae
+      POSTGRES_USER: mirinae
+      POSTGRES_PASSWORD: mirinae-local
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mirinae -d mirinae"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  postgres-data:

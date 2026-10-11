@@ -57,6 +57,19 @@ class StructureRulesTest {
   }
 
   @Test
+  void productionModuleSelectorsMustNotBeEmpty() {
+    JavaClasses classes = importClasses(com.mirinae.market.config.OpenApiConfig.class);
+    for (ArchRule rule :
+        List.of(
+            ArchitectureRules.moduleBoundaries(),
+            ArchitectureRules.webTypesNotInBusiness(),
+            ArchitectureRules.modulesMustNotReferenceCompositionRootConfig(),
+            ArchitectureRules.noModuleCycles())) {
+      assertRuleFails(rule, classes);
+    }
+  }
+
+  @Test
   void positiveFixturesSatisfyAllArchitectureRules() {
     JavaClasses classes =
         new ClassFileImporter().importPackages("com.mirinae.market.architecture.fixture.positive");

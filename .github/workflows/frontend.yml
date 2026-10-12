@@ -1,0 +1,150 @@
+name: frontend
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend check and build
+        working-directory: frontend
+        run: npm run check && npm run build
+
+  frontend-e2e:
+    needs: frontend-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.10
+        env:
+          POSTGRES_DB: mirinae_frontend_test
+          POSTGRES_USER: mirinae_test
+          POSTGRES_PASSWORD: ${{ secrets.FRONTEND_TEST_DB_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mirinae_test -d mirinae_frontend_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DB_URL: jdbc:postgresql://127.0.0.1:5432/mirinae_frontend_test
+      DB_USERNAME: mirinae_test
+      DB_PASSWORD: ${{ secrets.FRONTEND_TEST_DB_PASSWORD }}
+      BACKEND_URL: http://127.0.0.1:8081
+      E2E_BUYER_LOGIN_ID: ${{ secrets.E2E_BUYER_LOGIN_ID }}
+      E2E_SELLER_A_LOGIN_ID: ${{ secrets.E2E_SELLER_A_LOGIN_ID }}
+      E2E_SELLER_B_LOGIN_ID: ${{ secrets.E2E_SELLER_B_LOGIN_ID }}
+      E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build integration backend
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bootJar --console=plain --no-daemon
+
+      - name: Start integration backend
+        run: |
+          mkdir -p .local/verification
+          java -jar build/libs/mirinae-market-0.0.1-SNAPSHOT.jar --server.port=8081 --spring.profiles.active=demo > .local/verification/frontend-backend.log 2>&1 &
+          echo $! > .local/verification/frontend-backend.pid
+          python3 - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:8081/actuator/health', timeout=2) as response:
+                      if json.load(response)['status'] == 'UP':
+                          break
+              except (OSError, ValueError):
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit('Integration backend did not become ready')
+          PY
+
+      - name: Resolve demo store numbers
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          for suffix in A B; do
+            key="E2E_SELLER_${suffix}_LOGIN_ID"
+            login_id="${!key}"
+            test -n "$login_id"
+            store_id=$(printf '%s\n' "SELECT s.id FROM stores s JOIN accounts a ON a.id = s.owner_account_id WHERE a.login_id = :'seller_login';" | docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "seller_login=$login_id" -At)
+            [[ "$store_id" =~ ^[1-9][0-9]*$ ]]
+            echo "E2E_STORE_${suffix}_ID=$store_id" >> "$GITHUB_ENV"
+          done
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser integration tests
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Stop integration backend
+        if: always()
+        run: |
+          if [ -f .local/verification/frontend-backend.pid ]; then
+            kill "$(cat .local/verification/frontend-backend.pid)" || true
+          fi
+
+      - name: Upload frontend verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-verification-reports
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            .local/verification/frontend-backend.log
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

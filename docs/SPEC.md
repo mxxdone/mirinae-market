@@ -160,7 +160,7 @@
 
 - GET /api/markets: 시장 목록. GET /api/markets/{marketId}/offers?query=&page=0&size=20: 내일 판매 검색. GET /api/markets/{marketId}/offers/{offerId}: 공개 상세.
 - POST /api/seller/stores/{storeId}/products: 상품 등록(201). GET /api/seller/stores/{storeId}/products?page=0&size=20: 본인 상품 목록. PUT /api/seller/stores/{storeId}/products/{productId}: 상품 수정.
-- PUT /api/seller/stores/{storeId}/pickup-windows/{pickupDate}: 매장 수령 시간 등록·수정. PUT /api/seller/stores/{storeId}/products/{productId}/offers/{pickupDate}: 날짜별 판매 조건 등록·수정(200).
+- GET /api/seller/stores/{storeId}/pickup-windows/{pickupDate}: 내일의 저장된 본인 매장 수령 시간(미등록 404). PUT /api/seller/stores/{storeId}/pickup-windows/{pickupDate}: 매장 수령 시간 등록·수정. PUT /api/seller/stores/{storeId}/products/{productId}/offers/{pickupDate}: 날짜별 판매 조건 등록·수정(200).
 - Given 양파 3kg 상품과 별도 WEIGHT·3000 입력 / When 9,000원·20포장으로 내일 판매 등록 / Then 실제 DB에 저장되고 해당 시장에서 포장 가격 9,000원·100g당 300.00원이 표시된다.
 - Given 1kg 10,000원과 100g 1,500원 상품 / When 검색 / Then 각 보조 가격은 100g당 1,000.00원과 1,500.00원이며 상품을 자동 묶거나 가격순 정렬하지 않는다.
 - Given 서로 다른 시장의 상품 / When 한 시장에서 검색·상세 조회 / Then 타 시장 상품은 목록에 없고 타 시장 상세는 404다.
@@ -196,3 +196,5 @@
 - Given 판매자 대시보드의 집계 대상 원본이 있음 / When 기준 조회를 수행함 / Then 정의된 주문·구매자 건수와 결제·환불 금액이 원본 기준 기대값과 일치함.
 
 미정 규칙 확정 후 정상·실패·경계 수용 기준을 보완한다. 현재 초안은 기능 검증 완료를 의미하지 않는다.
+
+- Given 본인 매장 수령 시간이 저장됨 / When 판매자가 내일 수령 시간을 조회함 / Then 저장값이 복원된다. 미등록은 404, 다른 매장·역할은 403, 미로그인은 401이다.

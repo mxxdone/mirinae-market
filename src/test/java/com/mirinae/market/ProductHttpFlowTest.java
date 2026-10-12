@@ -145,6 +145,9 @@ class ProductHttpFlowTest {
                   "SELECT count(*) FROM daily_offers WHERE product_id = ?", Long.class, productId))
           .isZero();
       JsonNode offer = publish(seller, first, productId, 9000, 20);
+      HttpResponse<String> restoredWindow = seller.get(windowPath(first, DATE));
+      assertThat(restoredWindow.statusCode()).isEqualTo(200);
+      assertThat(seller.json(restoredWindow).get("startTime").asString()).startsWith("14:00");
       assertThat(offer.get("productName").asString()).isEqualTo("국내산 양파 3kg");
       assertThat(offer.get("unitAmount").asInt()).isEqualTo(3000);
       assertThat(offer.get("priceWon").asInt()).isEqualTo(9000);
@@ -310,6 +313,9 @@ class ProductHttpFlowTest {
       assertThat(seller.post(productPath(first), body, "application/json", false).statusCode())
           .isEqualTo(403);
       assertThat(seller.get(productPath(otherMarket)).statusCode()).isEqualTo(403);
+      assertThat(seller.get(windowPath(otherMarket, DATE)).statusCode()).isEqualTo(403);
+      assertThat(buyer.get(windowPath(first, DATE)).statusCode()).isEqualTo(403);
+      assertThat(anonymous.get(windowPath(first, DATE)).statusCode()).isEqualTo(401);
       assertThat(
               seller
                   .put(

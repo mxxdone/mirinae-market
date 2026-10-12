@@ -23,6 +23,10 @@ class MarketEntity {
     this.name = name;
   }
 
+  MarketRow toRow() {
+    return new MarketRow(id, name);
+  }
+
   long id() {
     return id;
   }

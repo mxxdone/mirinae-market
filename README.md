@@ -1,6 +1,6 @@
 # 미리내 마켓
 
-Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품 등록·내일 판매 조건·시장 검색·단위당 보조 가격을 제공한다. 주문·결제는 후속 페이즈다.
+Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품 등록·오늘 판매 조건·시장 검색·단위당 보조 가격을 제공한다. 주문·결제는 후속 페이즈다.
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
 - 요구사항·계정 입력 규칙·API 계약: [docs/SPEC.md](docs/SPEC.md)
@@ -121,7 +121,7 @@ Chromium을 별도로 설치하는 환경에서는 `npx playwright install chrom
 
 프런트엔드 CI는 `.github/workflows/frontend.yml`에서 검사·빌드와 실제 PostgreSQL·백엔드·브라우저 검증을 수행한다. 저장소에 `FRONTEND_TEST_DB_PASSWORD`, `E2E_BUYER_LOGIN_ID`, `E2E_SELLER_A_LOGIN_ID`, `E2E_SELLER_B_LOGIN_ID`, `E2E_DEMO_PASSWORD` GitHub Secrets를 설정해야 한다. 계정은 위 데모 프로필과 일치해야 하며 DB 비밀번호는 CI의 독립 테스트 DB용이다. 원격 CI 결과는 로컬 통과와 별도로 확인한다.
 
-## 내일 판매 등록·검색
+## 오늘 판매 등록·검색
 
 데모 판매자로 로그인하고 본인 매장 번호를 지정한다. 기존 HTTP 예시의 로그인 ID를 demo_seller_a로 바꾼 뒤 로그인 후 CSRF 토큰을 다시 조회한다. 상품명과 판매 구성 숫자는 별도이며 상품명을 분석해 숫자를 추출하지 않는다.
 
@@ -129,14 +129,14 @@ Chromium을 별도로 설치하는 환경에서는 `npx playwright install chrom
 $storeId = Read-Host '본인 매장 번호'
 $ownedStore = Invoke-RestMethod "$apiBase/api/seller/stores/$storeId" -WebSession $marketSession
 $headers = @{ 'X-CSRF-TOKEN' = $csrf }
-$pickupDate = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'Korea Standard Time').AddDays(1).ToString('yyyy-MM-dd')
+$pickupDate = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'Korea Standard Time').ToString('yyyy-MM-dd')
 
 $product = Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/products" -Method Post `
   -WebSession $marketSession -Headers $headers -ContentType 'application/json' `
   -Body (@{ name = '국내산 양파 3kg'; description = '한 봉지'; unitType = 'WEIGHT'; unitAmount = 3000 } | ConvertTo-Json)
 Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/pickup-windows/$pickupDate" -Method Put `
   -WebSession $marketSession -Headers $headers -ContentType 'application/json' `
-  -Body (@{ startTime = '14:00'; endTime = '18:00' } | ConvertTo-Json)
+  -Body (@{ startTime = '14:00'; endTime = '18:00'; orderDeadline = '13:00' } | ConvertTo-Json)
 Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/products/$($product.id)/offers/$pickupDate" -Method Put `
   -WebSession $marketSession -Headers $headers -ContentType 'application/json' `
   -Body (@{ priceWon = 9000; onlineQuantity = 20 } | ConvertTo-Json)
@@ -146,18 +146,22 @@ Invoke-RestMethod "$apiBase/api/markets/$($ownedStore.marketId)/offers?query=$qu
 
 이 조회는 포장 가격 9,000원과 표시용 100g당 300.00원을 함께 반환한다. 개수 방식은 COUNT와 한 판매 단위에 포함된 개수를 입력하고 1개당 가격을 표시한다. 구매 수량은 후속 주문에서 포장 개수로 취급한다. 자동 상품 묶기·가격 정렬은 제공하지 않는다. 시장 선택·검색·상세에는 로그인이 필요하다.
 
-같은 매장·수령일의 모든 상품은 공통 수령 시간을 사용한다. 판매 조건 PUT을 다시 호출하면 같은 제안의 가격·온라인 수량을 수정한다. 등록한 판매 조건이 있는 상품의 이름·판매 구성 변경은 새 상품으로 등록한다. 상품 설명은 수정할 수 있다. 한국 시간 기준 수령일 00시부터 해당 날짜 수정과 구매자 공개가 종료되며 다음 수령일에 같은 상품을 다시 등록할 수 있다.
+같은 매장·수령일의 모든 상품은 공통 수령 시간을 사용한다. 판매 조건 PUT을 다시 호출하면 같은 제안의 가격·온라인 수량을 수정한다. 등록한 판매 조건이 있는 상품의 이름·판매 구성 변경은 새 상품으로 등록한다. 상품 설명은 수정할 수 있다. 한국 시간 기준 당일만 판매하며 매장의 주문 마감 정각부터 판매 조건 수정과 구매자 공개가 종료된다. 다음 날은 가격·수량을 확인해 수동 공개한다.
 
 검증은 실제 HTTP·PostgreSQL에서 등록 → 공개 → 구매자 검색·상세와 역할/소유권·시장 격리·CSRF·가격 환산·잘못된 숫자·수정 실패 데이터 보존·자정 경계를 확인한다. 날짜 경계 테스트에서만 서버 Clock을 고정하며 HTTP·DB·인증은 mock하지 않는다. 프런트엔드와 주문 연동은 이번 Phase 3 백엔드 범위에 포함되지 않는다.
 
 ## Phase 3 DB 변경과 복구
 
-V2는 상품·수령 시간·판매 조건 테이블을 추가하며 기존 계정·시장·매장 데이터와 V1 마이그레이션을 변경하지 않는다. 이미 운영 중인 DB에서 V1을 V2로 올리는 경로도 통합 테스트로 검증한다. 실제 배포 전에는 pg_dump로 전체 DB를 백업하고 이전 jar를 보관한다. 문제가 생기면 앱을 중지하고 이전 jar로 되돌리되 V2 테이블을 즉시 삭제하거나 Flyway 이력을 수동 수정하지 않는다. DB 복원이 필요하면 서비스 정지 상태에서 백업을 별도 빈 PostgreSQL DB에 복원·검증한 후 연결을 전환한다. 현재 작업은 Testcontainers 검증이며 운영 배포는 수행하지 않는다.
+V2는 상품·수령 시간·판매 조건 테이블을 추가한다. V3·V4는 상품 삭제 표시와 주문 마감을 추가하고 기존 시간의 마감을 수령 시작으로 채운다. V1·V2 파일과 기존 계정·상품·판매 이력은 보존한다. 기존 데이터가 있는 V2에서 최신 버전으로 올리는 경로도 통합 테스트로 검증한다. 적용 전에는 pg_dump로 DB를 백업하고 이전 jar를 보관한다. 복구 시 서비스를 중지하고 백업을 별도 DB에 복원·검증한 후 앱 버전과 함께 연결을 전환한다. 이전 앱은 삭제 표시를 무시하므로 변경된 DB에 이전 jar만 연결해 공개하지 않는다. Flyway 이력을 수동 수정하거나 테이블을 삭제하지 않는다. 자세한 제약은 ADR-005를 참조한다.
 
 ## Phase 3 화면 사용
 
-구매자는 로그인한 계정 화면에서 **시장 상품 둘러보기**를 선택한다. 시장·상품명 검색, 포장 가격/100g당·1개당 보조 가격, 매장별 수령 시간과 상세를 확인할 수 있다. 판매자는 담당 매장 아래 **상품과 내일 판매 관리**에서 상품명·별도 구성 숫자를 등록하고 매장 수령 시간을 저장한 뒤 가격·온라인 포장 수량으로 내일 판매를 공개한다. 중량 입력의 g/kg 선택은 서버 전송 전에 정확히 g로 변환한다.
+구매자는 로그인한 계정 화면에서 **시장 상품 둘러보기**를 선택한다. 시장·상품명 검색, 포장 가격/100g당·1개당 보조 가격, 매장별 수령 시간과 상세를 확인할 수 있다. 판매자는 담당 매장 아래 **상품과 오늘 판매 관리**에서 상품명·별도 구성 숫자를 등록하고 주문 마감과 매장 수령 시간을 저장한 뒤 가격·온라인 포장 수량으로 오늘 판매를 공개한다. 중량 입력의 g/kg 선택은 서버 전송 전에 정확히 g로 변환한다.
 
-저장된 수령 시간은 새로고침 후 서버에서 복원한다. 상품을 선택하면 내일의 공개 조건을 복원하며 설명·가격·수량을 수정할 수 있다. 세션 만료는 화면 상태와 이전 CSRF를 폐기하며 재로그인을 안내한다. 전송 실패를 성공으로 표시하거나 변경 요청을 자동 재전송하지 않는다.
+저장된 수령 시간은 새로고침 후 서버에서 복원한다. 상품을 선택하면 오늘의 공개 조건을 복원하며 설명·가격·수량을 수정할 수 있다. 세션 만료는 화면 상태와 이전 CSRF를 폐기하며 재로그인을 안내한다. 전송 실패를 성공으로 표시하거나 변경 요청을 자동 재전송하지 않는다.
 
 기존 5173 개발 서버를 보존하며 별도 E2E를 실행할 때는 `$env:E2E_PORT = '5175'`를 추가하고 `$env:BACKEND_URL`을 실제 테스트 백엔드 주소로 지정한다. CI와 미지정 환경은 기존 5173을 사용한다. 테스트에는 앞서 설명한 데모 계정 환경 변수와 실제 백엔드·DB가 필요하다. 화면의 시각 검증 PNG는 Git에서 제외한 `output/playwright/`에 생성된다.
+
+상품 단건 삭제는 기록을 보존하고 목록·공개 판매에서 제외합니다. 매장별 주문 마감 정각부터 공개 조회와 판매 조건 변경을 중단합니다. 시간 저장 API에는 orderDeadline이 필수입니다. DB 변경 복구의 제약은 ADR-005를 참조합니다.
+
+당일 판매 E2E는 실행 시간에 따른 마감 실패를 피하도록 시간만 고정합니다. 실제 HTTP·PostgreSQL·세션 인증을 사용하며 서버는 `demo,e2e` 프로필과 `--e2e.fixed-instant=2026-10-13T03:00:00Z`, 브라우저 테스트는 `$env:E2E_FIXED_INSTANT = '2026-10-13T03:00:00Z'`를 함께 지정합니다. 일반 서버는 `demo` 프로필만 사용하므로 실제 시간으로 동작합니다. e2e 프로필에서 고정 시각이 없거나 잘못되면 실패하며 skip하지 않습니다.

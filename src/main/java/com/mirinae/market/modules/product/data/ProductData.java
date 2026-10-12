@@ -102,6 +102,20 @@ public class ProductData {
         end);
   }
 
+  public Optional<WindowRow> findWindow(long storeId, LocalDate date) {
+    return jdbc
+        .query(
+            "SELECT start_time, end_time FROM pickup_windows WHERE store_id = ? AND pickup_date = ?",
+            (rs, row) ->
+                new WindowRow(
+                    rs.getObject("start_time", LocalTime.class),
+                    rs.getObject("end_time", LocalTime.class)),
+            storeId,
+            date)
+        .stream()
+        .findFirst();
+  }
+
   public boolean hasWindow(long storeId, LocalDate date) {
     return Boolean.TRUE.equals(
         jdbc.queryForObject(

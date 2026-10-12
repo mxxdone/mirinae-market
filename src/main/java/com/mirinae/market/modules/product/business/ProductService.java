@@ -118,6 +118,15 @@ public class ProductService {
     return offerView(data.detail(marketId, date, id).orElseThrow(ProductNotFoundException::new));
   }
 
+  public PickupWindowView window(String loginId, long storeId, LocalDate date) {
+    stores.ownedStore(loginId, storeId);
+    OfferRules.date(date, clock);
+    var row =
+        data.findWindow(storeId, date)
+            .orElseThrow(() -> new ProductNotFoundException("해당 날짜의 매장 수령 시간을 아직 등록하지 않았습니다."));
+    return new PickupWindowView(storeId, date, row.startTime(), row.endTime());
+  }
+
   public OfferPage search(long marketId, String query, int page, int size) {
     ProductRules.page(page, size);
     List<OfferRow> rows =

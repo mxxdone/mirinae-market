@@ -102,6 +102,16 @@ public class SellerProductController {
   }
 
   @Operation(
+      summary = "매장 수령 시간 조회",
+      description = "본인 매장의 내일 수령 시간을 복원합니다. 미등록은 404 NOT_FOUND이며 타 매장 정보는 반환하지 않습니다.")
+  @ApiResponse(responseCode = "200", description = "저장된 수령 시간")
+  @GetMapping("/pickup-windows/{pickupDate}")
+  public PickupWindowView window(
+      Principal principal, @PathVariable long storeId, @PathVariable LocalDate pickupDate) {
+    return products.window(principal.getName(), storeId, pickupDate);
+  }
+
+  @Operation(
       summary = "내일 판매 조건 등록·수정",
       description =
           "한 상품·수령일에 하나. 저장 즉시 공개하며 재등록은 같은 제안 ID의 가격·온라인 수량을 수정합니다. 00시부터 해당 날짜 수정은 거절됩니다. 주문 연동은 Phase 4 범위입니다.")

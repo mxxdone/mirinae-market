@@ -2,6 +2,8 @@
 build/
 bin/
 out/
+frontend/dist/
+frontend/*.tsbuildinfo
 
 # Gradle caches (wrapper jar itself must be tracked)
 .gradle/

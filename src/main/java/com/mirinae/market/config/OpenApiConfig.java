@@ -101,6 +101,26 @@ public class OpenApiConfig {
                   new ApiResponses()
                       .addApiResponse("204", new ApiResponse().description("로그아웃 완료"))
                       .addApiResponse("403", errorResponse("CSRF 토큰 누락·불일치: FORBIDDEN")));
+      api.getPaths()
+          .forEach(
+              (path, item) -> {
+                if (path.startsWith("/api/seller/") || path.startsWith("/api/markets")) {
+                  item.readOperationsMap()
+                      .forEach(
+                          (method, operation) -> {
+                            boolean mutation =
+                                method == PathItem.HttpMethod.POST
+                                    || method == PathItem.HttpMethod.PUT
+                                    || method == PathItem.HttpMethod.PATCH
+                                    || method == PathItem.HttpMethod.DELETE;
+                            operation.security(
+                                List.of(
+                                    mutation
+                                        ? csrfSecurity()
+                                        : new SecurityRequirement().addList("sessionCookie")));
+                          });
+                }
+              });
       api.path("/api/auth/login", new PathItem().post(login));
       api.path("/api/auth/logout", new PathItem().post(logout));
       api.getPaths().get("/api/accounts").getPost().security(List.of(csrfSecurity()));

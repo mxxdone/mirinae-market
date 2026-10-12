@@ -4,6 +4,7 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.account.business.AccountView;
 import com.mirinae.market.modules.store.data.StoreData;
 import com.mirinae.market.modules.store.data.StoreRow;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -14,6 +15,10 @@ public class StoreService {
   public StoreService(StoreData data, AccountService accounts) {
     this.data = data;
     this.accounts = accounts;
+  }
+
+  public List<MarketView> markets() {
+    return data.markets().stream().map(row -> new MarketView(row.id(), row.name())).toList();
   }
 
   public StoreView ownedStore(String loginId, long storeId) {

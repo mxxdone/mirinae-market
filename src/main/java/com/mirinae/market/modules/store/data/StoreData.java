@@ -1,5 +1,6 @@
 package com.mirinae.market.modules.store.data;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +13,13 @@ public class StoreData {
   StoreData(StoreJpaRepository stores, MarketJpaRepository markets) {
     this.stores = stores;
     this.markets = markets;
+  }
+
+  @Transactional(readOnly = true)
+  public List<MarketRow> markets() {
+    return markets.findAll(org.springframework.data.domain.Sort.by("id")).stream()
+        .map(MarketEntity::toRow)
+        .toList();
   }
 
   @Transactional(readOnly = true)

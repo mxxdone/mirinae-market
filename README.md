@@ -1,6 +1,6 @@
 # 미리내 마켓
 
-Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품·주문·결제는 후속 페이즈다.
+Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품 등록·내일 판매 조건·시장 검색·단위당 보조 가격을 제공한다. 주문·결제는 후속 페이즈다.
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
 - 요구사항·계정 입력 규칙·API 계약: [docs/SPEC.md](docs/SPEC.md)
@@ -120,3 +120,36 @@ npm run test:e2e
 Chromium을 별도로 설치하는 환경에서는 `npx playwright install chromium`을 실행하고 `PLAYWRIGHT_CHANNEL`을 지정하지 않는다. Playwright는 Vite를 시작하며 백엔드는 위 절차로 준비한다. `BACKEND_URL`을 변경했다면 Vite도 같은 값으로 다시 실행한다. 테스트 결과는 `frontend/playwright-report/`와 `frontend/test-results/`에 생성된다.
 
 프런트엔드 CI는 `.github/workflows/frontend.yml`에서 검사·빌드와 실제 PostgreSQL·백엔드·브라우저 검증을 수행한다. 저장소에 `FRONTEND_TEST_DB_PASSWORD`, `E2E_BUYER_LOGIN_ID`, `E2E_SELLER_A_LOGIN_ID`, `E2E_SELLER_B_LOGIN_ID`, `E2E_DEMO_PASSWORD` GitHub Secrets를 설정해야 한다. 계정은 위 데모 프로필과 일치해야 하며 DB 비밀번호는 CI의 독립 테스트 DB용이다. 원격 CI 결과는 로컬 통과와 별도로 확인한다.
+
+## 내일 판매 등록·검색
+
+데모 판매자로 로그인하고 본인 매장 번호를 지정한다. 기존 HTTP 예시의 로그인 ID를 demo_seller_a로 바꾼 뒤 로그인 후 CSRF 토큰을 다시 조회한다. 상품명과 판매 구성 숫자는 별도이며 상품명을 분석해 숫자를 추출하지 않는다.
+
+```powershell
+$storeId = Read-Host '본인 매장 번호'
+$ownedStore = Invoke-RestMethod "$apiBase/api/seller/stores/$storeId" -WebSession $marketSession
+$headers = @{ 'X-CSRF-TOKEN' = $csrf }
+$pickupDate = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'Korea Standard Time').AddDays(1).ToString('yyyy-MM-dd')
+
+$product = Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/products" -Method Post `
+  -WebSession $marketSession -Headers $headers -ContentType 'application/json' `
+  -Body (@{ name = '국내산 양파 3kg'; description = '한 봉지'; unitType = 'WEIGHT'; unitAmount = 3000 } | ConvertTo-Json)
+Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/pickup-windows/$pickupDate" -Method Put `
+  -WebSession $marketSession -Headers $headers -ContentType 'application/json' `
+  -Body (@{ startTime = '14:00'; endTime = '18:00' } | ConvertTo-Json)
+Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/products/$($product.id)/offers/$pickupDate" -Method Put `
+  -WebSession $marketSession -Headers $headers -ContentType 'application/json' `
+  -Body (@{ priceWon = 9000; onlineQuantity = 20 } | ConvertTo-Json)
+$query = [Uri]::EscapeDataString('양파')
+Invoke-RestMethod "$apiBase/api/markets/$($ownedStore.marketId)/offers?query=$query" -WebSession $marketSession
+```
+
+이 조회는 포장 가격 9,000원과 표시용 100g당 300.00원을 함께 반환한다. 개수 방식은 COUNT와 한 판매 단위에 포함된 개수를 입력하고 1개당 가격을 표시한다. 구매 수량은 후속 주문에서 포장 개수로 취급한다. 자동 상품 묶기·가격 정렬은 제공하지 않는다. 시장 선택·검색·상세에는 로그인이 필요하다.
+
+같은 매장·수령일의 모든 상품은 공통 수령 시간을 사용한다. 판매 조건 PUT을 다시 호출하면 같은 제안의 가격·온라인 수량을 수정한다. 등록한 판매 조건이 있는 상품의 이름·판매 구성 변경은 새 상품으로 등록한다. 상품 설명은 수정할 수 있다. 한국 시간 기준 수령일 00시부터 해당 날짜 수정과 구매자 공개가 종료되며 다음 수령일에 같은 상품을 다시 등록할 수 있다.
+
+검증은 실제 HTTP·PostgreSQL에서 등록 → 공개 → 구매자 검색·상세와 역할/소유권·시장 격리·CSRF·가격 환산·잘못된 숫자·수정 실패 데이터 보존·자정 경계를 확인한다. 날짜 경계 테스트에서만 서버 Clock을 고정하며 HTTP·DB·인증은 mock하지 않는다. 프런트엔드와 주문 연동은 이번 Phase 3 백엔드 범위에 포함되지 않는다.
+
+## Phase 3 DB 변경과 복구
+
+V2는 상품·수령 시간·판매 조건 테이블을 추가하며 기존 계정·시장·매장 데이터와 V1 마이그레이션을 변경하지 않는다. 이미 운영 중인 DB에서 V1을 V2로 올리는 경로도 통합 테스트로 검증한다. 실제 배포 전에는 pg_dump로 전체 DB를 백업하고 이전 jar를 보관한다. 문제가 생기면 앱을 중지하고 이전 jar로 되돌리되 V2 테이블을 즉시 삭제하거나 Flyway 이력을 수동 수정하지 않는다. DB 복원이 필요하면 서비스 정지 상태에서 백업을 별도 빈 PostgreSQL DB에 복원·검증한 후 연결을 전환한다. 현재 작업은 Testcontainers 검증이며 운영 배포는 수행하지 않는다.

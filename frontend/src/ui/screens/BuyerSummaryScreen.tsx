@@ -4,6 +4,7 @@ import { StatusAlert } from "../components/StatusAlert";
 
 interface BuyerSummaryScreenProps {
   user: UserMe;
+  onBrowse: () => void;
   onLogout: () => Promise<void> | void;
   isLoggingOut?: boolean;
   logoutError?: string | null;
@@ -15,6 +16,7 @@ interface BuyerSummaryScreenProps {
  */
 export function BuyerSummaryScreen({
   user,
+  onBrowse,
   onLogout,
   isLoggingOut = false,
   logoutError = null,
@@ -40,6 +42,9 @@ export function BuyerSummaryScreen({
         </div>
 
         <div className="summary-card-body">
+          <button type="button" className="btn-submit-primary" onClick={onBrowse}>
+            시장 상품 둘러보기
+          </button>
           {/* 계정 기본정보 테이블 */}
           <div>
             <table className="info-data-table">

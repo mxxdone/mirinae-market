@@ -61,3 +61,47 @@ export class ApiError extends Error {
     this.code = code;
   }
 }
+
+export type UnitType = "WEIGHT" | "COUNT";
+export interface MarketView {
+  id: number;
+  name: string;
+}
+export interface ProductInput {
+  name: string;
+  description: string;
+  unitType: UnitType;
+  unitAmount: number;
+}
+export interface ProductView extends ProductInput {
+  id: number;
+  storeId: number;
+}
+export interface OfferInput {
+  priceWon: number;
+  onlineQuantity: number;
+}
+export interface PickupWindowInput {
+  startTime: string;
+  endTime: string;
+}
+export interface OfferView extends OfferInput, PickupWindowInput {
+  id: number;
+  productId: number;
+  marketId: number;
+  storeId: number;
+  storeName: string;
+  productName: string;
+  description: string;
+  unitType: UnitType;
+  unitAmount: number;
+  pickupDate: string;
+  comparisonUnit: string;
+  comparisonPriceWon: number;
+}
+export interface ResultPage<T> {
+  items: T[];
+  page: number;
+  size: number;
+  hasNext: boolean;
+}

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { getCurrentSellerStore } from "../../api/store";
 import { ApiError, type StoreView, type UserMe } from "../../api/types";
+import { SellerProductsPanel } from "../components/SellerProductsPanel";
 import { StatusAlert } from "../components/StatusAlert";
 
 interface SellerStoreScreenProps {
@@ -67,7 +68,7 @@ export function SellerStoreScreen({
       className="screen-panel active"
       aria-labelledby="heading-seller-store"
     >
-      <div className="hybrid-card summary-container-card">
+      <div className="hybrid-card summary-container-card seller-workspace">
         {/* 상단 헤더 배너 */}
         <div className="seller-header-banner">
           <div className="summary-tag-row">
@@ -163,6 +164,10 @@ export function SellerStoreScreen({
                 </tbody>
               </table>
             </div>
+          )}
+
+          {store && (
+            <SellerProductsPanel key={store.id} store={store} onSessionExpired={onSessionExpired} />
           )}
 
           {/* 로그아웃 실패 시 인라인 오류 배너 (role="alert", 재시도 가능) */}

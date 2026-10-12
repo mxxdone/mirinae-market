@@ -202,6 +202,10 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#heading-seller-store")).toBeVisible();
     await expect(page.locator("#storeInfoId")).toBeVisible();
 
+    // 초기 상품·수령 시간 조회가 완료된 뒤 세션을 만료시켜 재조회 자체의 401을 검증한다.
+    await expect(page.getByRole("button", { name: "수령 시간 저장", exact: true })).toBeEnabled();
+    await expect(page.getByText("상품 목록을 불러오는 중입니다.", { exact: true })).toHaveCount(0);
+
     // 별도 HTTP 요청으로 세션 로그아웃 호출하여 서버 세션 무효화
     const csrfResponse = await context.request.get("/api/auth/csrf");
     const csrf = (await csrfResponse.json()) as { headerName: string; token: string };
@@ -211,7 +215,13 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     expect(logoutResponse.status()).toBe(204);
 
     // UI에서 매장 재조회 시도 -> 401 응답 발생
+    const expiredResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/seller/stores/me") && response.request().method() === "GET",
+    );
     await page.locator("#btnRefreshStore").click();
+
+    expect((await expiredResponse).status()).toBe(401);
 
     // 개인/매장 정보가 화면에서 즉시 폐기되고 로그인 화면으로 전환 및 안내 배너 표시 확인
     await expect(page.locator("#heading-login")).toBeVisible();

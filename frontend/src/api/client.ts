@@ -114,6 +114,8 @@ export async function refreshCsrfSilently(): Promise<void> {
  * 공통 API 오류 파싱 헬퍼
  */
 async function parseApiError(response: Response, defaultMessage: string): Promise<ApiError> {
+  // 401 이후에는 이전 세션의 CSRF를 재사용하지 않아 재로그인도 첫 요청부터 가능해야 한다.
+  if (response.status === 401) currentCsrf = null;
   try {
     const payload = (await response.json()) as Partial<ApiErrorPayload>;
     const code = payload.code || mapStatusToDefaultCode(response.status);
@@ -143,9 +145,10 @@ function mapStatusToDefaultCode(status: number): string {
 /**
  * GET 요청
  */
-export async function apiGet<T>(path: string): Promise<T> {
+export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetchWithTimeout(path, {
     method: "GET",
+    signal,
     credentials: "same-origin",
     headers: {
       Accept: "application/json",
@@ -238,4 +241,27 @@ export async function apiPostEmpty(path: string): Promise<void> {
     }
     throw await parseApiError(response, "요청 처리 중 오류가 발생했습니다.");
   }
+}
+
+/** PUT 변경 요청은 응답 유실 시 자동 재전송하지 않는다. */
+export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
+  const csrf = await getCsrfToken();
+  const response = await fetchWithTimeout(path, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    if (response.status === 403) void refreshCsrfSilently();
+    throw await parseApiError(
+      response,
+      "저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
+    );
+  }
+  return (await response.json()) as T;
 }

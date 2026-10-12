@@ -965,3 +965,262 @@ body {
     border-style: dotted;
   }
 }
+
+/* 기존 한지색·테라코타·먹색 스타일을 장보기와 상인 등록 화면에 이어서 적용한다. */
+.market-workspace {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+.market-header {
+  background: linear-gradient(120deg, var(--color-surface-panel), var(--color-surface-warm));
+}
+.market-body {
+  gap: 24px;
+}
+.market-search-bar {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.market-search-bar .field-group {
+  flex: 1;
+  min-width: 150px;
+}
+.market-search-bar .search-query {
+  flex: 2;
+}
+.offer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.offer-card {
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.offer-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.product-unit-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-panel);
+  color: var(--color-primary);
+  font-family: var(--font-serif);
+  font-size: 23px;
+  font-weight: 700;
+}
+.offer-store-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.offer-card h3,
+.offer-detail h2 {
+  overflow-wrap: anywhere;
+  font-family: var(--font-serif);
+  font-size: 20px;
+}
+.offer-price {
+  font-size: 25px;
+  font-weight: 800;
+  color: var(--color-text-main);
+  margin-top: 8px;
+}
+.offer-price span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-left: 4px;
+}
+.comparison-price {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.offer-pickup {
+  padding-top: 12px;
+  margin-top: auto;
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.offer-detail-button {
+  width: 100%;
+  margin-top: 9px;
+}
+.offer-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--color-surface-warm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.offer-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.offer-facts dt {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.offer-facts dd {
+  font-weight: 700;
+  margin-top: 3px;
+}
+.offer-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.market-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+.market-empty {
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  background: var(--color-surface-warm);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+.market-empty h2 {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.seller-product-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 24px;
+}
+.seller-product-panel {
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-warm);
+  min-width: 0;
+}
+.seller-product-panel h2 {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+.seller-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.seller-product-choice {
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-main);
+  background: white;
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.seller-product-choice[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.product-form-row {
+  display: flex;
+  gap: 12px;
+}
+.product-form-row > .field-group {
+  flex: 1;
+  min-width: 0;
+}
+.product-textarea {
+  padding: 12px 14px;
+  min-height: 90px;
+  resize: vertical;
+}
+.market-success {
+  padding: 14px;
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 860px) {
+  .offer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .seller-product-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 540px) {
+  .offer-grid {
+    grid-template-columns: 1fr;
+  }
+  .market-search-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .market-search-bar .field-group {
+    width: 100%;
+  }
+  .offer-detail,
+  .seller-product-panel {
+    padding: 18px;
+  }
+  .product-form-row {
+    flex-wrap: wrap;
+  }
+  .product-form-row > .field-group {
+    flex-basis: 100%;
+  }
+}
+
+.seller-workspace {
+  max-width: 1040px;
+}
+.seller-products {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

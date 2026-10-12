@@ -4,12 +4,14 @@ import { ApiError, type UserMe } from "../api/types";
 import { HealthBadge } from "./components/HealthBadge";
 import { Toast } from "./components/Toast";
 import { BuyerSummaryScreen } from "./screens/BuyerSummaryScreen";
+import { BuyerMarketContainer } from "./screens/BuyerMarketContainer";
 import { LoginScreen } from "./screens/LoginScreen";
 import { SellerStoreScreen } from "./screens/SellerStoreScreen";
 import { SignupCompleteScreen } from "./screens/SignupCompleteScreen";
 import { SignupScreen } from "./screens/SignupScreen";
 
-export type ScreenId = "login" | "signup" | "signup-complete" | "buyer-summary" | "seller-store";
+export type ScreenId =
+  "login" | "signup" | "signup-complete" | "buyer-summary" | "seller-store" | "buyer-market";
 
 /**
  * 미리내 마켓 프런트엔드 애플리케이션 최상위 UI 컴포넌트
@@ -252,10 +254,19 @@ export function App(): ReactElement {
 
           {currentScreen === "buyer-summary" && currentUser && (
             <BuyerSummaryScreen
+              onBrowse={() => setCurrentScreen("buyer-market")}
               user={currentUser}
               isLoggingOut={isLoggingOut}
               logoutError={logoutError}
               onLogout={() => void handleLogout()}
+            />
+          )}
+
+          {currentScreen === "buyer-market" && currentUser && (
+            <BuyerMarketContainer
+              key={currentUser.id}
+              onAccount={() => setCurrentScreen("buyer-summary")}
+              onSessionExpired={handleSessionExpired}
             />
           )}
 

@@ -34,3 +34,6 @@ playwright-report/
 blob-report/
 test-results/
 .cache/ms-playwright/
+
+# Browser visual verification artifacts
+output/playwright/

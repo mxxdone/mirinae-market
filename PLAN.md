@@ -1,6 +1,6 @@
 # 미리내 마켓 개발 PLAN
 
-상태: Phase 3 백엔드 푸시 완료. 기존 Phase 2 프런트 스타일로 Phase 3 화면과 실제 백엔드 연결을 구현·검증한다.
+상태: Phase 3 백엔드 푸시·원격 CI와 기존 스타일의 프런트 화면·실제 API 연결·로컬 검증을 완료했다. 기능 수용 확인·프런트 원격 CI/PR 리뷰·main 병합은 남아 있다.
 
 ## 목표와 참조
 
@@ -28,7 +28,7 @@
 | 0 | 핵심 요구사항·스택·개발 계획 | 작성 완료, 기능별 세부 계약 잔여 |
 | 1 | 실행·빌드·검사 가능한 개발 기반 | 백엔드 완료; 프런트엔드 별도, 원격 CI 연결 |
 | 2 | 가입·로그인·권한·데모 기반 | 백엔드 구현·검증 완료; 화면·브라우저 별도 |
-| 3 | 상품 등록·검색·가격 비교 | 미착수 |
+| 3 | 상품 등록·검색·가격 비교 | 백엔드 푸시·원격 CI, 화면·연동 로컬 검증 완료 |
 | 4 | 장바구니·재고 확보·통합 모의 결제 | 미착수 |
 | 5 | 취소·환불·수령·미수령 | 미착수 |
 | 6 | 원본 기반 판매자 대시보드 | 미착수 |
@@ -160,6 +160,19 @@
 
 완료 조건·검증: 단위·가격·수량·날짜·시간 규칙의 정상·실패·경계를 unit으로 검증한다. 매장 소유권과 시장별 데이터 범위를 integration으로 검증하고 판매자 등록 → 구매자 검색·비교 흐름을 확인한다.
 
+### Phase 3 화면·연동 결과 · 2026-10-12
+
+- 사용자 승인한 GitHub origin에 `feat/phase3-backend`를 푸시했다. 최초 `78de06f`와 수령 시간 복원 보완 `5f6885b`의 backend CI가 성공했다. 최신 [Actions](https://github.com/mxxdone/mirinae-market/actions/runs/38253472482)를 참조한다. main에는 병합하지 않았다.
+- `feat/phase3-frontend`에서 기존 Phase 2 프런트와 백엔드를 통합했고 PLAN·README 충돌은 양쪽 구현·운영 기록을 보존해 해결했다. 기존 한지색·테라코타·먹색 스타일로 판매자 상품/시간/판매 조건과 구매자 시장 선택·검색·상세를 구현했다.
+- 수령 시간 조회가 없으면 새로고침 복원이 불가능해 소유권을 유지한 GET을 추가했다. 계약은 Spec의 Phase 3 항목을 따른다. 계약 확장은 조회만 추가하며 인증·저장 정책과 스키마는 유지한다.
+- 핵심 입력 TDD: 실제 실패 확인 후 g/kg 변환·정수 가격/수량·한국 시간 자정 등 15개 통과. 최종 `npm run check`에서 strict TypeScript·ESLint·Prettier·dependency-cruiser·전체 32개 Unit 통과, `npm run build` 통과.
+- 결합 백엔드 `gradlew.bat check build --console=plain --no-daemon` 통과: 100개, 실패/오류/skip 0. 이전 98개와 Phase 2 담당 매장 자동 조회 회귀를 포함한다.
+- 최종 `npm run test:e2e` 10개 통과. 독립 PostgreSQL·demo 자체 백엔드·Vite·Edge로 기존 인증 8개와 판매자 kg 입력→공개→구매자 검색/상세·시장 격리, 시간 복원·390px 넘침·입력/전송 실패·실제 세션 만료·첫 재로그인을 검증했다. HTTP·DB·인증은 mock하지 않았고 전송 실패만 브라우저 route abort로 모의했다.
+- 세션 만료 후 남은 CSRF로 첫 재로그인이 실패하는 것을 실제 red E2E로 확인하고 API 계층에서 401 시 토큰을 폐기하도록 수정했다. 기존 만료 테스트는 추가 조회가 먼저 만료를 감지할 수 있어 초기 조회 완료를 기다린 뒤 실제 재조회 401을 검증하도록 보완했다. skip·강제 클릭·timeout 확대를 추가하지 않았다.
+- E2E_PORT는 기존 미리보기와 별도 실행할 때만 지정한다. 기본 5173/CI 동작을 유지하며 값 0의 실제 차단과 정상 5175 실행을 확인했다. 검사 규칙은 완화하지 않았다.
+- 스크린샷은 `output/playwright/phase3-*.png`에서 직접 검토했다. 실제 증거는 `.local/verification/phase3-integrated-backend-check.log`, `phase3-front-check-final.log`, `phase3-front-build-final.log`, `phase3-e2e-final.log`와 JUnit/Playwright 보고서다.
+- 남은 항목: 사람의 화면 수용 확인, 프런트 커밋의 원격 CI·PR 리뷰·main 병합. Phase 4와 주문 연결은 별도 요청 후 진행한다.
+
 ## Phase 4 — 장바구니·재고 확보·통합 결제
 
 목표: 여러 매장 상품을 한 번에 모의 결제하고 재고·가격을 보장한다.
@@ -250,26 +263,6 @@
 - 로컬 증거: `.local/verification/commit-phase1-check-build.log`, `pre-push-check-build.log`, `phase2-check-build-4.log`. 원격 결과와 JUnit·PMD 보고서는 [backend Actions](https://github.com/mxxdone/mirinae-market/actions/workflows/backend.yml)를 참조한다. 로컬 검증과 원격 검증은 구분한다.
 - Phase 2는 구매자 계정·세션 인증·판매자 본인 매장 조회·데모 DB 기반까지다. 시장 선택·상품 등록/검색/가격 비교는 Phase 3이며 아직 구현하지 않았다. 화면·브라우저 검증은 별도 작업이다.
 
-## 다음 구현 요청
+## 다음 행동
 
-현재 범위는 사용자의 푸시 승인에 따라 기능 브랜치 PR·원격 CI를 진행한다. Phase 3 요청을 받으면 품명·규격 비교 기준, 판매 제안 공개 시점과 변경 범위의 관련 계약을 먼저 보완한다. 다음 페이즈를 자동으로 시작하지 않는다.
-
-## Phase 1~2 프런트엔드 · 2026-10-12
-
-- `feat/phase2-frontend`에서 1번의 색감·브랜드와 2번의 분할 구성을 결합해 React·TypeScript 화면을 실제 API에 연결했다. 로그인·가입·완료·계정 요약·판매자 매장 조회를 제공한다.
-- Head 리뷰 후 통신 실패를 로그아웃 성공으로 처리하던 문제와 로그인 후 계정 동기화 실패 안내를 개선했다. 오프라인 로그아웃 재시도 회귀 검증을 추가했다. 서버 계약과 다른 E2E 기대 문구·진입 경로를 수정하고 상태·오류 코드를 함께 검증했다.
-- 가입 화면의 잘못된 SVG 경로를 제거하고 브라우저 콘솔 회귀 검증을 추가했다. 생성된 Playwright 보고서는 형식 검사 대상에서 제외하며 소스 검사는 유지한다.
-- `npm run check`의 타입·lint·형식·의존성 검사와 가입 검증 Unit 17개, `npm run build`가 통과했다. 의존성·HTTP 경계의 임시 위반 입력이 차단되는 것도 확인하고 임시 파일을 제거했다.
-- 기존 백엔드 jar와 별도 PostgreSQL 17.10 DB를 사용한 `npm run test:e2e`는 7개 통과, 실패·skip 0. API 응답 mock 없이 실제 서버 세션·CSRF·인가를 사용했다. 최종 로그는 `.local/verification/frontend-final-check.log`, `frontend-final-build.log`, `frontend-e2e.log`다.
-- 로그인·가입의 1440px·390px 스크린샷을 검토하고 가로 넘침 없음을 확인했다. 증거는 `.local/design/phase2-hybrid/implementation-*.png`다. 로컬 미리보기는 `http://127.0.0.1:5173/`이며 백엔드는 8081, 전용 테스트 DB는 5433을 사용한다.
-- 프런트엔드 CI workflow를 추가했지만 커밋·push·원격 CI 실행은 아직 하지 않았다. 로컬 통과를 원격 CI 통과로 간주하지 않는다. 최초 화면 구현에서는 백엔드 계약을 유지했으며, 아래 보완 작업에서 담당 매장 자동 조회 계약을 추가한다.
-
-## 판매자 담당 매장 자동 조회 보완 · 2026-10-12
-
-- 사용자가 매장 번호 수동 입력 제거를 요청했다. 서버 세션의 계정으로 기존 소유 관계를 조회하는 API를 추가하고, 판매자 로그인·새로고침 후 담당 매장을 자동 표시한다. 기존 번호 지정 조회와 소유권 검사·DB 스키마는 유지한다.
-- 매장 자동 조회·미배정 판매자 거부의 HTTP 회귀 테스트와 판매자 A/B 자동 진입·URL 변조·새로고침의 브라우저 회귀 테스트가 기존 코드에서 실패함을 확인했다. 통신 실패 재시도와 세션 만료를 최종 변경에 맞춰 검증한다.
-- 최종 백엔드 `spotlessApply check build` 통과: 테스트 60개, 실패·오류·skip 0. 프런트엔드 `check`(Unit 17개 포함)·`build` 통과. 실제 서버·PostgreSQL의 E2E 8개 통과, 실패·skip 0. 자동 매장 조회, 판매자 A/B와 URL 변조, 미배정 판매자 거부, 세션 만료, 통신 실패 재시도를 확인했다. API mock을 사용하지 않았다.
-- OpenAPI의 새 경로와 200·401·403 계약을 실제 서버에서 확인했다. 기존 구조·소유권 정책·DB 스키마를 유지했으며 gate와 최종 diff를 검토했다. 증거는 `.local/verification/seller-auto-backend-check-build.log`, `seller-auto-frontend-check.log`, `seller-auto-frontend-build.log`, `seller-auto-e2e.log`다. 실패 재현 증거는 `seller-auto-store-red.log`, `seller-auto-ui-red.log`다.
-- 1440px·390px 실제 판매자 화면을 검토했고 매장 번호 입력창 제거와 가로 넘침 없음을 확인했다. 화면 증거는 `.local/design/phase2-hybrid/seller-auto-desktop.png`, `seller-auto-mobile.png`다. 미리보기 서버에 최종 jar를 적용했으며 기존 테스트 DB의 가입 데이터는 유지했다.
-- 사용자가 현재 구현 범위의 푸시를 승인했다. 남은 일은 기능 브랜치 커밋·PR·원격 CI 확인이다. 가판대 일러스트 교체와 시장 번호 대신 시장명 표시는 후속 개선 항목이다.
-- 원격 E2E 준비: 필요한 GitHub Secrets 5개(`FRONTEND_TEST_DB_PASSWORD`, `E2E_BUYER_LOGIN_ID`, `E2E_SELLER_A_LOGIN_ID`, `E2E_SELLER_B_LOGIN_ID`, `E2E_DEMO_PASSWORD`)가 원격에 등록되어 있음을 확인했다. 이번 작업에서는 비밀값을 등록·변경·삭제하지 않는다. 값의 유효성은 PR의 원격 E2E 통과로 확인하며, 이 상태에서 로컬 통과를 원격 통과로 기록하거나 검사를 생략하지 않는다.
+Phase 3 화면·백엔드 연결의 기능 수용 확인을 받고 프런트 원격 CI/PR 리뷰와 main 병합을 진행한다. Phase 4는 별도 요청을 기다린다.

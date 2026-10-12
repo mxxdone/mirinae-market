@@ -28,6 +28,15 @@ public class StoreService {
     return view(row);
   }
 
+  public StoreView currentStore(String loginId) {
+    AccountView account = accounts.current(loginId);
+    if (!"SELLER".equals(account.role())) {
+      throw new StoreForbiddenException();
+    }
+    StoreRow row = data.findByOwner(account.id()).orElseThrow(StoreForbiddenException::new);
+    return view(row);
+  }
+
   public StoreView ensureDemoStore(String ownerLoginId, String marketName, String storeName) {
     AccountView owner = accounts.current(ownerLoginId);
     if (!"SELLER".equals(owner.role())) {

@@ -19,6 +19,11 @@ public class StoreData {
     return stores.findById(storeId).map(StoreEntity::toRow);
   }
 
+  @Transactional(readOnly = true)
+  public Optional<StoreRow> findByOwner(long ownerId) {
+    return stores.findByOwnerAccountId(ownerId).map(StoreEntity::toRow);
+  }
+
   @Transactional
   public StoreRow ensureDemoStore(long ownerId, String marketName, String storeName) {
     MarketEntity market =

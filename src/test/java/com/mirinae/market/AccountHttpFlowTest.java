@@ -42,6 +42,7 @@ class AccountHttpFlowTest {
     try (HttpSessionClient session = new HttpSessionClient(port)) {
       assertThat(session.get("/api/auth/me").statusCode()).isEqualTo(401);
       assertThat(session.get("/api/seller/stores/1").statusCode()).isEqualTo(401);
+      assertThat(session.get("/api/seller/stores/me").statusCode()).isEqualTo(401);
       session.refreshCsrf();
       String oldSession = session.sessionId();
       // 로그인 시 새 세션 쿠키에서도 같은 보안 속성이 유지되어야 한다.
@@ -68,6 +69,7 @@ class AccountHttpFlowTest {
           .contains(loginId, "BUYER")
           .doesNotContain(hash);
       assertThat(session.get("/api/seller/stores/1").statusCode()).isEqualTo(403);
+      assertThat(session.get("/api/seller/stores/me").statusCode()).isEqualTo(403);
       // 로그인 전 토큰은 로그인 성공 후 폐기되어야 한다.
       assertThat(
               session
@@ -225,6 +227,53 @@ class AccountHttpFlowTest {
       assertThat(foreign.statusCode()).isEqualTo(403);
       assertThat(foreign.body()).doesNotContain("매장B");
       assertThat(session.get("/api/seller/stores/99999999").statusCode()).isEqualTo(403);
+    }
+  }
+
+  @Test
+  void currentSellerStoreIsSelectedFromSessionWithoutClientStoreNumber() throws Exception {
+    String sellerId = uniqueId();
+    String otherId = uniqueId();
+    accounts.ensureDemoAccount(sellerId, "Pass1234!", "판매자A", sellerId + "@example.com", "SELLER");
+    accounts.ensureDemoAccount(otherId, "Pass1234!", "판매자B", otherId + "@example.com", "SELLER");
+    long ownStore = stores.ensureDemoStore(sellerId, "시장" + sellerId, "매장A").id();
+    long otherStore = stores.ensureDemoStore(otherId, "시장" + otherId, "매장B").id();
+    try (HttpSessionClient session = new HttpSessionClient(port)) {
+      session.refreshCsrf();
+      assertThat(session.login(sellerId, "Pass1234!").statusCode()).isEqualTo(200);
+      HttpResponse<String> own = session.get("/api/seller/stores/me?storeId=" + otherStore);
+      assertThat(own.statusCode()).isEqualTo(200);
+      assertThat(session.json(own).get("id").asLong()).isEqualTo(ownStore);
+      assertThat(session.json(own).get("name").asString()).isEqualTo("매장A");
+      assertThat(own.body()).doesNotContain("매장B", "ownerAccountId", "password");
+    }
+    try (HttpSessionClient session = new HttpSessionClient(port)) {
+      session.refreshCsrf();
+      assertThat(session.login(otherId, "Pass1234!").statusCode()).isEqualTo(200);
+      HttpResponse<String> own = session.get("/api/seller/stores/me");
+      assertThat(own.statusCode()).isEqualTo(200);
+      assertThat(session.json(own).get("id").asLong()).isEqualTo(otherStore);
+      session.refreshCsrf();
+      assertThat(
+              session
+                  .post("/api/auth/logout", "", "application/x-www-form-urlencoded", true)
+                  .statusCode())
+          .isEqualTo(204);
+      assertThat(session.get("/api/seller/stores/me").statusCode()).isEqualTo(401);
+    }
+  }
+
+  @Test
+  void sellerWithoutAssignedStoreCannotReadAnotherStore() throws Exception {
+    String sellerId = uniqueId();
+    accounts.ensureDemoAccount(sellerId, "Pass1234!", "미배정상인", sellerId + "@example.com", "SELLER");
+    try (HttpSessionClient session = new HttpSessionClient(port)) {
+      session.refreshCsrf();
+      assertThat(session.login(sellerId, "Pass1234!").statusCode()).isEqualTo(200);
+      HttpResponse<String> response = session.get("/api/seller/stores/me");
+      assertThat(response.statusCode()).isEqualTo(403);
+      assertThat(session.json(response).get("code").asString()).isEqualTo("FORBIDDEN");
+      assertThat(response.body()).doesNotContain("marketId", "ownerAccountId");
     }
   }
 

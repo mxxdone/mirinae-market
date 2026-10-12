@@ -1,6 +1,6 @@
 # 미리내 마켓 개발 PLAN
 
-상태: Phase 2 백엔드 구현·검증 완료(2026-10-12). 프런트엔드는 나중에 별도 진행한다. Phase 3는 사용자의 별도 요청 전 시작하지 않는다.
+상태: Phase 2 판매자 담당 매장 자동 조회 보완과 로컬 재검증 완료(2026-10-12). 사용자가 현재 범위의 커밋·푸시를 승인해 기능 브랜치 PR·원격 CI를 진행한다. Phase 3는 사용자의 별도 요청 전 시작하지 않는다.
 
 ## 목표와 참조
 
@@ -18,7 +18,7 @@
 - GitHub [mxxdone/mirinae-market](https://github.com/mxxdone/mirinae-market)을 origin으로 연결하고 기존 MIT LICENSE·최초 커밋 위에 main 이력을 유지한다.
 - Gradle Wrapper·서버·OpenAPI·검사 gate·로컬 빌드 검증을 완료했다. 실행 방법은 README, 지속 구조·검사 규칙은 AGENTS에 있다.
 - GitHub Actions의 [backend workflow](https://github.com/mxxdone/mirinae-market/actions/workflows/backend.yml)가 main push와 PR에서 동일 gate를 실행한다. 실행 결과·검증 보고서는 Actions를 참조한다. branch protection은 별도 미설정이다.
-- 구매자 가입·세션 인증·역할/매장 소유권·PostgreSQL/Flyway·데모 기반을 구현하고 검증했다. 상품·주문은 미착수이며 프런트엔드는 별도 작업이다.
+- 구매자 가입·세션 인증·역할/매장 소유권·PostgreSQL/Flyway·데모 기반과 Phase 2 프런트엔드를 구현하고 로컬 검증했다. 상품·주문은 미착수다.
 - 중복 초기 설정 문서를 Phase 1에 통합·삭제했고, 백엔드 작업자를 중단했다. 다음 페이즈를 자동으로 시작하지 않는다.
 
 ## 페이즈 개요
@@ -219,9 +219,9 @@
 
 ## 진행·위임과 차단 요인
 
-- 페이즈별로 완료 결과를 보고한 뒤 멈춘다. 다음 페이즈는 사용자의 별도 구현 요청을 받은 경우에만 시작한다. Phase 2 백엔드 구현·검증을 완료했다. Phase 3~8 자동 진행과 프런트엔드 구현은 승인 범위에 포함되지 않는다.
+- 페이즈별로 완료 결과를 보고한 뒤 멈춘다. 다음 페이즈는 사용자의 별도 구현 요청을 받은 경우에만 시작한다. 사용자가 추가 승인한 Phase 1~2 프런트엔드까지 로컬 구현·검증했다. Phase 3~8 자동 진행은 승인 범위에 포함되지 않는다.
 
-- 실행 순서 변경: 지금은 Phase 1~6의 백엔드 API·업무 규칙·DB 검증부터 진행한다. 각 페이즈에 적힌 화면 연결·브라우저 로그인·Playwright 검증은 프런트엔드 작업으로 연기하며 백엔드 완료를 차단하지 않는다. 완성 API 흐름은 실제 백엔드를 포함한 HTTP 흐름 검증으로 확인한다. Phase 7의 화면 시연 완성은 프런트엔드 연결 후 진행한다.
+- 실행 순서 변경: 백엔드 API·업무 규칙·DB 검증을 먼저 진행하고 화면 연결은 별도 요청 범위에서 수행한다. Phase 1~2 화면·Playwright 검증은 이번 요청으로 완료했다. 후속 페이즈의 화면 연결은 아직 진행하지 않았다.
 
 - API·화면·관련 검증이 함께 완성되는 작은 작업으로 나눈다. 업무 테스트·integration은 구현 중, 대규모 부하 실험은 시연 완성 후 진행한다.
 - Head가 Spec·계약을 검토한 뒤 백엔드/검사는 Paseo Implementation Worker, 화면은 Gemini에 위임한다. 기본은 한 writer씩 순차 진행한다.
@@ -239,4 +239,24 @@
 
 ## 다음 구현 요청
 
-Phase 2 백엔드 구현·검증을 완료했으며 다음 페이즈를 자동으로 시작하지 않는다. Phase 3 요청을 받으면 품명·규격 비교 기준, 판매 제안 공개 시점과 변경 범위의 관련 계약을 먼저 보완하고 상품·검색·가격 비교 백엔드를 구현한다. 프런트엔드는 별도 작업으로 유지한다.
+현재 범위는 사용자의 푸시 승인에 따라 기능 브랜치 PR·원격 CI를 진행한다. Phase 3 요청을 받으면 품명·규격 비교 기준, 판매 제안 공개 시점과 변경 범위의 관련 계약을 먼저 보완한다. 다음 페이즈를 자동으로 시작하지 않는다.
+
+## Phase 1~2 프런트엔드 · 2026-10-12
+
+- `feat/phase2-frontend`에서 1번의 색감·브랜드와 2번의 분할 구성을 결합해 React·TypeScript 화면을 실제 API에 연결했다. 로그인·가입·완료·계정 요약·판매자 매장 조회를 제공한다.
+- Head 리뷰 후 통신 실패를 로그아웃 성공으로 처리하던 문제와 로그인 후 계정 동기화 실패 안내를 개선했다. 오프라인 로그아웃 재시도 회귀 검증을 추가했다. 서버 계약과 다른 E2E 기대 문구·진입 경로를 수정하고 상태·오류 코드를 함께 검증했다.
+- 가입 화면의 잘못된 SVG 경로를 제거하고 브라우저 콘솔 회귀 검증을 추가했다. 생성된 Playwright 보고서는 형식 검사 대상에서 제외하며 소스 검사는 유지한다.
+- `npm run check`의 타입·lint·형식·의존성 검사와 가입 검증 Unit 17개, `npm run build`가 통과했다. 의존성·HTTP 경계의 임시 위반 입력이 차단되는 것도 확인하고 임시 파일을 제거했다.
+- 기존 백엔드 jar와 별도 PostgreSQL 17.10 DB를 사용한 `npm run test:e2e`는 7개 통과, 실패·skip 0. API 응답 mock 없이 실제 서버 세션·CSRF·인가를 사용했다. 최종 로그는 `.local/verification/frontend-final-check.log`, `frontend-final-build.log`, `frontend-e2e.log`다.
+- 로그인·가입의 1440px·390px 스크린샷을 검토하고 가로 넘침 없음을 확인했다. 증거는 `.local/design/phase2-hybrid/implementation-*.png`다. 로컬 미리보기는 `http://127.0.0.1:5173/`이며 백엔드는 8081, 전용 테스트 DB는 5433을 사용한다.
+- 프런트엔드 CI workflow를 추가했지만 커밋·push·원격 CI 실행은 아직 하지 않았다. 로컬 통과를 원격 CI 통과로 간주하지 않는다. 최초 화면 구현에서는 백엔드 계약을 유지했으며, 아래 보완 작업에서 담당 매장 자동 조회 계약을 추가한다.
+
+## 판매자 담당 매장 자동 조회 보완 · 2026-10-12
+
+- 사용자가 매장 번호 수동 입력 제거를 요청했다. 서버 세션의 계정으로 기존 소유 관계를 조회하는 API를 추가하고, 판매자 로그인·새로고침 후 담당 매장을 자동 표시한다. 기존 번호 지정 조회와 소유권 검사·DB 스키마는 유지한다.
+- 매장 자동 조회·미배정 판매자 거부의 HTTP 회귀 테스트와 판매자 A/B 자동 진입·URL 변조·새로고침의 브라우저 회귀 테스트가 기존 코드에서 실패함을 확인했다. 통신 실패 재시도와 세션 만료를 최종 변경에 맞춰 검증한다.
+- 최종 백엔드 `spotlessApply check build` 통과: 테스트 60개, 실패·오류·skip 0. 프런트엔드 `check`(Unit 17개 포함)·`build` 통과. 실제 서버·PostgreSQL의 E2E 8개 통과, 실패·skip 0. 자동 매장 조회, 판매자 A/B와 URL 변조, 미배정 판매자 거부, 세션 만료, 통신 실패 재시도를 확인했다. API mock을 사용하지 않았다.
+- OpenAPI의 새 경로와 200·401·403 계약을 실제 서버에서 확인했다. 기존 구조·소유권 정책·DB 스키마를 유지했으며 gate와 최종 diff를 검토했다. 증거는 `.local/verification/seller-auto-backend-check-build.log`, `seller-auto-frontend-check.log`, `seller-auto-frontend-build.log`, `seller-auto-e2e.log`다. 실패 재현 증거는 `seller-auto-store-red.log`, `seller-auto-ui-red.log`다.
+- 1440px·390px 실제 판매자 화면을 검토했고 매장 번호 입력창 제거와 가로 넘침 없음을 확인했다. 화면 증거는 `.local/design/phase2-hybrid/seller-auto-desktop.png`, `seller-auto-mobile.png`다. 미리보기 서버에 최종 jar를 적용했으며 기존 테스트 DB의 가입 데이터는 유지했다.
+- 사용자가 현재 구현 범위의 푸시를 승인했다. 남은 일은 기능 브랜치 커밋·PR·원격 CI 확인이다. 가판대 일러스트 교체와 시장 번호 대신 시장명 표시는 후속 개선 항목이다.
+- 원격 E2E 준비: 필요한 GitHub Secrets 5개(`FRONTEND_TEST_DB_PASSWORD`, `E2E_BUYER_LOGIN_ID`, `E2E_SELLER_A_LOGIN_ID`, `E2E_SELLER_B_LOGIN_ID`, `E2E_DEMO_PASSWORD`)가 원격에 등록되어 있음을 확인했다. 이번 작업에서는 비밀값을 등록·변경·삭제하지 않는다. 값의 유효성은 PR의 원격 E2E 통과로 확인하며, 이 상태에서 로컬 통과를 원격 통과로 기록하거나 검사를 생략하지 않는다.

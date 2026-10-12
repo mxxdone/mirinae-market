@@ -1,6 +1,6 @@
-# 미리내 마켓 백엔드
+# 미리내 마켓
 
-Java 21 · Spring Boot 4.1.1 · Gradle Wrapper 기반 백엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 매장 소유권을 제공한다. 프런트엔드는 별도 작업이다.
+Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품·주문·결제는 후속 페이즈다.
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
 - 요구사항·계정 입력 규칙·API 계약: [docs/SPEC.md](docs/SPEC.md)
@@ -75,4 +75,48 @@ Invoke-WebRequest "$apiBase/api/auth/logout" -Method Post -WebSession $marketSes
 
 `check`는 Spotless·컴파일 경고 실패·PMD·ArchUnit·JUnit을 실행한다. 핵심 업무 Unit은 가입 규칙·소유권을 검증한다. 통합 테스트는 Mock DB 없이 Testcontainers PostgreSQL에서 Flyway·JPA와 실제 임의 포트 서버의 쿠키·CSRF·인증·인가·동시 중복 가입을 검증한다. Docker 실패 시 테스트를 skip하지 않는다.
 
-화면·Playwright와 상품·주문·결제는 아직 구현하지 않았다. HTTP 흐름 검증은 브라우저 검증과 구분한다. 로컬 검증 로그는 Git에서 제외한 `.local/verification/`에 둔다.
+화면의 핵심 흐름은 실제 백엔드와 PostgreSQL을 포함한 Playwright로 검증한다. HTTP 통합 테스트와 브라우저 검증은 구분한다. 로컬 검증 로그는 Git에서 제외한 `.local/verification/`에 둔다.
+
+## 프런트엔드 실행
+
+Node.js 24와 npm을 사용한다. 위의 백엔드를 먼저 실행한 뒤 별도 터미널에서 시작한다.
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+
+# 정적 검사·단위 테스트 및 배포 번들 생성
+npm run check
+npm run build
+```
+
+브라우저 주소는 `http://127.0.0.1:5173`이다. `/api`와 `/actuator`는 Vite가 백엔드로 전달한다. 기본 대상은 `http://127.0.0.1:8080`이며 다른 백엔드를 사용할 때는 개발 서버 실행 전에 `$env:BACKEND_URL`을 지정한다. 인증 정보를 브라우저 저장소에 보관하지 않으며 새로고침 시 서버 세션으로 현재 사용자를 복원한다.
+
+가입 후 로그인은 별도로 수행한다. 판매자는 로그인 후 서버 세션에 연결된 담당 매장을 자동으로 확인한다. 매장 번호를 입력할 필요가 없다. 아래 DB 조회는 E2E 기대값 확인용이며 사용자 화면의 입력 절차가 아니다.
+
+```powershell
+docker compose exec postgres psql -U mirinae -d mirinae -c "SELECT s.id, a.login_id, s.name FROM stores s JOIN accounts a ON a.id = s.owner_account_id ORDER BY s.id;"
+```
+
+## 브라우저 연동 검증
+
+데모 프로필 백엔드를 준비하고 테스트 실행 환경에 계정 정보와 실제 매장 번호를 제공한다. 환경 값 누락이나 백엔드·DB 장애를 skip으로 처리하지 않는다. 테스트 가입 정보는 매 실행마다 고유하게 생성하므로 운영 DB를 대상으로 실행하지 않는다.
+
+```powershell
+cd frontend
+$env:E2E_BUYER_LOGIN_ID = Read-Host '데모 구매자 로그인 ID'
+$env:E2E_SELLER_A_LOGIN_ID = Read-Host '데모 판매자 A 로그인 ID'
+$env:E2E_SELLER_B_LOGIN_ID = Read-Host '데모 판매자 B 로그인 ID'
+$env:E2E_DEMO_PASSWORD = Read-Host '데모 계정 비밀번호'
+$env:E2E_STORE_A_ID = Read-Host '판매자 A 매장 번호'
+$env:E2E_STORE_B_ID = Read-Host '판매자 B 매장 번호'
+
+# 설치된 Edge를 사용하는 Windows 로컬 검증
+$env:PLAYWRIGHT_CHANNEL = 'msedge'
+npm run test:e2e
+```
+
+Chromium을 별도로 설치하는 환경에서는 `npx playwright install chromium`을 실행하고 `PLAYWRIGHT_CHANNEL`을 지정하지 않는다. Playwright는 Vite를 시작하며 백엔드는 위 절차로 준비한다. `BACKEND_URL`을 변경했다면 Vite도 같은 값으로 다시 실행한다. 테스트 결과는 `frontend/playwright-report/`와 `frontend/test-results/`에 생성된다.
+
+프런트엔드 CI는 `.github/workflows/frontend.yml`에서 검사·빌드와 실제 PostgreSQL·백엔드·브라우저 검증을 수행한다. 저장소에 `FRONTEND_TEST_DB_PASSWORD`, `E2E_BUYER_LOGIN_ID`, `E2E_SELLER_A_LOGIN_ID`, `E2E_SELLER_B_LOGIN_ID`, `E2E_DEMO_PASSWORD` GitHub Secrets를 설정해야 한다. 계정은 위 데모 프로필과 일치해야 하며 DB 비밀번호는 CI의 독립 테스트 DB용이다. 원격 CI 결과는 로컬 통과와 별도로 확인한다.

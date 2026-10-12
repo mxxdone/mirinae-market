@@ -48,7 +48,7 @@ export function SellerProductsPanel({
   const [offerLoading, setOfferLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [windowLoading, setWindowLoading] = useState(true);
-  const [windowRegistered, setWindowRegistered] = useState(false);
+  const [windowRegistered, setWindowRegistered] = useState<boolean | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -114,8 +114,6 @@ export function SellerProductsPanel({
         if (existing) {
           setPrice(String(existing.priceWon));
           setQuantity(String(existing.onlineQuantity));
-          setStart(existing.startTime.slice(0, 5));
-          setEnd(existing.endTime.slice(0, 5));
         }
       } catch (failure) {
         if (active) handleError(failure);
@@ -133,6 +131,7 @@ export function SellerProductsPanel({
     let active = true;
     const controller = new AbortController();
     setWindowLoading(true);
+    setWindowRegistered(null);
     setStart("");
     setEnd("");
     void getPickupWindow(store.id, date, controller.signal)
@@ -146,6 +145,9 @@ export function SellerProductsPanel({
       })
       .catch((failure: unknown) => {
         if (active) handleError(failure);
+      })
+      .finally(() => {
+        if (active) setWindowLoading(false);
       });
     return () => {
       active = false;
@@ -209,7 +211,8 @@ export function SellerProductsPanel({
         setDate(tomorrowPickupDate());
         throw new Error("수령 날짜가 바뀌었습니다. 새 날짜의 조건을 확인해 주세요.");
       }
-      await savePickupWindow(store.id, tomorrowPickupDate(), { startTime: start, endTime: end });
+      await savePickupWindow(store.id, date, { startTime: start, endTime: end });
+      if (mounted.current) setWindowRegistered(true);
       if (mounted.current)
         setSuccess("매장 수령 시간이 저장되었습니다. 같은 날 모든 상품이 이 시간을 공유합니다.");
     } catch (failure) {
@@ -230,7 +233,7 @@ export function SellerProductsPanel({
         setDate(tomorrowPickupDate());
         throw new Error("수령 날짜가 바뀌었습니다. 새 날짜의 조건을 확인해 주세요.");
       }
-      const saved = await saveOffer(store.id, selected.id, tomorrowPickupDate(), input);
+      const saved = await saveOffer(store.id, selected.id, date, input);
       if (!mounted.current) return;
       setOffer(saved);
       setSuccess("내일 판매가 공개되었습니다. 구매자가 시장에서 검색할 수 있습니다.");
@@ -442,9 +445,11 @@ export function SellerProductsPanel({
           <p className="field-help-text">
             {windowLoading
               ? "저장된 시간을 확인하고 있습니다."
-              : windowRegistered
-                ? "저장된 수령 시간을 불러왔습니다."
-                : "수령 시간을 먼저 저장해 주세요."}
+              : windowRegistered === null
+                ? "수령 시간을 확인하지 못했습니다. 다시 시도해 주세요."
+                : windowRegistered
+                  ? "저장된 수령 시간을 불러왔습니다."
+                  : "수령 시간을 먼저 저장해 주세요."}
           </p>
           <p className="field-help-text">{date} · 같은 날 모든 상품이 공유합니다.</p>
           <form className="market-form" onSubmit={(event) => void submitWindow(event)}>

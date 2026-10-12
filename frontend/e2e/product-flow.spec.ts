@@ -111,3 +111,54 @@ test("입력 실패·통신 실패를 성공으로 표시하지 않고 세션 �
   await page.locator("#btnLoginSubmit").click();
   await expect(page.locator("#heading-seller-store")).toBeVisible();
 });
+
+test("수령 시간 조회 실패 후 로딩을 끝내고 재조회로 복원", async ({ page, context }) => {
+  await context.route("**/api/seller/stores/*/pickup-windows/*", async (route) => {
+    if (route.request().method() === "GET") await route.abort("failed");
+    else await route.continue();
+  });
+  await login(page, required("E2E_SELLER_A_LOGIN_ID"));
+  await expect(page.getByRole("alert")).toContainText("통신할 수 없습니다");
+  await expect(page.getByText("저장된 시간을 확인하고 있습니다.")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "상품 등록", exact: true })).toBeEnabled();
+  await context.unroute("**/api/seller/stores/*/pickup-windows/*");
+  await page.getByRole("alert").getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.locator("#pickupStart")).toHaveValue("15:00");
+  await expect(page.getByText("저장된 수령 시간을 불러왔습니다.")).toBeVisible();
+});
+
+test("작성 중인 수령일을 자정 경계에서도 다른 날짜로 자동 변경해 전송하지 않음", async ({
+  page,
+}) => {
+  await login(page, required("E2E_SELLER_A_LOGIN_ID"));
+  await page.locator("#productName").fill(`날짜검증${Date.now()}`);
+  await page.locator("#productUnitAmount").fill("100");
+  await page.getByRole("button", { name: "상품 등록", exact: true }).click();
+  await page.locator("#offerPrice").fill("1000");
+  await page.locator("#offerQuantity").fill("1");
+  const label = await page
+    .locator(".seller-products > .summary-tag-row .field-help-text")
+    .innerText();
+  const intendedDate = label.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+  expect(intendedDate).toBeTruthy();
+  await page.evaluate(() => {
+    const NativeDate = Date;
+    const now = NativeDate.now();
+    let reads = 0;
+    globalThis.Date = new Proxy(NativeDate, {
+      construct(target, args, newTarget) {
+        return Reflect.construct(
+          target,
+          args.length === 0 ? [reads++ === 0 ? now : now + 86400000] : args,
+          newTarget,
+        ) as Date;
+      },
+    });
+  });
+  const request = page.waitForRequest(
+    (request) => request.method() === "PUT" && request.url().includes("/offers/"),
+  );
+  await page.getByRole("button", { name: "내일 판매 공개", exact: true }).click();
+  expect((await request).url()).toMatch(new RegExp(`/${intendedDate}$`));
+  await expect(page.getByText("내일 판매가 공개되었습니다.", { exact: false })).toBeVisible();
+});

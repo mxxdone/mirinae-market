@@ -167,8 +167,9 @@
 - 수령 시간 조회가 없으면 새로고침 복원이 불가능해 소유권을 유지한 GET을 추가했다. 계약은 Spec의 Phase 3 항목을 따른다. 계약 확장은 조회만 추가하며 인증·저장 정책과 스키마는 유지한다.
 - 핵심 입력 TDD: 실제 실패 확인 후 g/kg 변환·정수 가격/수량·한국 시간 자정 등 15개 통과. 최종 `npm run check`에서 strict TypeScript·ESLint·Prettier·dependency-cruiser·전체 32개 Unit 통과, `npm run build` 통과.
 - 결합 백엔드 `gradlew.bat check build --console=plain --no-daemon` 통과: 100개, 실패/오류/skip 0. 이전 98개와 Phase 2 담당 매장 자동 조회 회귀를 포함한다.
-- 최종 `npm run test:e2e` 10개 통과. 독립 PostgreSQL·demo 자체 백엔드·Vite·Edge로 기존 인증 8개와 판매자 kg 입력→공개→구매자 검색/상세·시장 격리, 시간 복원·390px 넘침·입력/전송 실패·실제 세션 만료·첫 재로그인을 검증했다. HTTP·DB·인증은 mock하지 않았고 전송 실패만 브라우저 route abort로 모의했다.
+- 최종 `npm run test:e2e` 12개 통과. 독립 PostgreSQL·demo 자체 백엔드·Vite·Edge로 기존 인증 8개와 판매자 kg 입력→공개→구매자 검색/상세·시장 격리, 시간 복원·390px 넘침·입력/전송 실패·실제 세션 만료·첫 재로그인을 검증했다. HTTP·DB·인증은 mock하지 않았고 전송·조회 실패는 브라우저 route abort, 날짜 읽기 사이 자정 경계는 브라우저 Date를 모의했다.
 - 세션 만료 후 남은 CSRF로 첫 재로그인이 실패하는 것을 실제 red E2E로 확인하고 API 계층에서 401 시 토큰을 폐기하도록 수정했다. 기존 만료 테스트는 추가 조회가 먼저 만료를 감지할 수 있어 초기 조회 완료를 기다린 뒤 실제 재조회 401을 검증하도록 보완했다. skip·강제 클릭·timeout 확대를 추가하지 않았다.
+- 추가 리뷰에서 조회 실패 시 로딩이 끝나지 않는 문제와 자정에 날짜를 두 번 읽어 작성일보다 다음 수령일을 전송하는 문제를 각각 실제 red E2E로 재현했다. finally로 조회 상태를 종료하고, 미등록/조회 실패를 구분하며, 화면에 표시된 수령일만 전송하도록 보완한 뒤 전체 12개를 통과했다.
 - E2E_PORT는 기존 미리보기와 별도 실행할 때만 지정한다. 기본 5173/CI 동작을 유지하며 값 0의 실제 차단과 정상 5175 실행을 확인했다. 검사 규칙은 완화하지 않았다.
 - 스크린샷은 `output/playwright/phase3-*.png`에서 직접 검토했다. 실제 증거는 `.local/verification/phase3-integrated-backend-check.log`, `phase3-front-check-final.log`, `phase3-front-build-final.log`, `phase3-e2e-final.log`와 JUnit/Playwright 보고서다.
 - 남은 항목: 사람의 화면 수용 확인, 프런트 커밋의 원격 CI·PR 리뷰·main 병합. Phase 4와 주문 연결은 별도 요청 후 진행한다.

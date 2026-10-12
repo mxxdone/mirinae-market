@@ -1,4 +1,9 @@
 const MAX_INTEGER = 2147483647;
+export function convertWeightInput(value: string, from: "g" | "kg", to: "g" | "kg"): string {
+  if (from === to || value === "") return value;
+  const grams = parseSaleUnit("WEIGHT", value, from);
+  return to === "g" ? String(grams) : String(grams / 1000);
+}
 function integer(value: string, minimum: number): number {
   if (!/^\d+$/.test(value)) throw new Error("공백·소수·지수 표기 없이 정수를 입력해 주세요.");
   const parsed = Number(value);
@@ -28,7 +33,7 @@ export function parseOfferInput(
 ): { priceWon: number; onlineQuantity: number } {
   return { priceWon: integer(price, 1), onlineQuantity: integer(quantity, 0) };
 }
-export function tomorrowPickupDate(now: Date = new Date()): string {
+export function todayPickupDate(now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
@@ -37,6 +42,5 @@ export function tomorrowPickupDate(now: Date = new Date()): string {
   }).formatToParts(now);
   const get = (type: string): string => parts.find((part) => part.type === type)?.value ?? "";
   const date = new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
   return date.toISOString().slice(0, 10);
 }

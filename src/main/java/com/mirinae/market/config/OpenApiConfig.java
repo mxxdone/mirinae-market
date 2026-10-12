@@ -29,7 +29,7 @@ public class OpenApiConfig {
         .info(
             new Info()
                 .title("미리내 마켓 API")
-                .description("전통시장 전날 예약 구매 서비스. 변경 요청에는 세션 쿠키와 CSRF 토큰이 필요합니다.")
+                .description("전통시장 당일 예약 구매 서비스. 변경 요청에는 세션 쿠키와 CSRF 토큰이 필요합니다.")
                 .version("0.0.1"))
         .components(
             new Components()

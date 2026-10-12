@@ -60,6 +60,10 @@ public final class HttpSessionClient implements AutoCloseable {
     return mutation("PUT", path, body, "application/json", includeCsrf);
   }
 
+  public HttpResponse<String> delete(String path, boolean includeCsrf) throws Exception {
+    return mutation("DELETE", path, "", "application/json", includeCsrf);
+  }
+
   public java.util.concurrent.CompletableFuture<HttpResponse<String>> putAsync(
       String path, String body) {
     return client.sendAsync(

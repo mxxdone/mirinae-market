@@ -34,6 +34,19 @@ class ProductMigrationIntegrationTest {
               Long.class,
               marketId,
               accountId);
+      Flyway.configure().dataSource(dataSource).target("2").load().migrate();
+      Long productId =
+          jdbc.queryForObject(
+              "INSERT INTO products (store_id, name, description, unit_type, unit_amount) VALUES (?, '기존양파', '기존설명', 'WEIGHT', 1000) RETURNING id",
+              Long.class,
+              storeId);
+      jdbc.update(
+          "INSERT INTO pickup_windows (store_id, pickup_date, start_time, end_time) VALUES (?, '2026-10-13', '14:00', '18:00')",
+          storeId);
+      jdbc.update(
+          "INSERT INTO daily_offers (store_id, product_id, pickup_date, price_won, online_quantity) VALUES (?, ?, '2026-10-13', 5000, 10)",
+          storeId,
+          productId);
       Flyway.configure().dataSource(dataSource).load().migrate();
       assertThat(
               jdbc.queryForObject(
@@ -48,12 +61,27 @@ class ProductMigrationIntegrationTest {
               jdbc.queryForObject(
                   "SELECT owner_account_id FROM stores WHERE id = ?", Long.class, storeId))
           .isEqualTo(accountId);
-      assertThat(jdbc.queryForObject("SELECT count(*) FROM products", Long.class)).isZero();
       assertThat(
               jdbc.queryForObject(
-                  "SELECT count(*) FROM flyway_schema_history WHERE success AND version IN ('1','2')",
+                  "SELECT count(*) FROM products WHERE archived_at IS NULL", Long.class))
+          .isEqualTo(1);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT order_deadline::text FROM pickup_windows WHERE store_id = ?",
+                  String.class,
+                  storeId))
+          .isEqualTo("14:00:00");
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT online_quantity FROM daily_offers WHERE product_id = ?",
+                  Integer.class,
+                  productId))
+          .isEqualTo(10);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM flyway_schema_history WHERE success AND version IN ('1','2','3','4')",
                   Long.class))
-          .isEqualTo(2L);
+          .isEqualTo(4L);
       assertThat(
               Flyway.configure()
                   .dataSource(dataSource)

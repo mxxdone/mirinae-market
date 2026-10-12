@@ -53,6 +53,7 @@ jobs:
       DB_USERNAME: mirinae_test
       DB_PASSWORD: ${{ secrets.FRONTEND_TEST_DB_PASSWORD }}
       BACKEND_URL: http://127.0.0.1:8081
+      E2E_FIXED_INSTANT: '2026-10-13T03:00:00Z'
       E2E_BUYER_LOGIN_ID: ${{ secrets.E2E_BUYER_LOGIN_ID }}
       E2E_SELLER_A_LOGIN_ID: ${{ secrets.E2E_SELLER_A_LOGIN_ID }}
       E2E_SELLER_B_LOGIN_ID: ${{ secrets.E2E_SELLER_B_LOGIN_ID }}
@@ -89,7 +90,7 @@ jobs:
       - name: Start integration backend
         run: |
           mkdir -p .local/verification
-          java -jar build/libs/mirinae-market-0.0.1-SNAPSHOT.jar --server.port=8081 --spring.profiles.active=demo > .local/verification/frontend-backend.log 2>&1 &
+          java -jar build/libs/mirinae-market-0.0.1-SNAPSHOT.jar --server.port=8081 --spring.profiles.active=demo,e2e --e2e.fixed-instant="$E2E_FIXED_INSTANT" > .local/verification/frontend-backend.log 2>&1 &
           echo $! > .local/verification/frontend-backend.pid
           python3 - <<'PY'
           import json

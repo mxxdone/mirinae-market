@@ -1,6 +1,6 @@
 # 미리내 마켓 개발 PLAN
 
-상태: 기존 Phase 3를 b311f1b와 archive/phase3-next-day로 보존했다. feat/phase3-same-day에서 당일 판매 계약과 판매자 화면 개선을 구현·검증 중이다.
+상태: 기존 Phase 3를 b311f1b와 archive/phase3-next-day로 보존했다. feat/phase3-same-day에서 당일 판매 계약·판매자 화면·실제 API 연결·필수 로컬 검증을 완료했다. 사람의 기능 수용 확인과 원격 CI·PR 리뷰·main 병합은 남아 있다.
 
 ## 목표와 참조
 
@@ -174,6 +174,19 @@
 - 스크린샷은 `output/playwright/phase3-*.png`에서 직접 검토했다. 실제 증거는 `.local/verification/phase3-integrated-backend-check.log`, `phase3-front-check-final.log`, `phase3-front-build-final.log`, `phase3-e2e-final.log`와 JUnit/Playwright 보고서다.
 - 남은 항목: 사람의 화면 수용 확인, 프런트 커밋의 원격 CI·PR 리뷰·main 병합. Phase 4와 주문 연결은 별도 요청 후 진행한다.
 
+## Phase 3 당일 판매 변경 결과 · 2026-10-13
+
+- 기존 작업은 b311f1b와 archive/phase3-next-day로 보존했다. 명세 변경은 b23ade6이며 구현은 feat/phase3-same-day에서 진행했다.
+- 확정 계약은 Spec의 당일 판매 수용 기준과 ADR-005를 따른다. 당일 수령·매장별 주문 마감·수동 공개, 기록을 보존하는 단건 삭제를 구현했다. 상품 목록의 판매 이력 표시로 마감 이후에도 이름·구성 고정을 안내한다.
+- 프런트는 기존 스타일을 유지하며 실제 API를 연결했다. g/kg 환산과 kg 수정값 복원, 상품 등록 후 판매 설정 안내, 번호 페이지와 새로고침 아이콘, 삭제 확인, 카드·상세의 주문 마감 표시를 반영했다.
+- 핵심 규칙의 실패 확인: 오늘 날짜와 자정 전환, 주문 마감·시간 제약, 단위 환산. 삭제 HTTP 테스트도 기존 API에서 실패를 확인했다.
+- 최종 backend spotlessApply check build: 테스트 104개, 실패·오류·skip 0. frontend check: TS·ESLint·Prettier·dependency-cruiser와 Unit 33개 통과. frontend build 통과.
+- 실제 PostgreSQL·자체 백엔드·Vite·Edge E2E: 13개 통과, retry·skip 0. 시간만 서버 e2e 프로필과 브라우저에서 고정하며 HTTP·DB·인증은 실제 연동한다. 통신 실패 시나리오의 route.abort와 브라우저 날짜 경계 Proxy는 별도 명시된 실패 주입이다.
+- E2E 고정 시각은 전용 프로필에서만 활성화한다. 기본 프로필의 실제 Clock 유지와 e2e 시각 누락 실패를 검증했다. CI 구성은 같은 시각을 전달하도록 동기화했으며 원격 실행은 아직 하지 않았다.
+- 기존 시연 DB를 pg_dump하고 별도 DB에 복원해 계정 3·상품 4·판매 조건 4와 V2 이력을 확인했다. 시연 DB의 V3·V4 적용 후에도 같은 건수를 유지했다. 기존 상품을 당일 판매로 공개하고 실제 시간의 구매자·판매자 화면을 smoke·시각 확인했다. 시연 주소는 http://127.0.0.1:5175다.
+- 로그는 .local/verification/same-day-backend-gate.log, same-day-front-gate.log, same-day-front-build-final.log, same-day-e2e-final.log, same-day-backup-restore.txt다. 시각 증거는 output/playwright/same-day-demo-buyer.png와 same-day-demo-seller.png다.
+- diff·인가·CSRF·삭제 기록 보존·마감 경계·계층 의존성·실패 처리 검토 완료. 로컬 필수 검사 미충족은 없다. 사람의 기능 수용 확인·원격 CI·PR 리뷰·main 병합은 남아 있다. 주문·결제·환불은 이번 구현 범위가 아니다.
+
 ## Phase 4 — 장바구니·재고 확보·통합 결제
 
 목표: 여러 매장 상품을 한 번에 모의 결제하고 재고·가격을 보장한다.
@@ -266,4 +279,4 @@
 
 ## 다음 행동
 
-당일 판매·주문 마감·상품 삭제·단위 환산·목록 개선을 구현하고 backend check/build, frontend check/build 및 실제 연동 E2E를 통과시킨다. 기존 시연 주소에 변경 화면을 연결하고 기능 수용 확인을 받는다. Phase 4 주문·결제는 별도 요청을 기다린다.
+http://127.0.0.1:5175의 당일 판매 화면을 수용 확인하고 원격 CI·PR 리뷰와 main 병합을 진행한다. Phase 4 주문·결제·판매 실패 환불은 별도 요청을 기다린다.

@@ -34,13 +34,13 @@ export function BuyerMarketScreen(props: Props) {
     <section className="hybrid-card market-workspace" aria-labelledby="heading-market">
       <header className="summary-card-header market-header">
         <div className="summary-tag-row">
-          <span className="pill-badge primary">내일의 장보기</span>
+          <span className="pill-badge primary">오늘의 장보기</span>
           <button className="text-action-link" type="button" onClick={props.onAccount}>
             내 계정
           </button>
         </div>
         <h1 id="heading-market" className="summary-heading">
-          우리 시장, 내일의 좋은 먹거리
+          우리 시장, 오늘의 좋은 먹거리
         </h1>
         <p className="summary-subtext">
           {props.date} 방문 수령 · 포장 구성과 매장별 가격을 살펴보세요.
@@ -120,6 +120,10 @@ export function BuyerMarketScreen(props: Props) {
             </p>
             <dl className="offer-facts">
               <div>
+                <dt>주문 마감</dt>
+                <dd>{props.selected.orderDeadline.slice(0, 5)}</dd>
+              </div>
+              <div>
                 <dt>한 포장 구성</dt>
                 <dd>
                   {props.selected.unitAmount.toLocaleString()}
@@ -186,7 +190,7 @@ export function BuyerMarketScreen(props: Props) {
               <h2>
                 {props.markets.length === 0
                   ? "아직 등록된 시장이 없습니다"
-                  : "내일 판매할 상품을 기다리고 있어요"}
+                  : "오늘 판매할 상품을 기다리고 있어요"}
               </h2>
               <p>다른 시장이나 검색어를 선택해 보세요.</p>
             </div>

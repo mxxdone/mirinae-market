@@ -76,6 +76,7 @@ export interface ProductInput {
 export interface ProductView extends ProductInput {
   id: number;
   storeId: number;
+  hasSales: boolean;
 }
 export interface OfferInput {
   priceWon: number;
@@ -84,6 +85,7 @@ export interface OfferInput {
 export interface PickupWindowInput {
   startTime: string;
   endTime: string;
+  orderDeadline: string;
 }
 export interface OfferView extends OfferInput, PickupWindowInput {
   id: number;
@@ -104,4 +106,8 @@ export interface ResultPage<T> {
   page: number;
   size: number;
   hasNext: boolean;
+}
+
+export interface ProductPage extends ResultPage<ProductView> {
+  totalItems: number;
 }

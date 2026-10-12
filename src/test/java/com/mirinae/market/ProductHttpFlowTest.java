@@ -54,7 +54,7 @@ class ProductHttpFlowTest {
 
   @BeforeEach
   void fixtures() {
-    clock.set(Instant.parse("2026-10-12T03:00:00Z"));
+    clock.set(Instant.parse("2026-10-13T03:00:00Z"));
     String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
     first = seller("a" + suffix, "시장" + suffix);
     sameMarket = seller("b" + suffix, "시장" + suffix);
@@ -114,7 +114,7 @@ class ProductHttpFlowTest {
             session
                 .put(
                     windowPath(seller, DATE),
-                    "{\"startTime\":\"14:00\",\"endTime\":\"18:00\"}",
+                    "{\"startTime\":\"14:00\",\"endTime\":\"18:00\",\"orderDeadline\":\"13:00\"}",
                     true)
                 .statusCode())
         .isEqualTo(200);
@@ -125,6 +125,48 @@ class ProductHttpFlowTest {
             true);
     assertThat(response.statusCode()).isEqualTo(200);
     return session.json(response);
+  }
+
+  @Test
+  void archiveRemovesPublicAndSellerListingsWhilePreservingHistoryAndOwnership() throws Exception {
+    try (HttpSessionClient seller = new HttpSessionClient(port);
+        HttpSessionClient buyer = new HttpSessionClient(port);
+        HttpSessionClient anonymous = new HttpSessionClient(port)) {
+      login(seller, first.loginId());
+      login(buyer, buyerId);
+      anonymous.refreshCsrf();
+      long id = create(seller, first, "삭제 상품", "WEIGHT", 1000);
+      long offerId = publish(seller, first, id, 9000, 10).get("id").asLong();
+      String path = productPath(first) + "/" + id;
+      assertThat(anonymous.delete(path, true).statusCode()).isEqualTo(401);
+      assertThat(buyer.delete(path, true).statusCode()).isEqualTo(403);
+      assertThat(seller.delete(productPath(otherMarket) + "/" + id, true).statusCode())
+          .isEqualTo(403);
+      assertThat(seller.delete(path, false).statusCode()).isEqualTo(403);
+      assertThat(seller.delete(path, true).statusCode()).isEqualTo(204);
+      assertThat(seller.delete(path, true).statusCode()).isEqualTo(204);
+      assertThat(seller.json(seller.get(productPath(first))).get("items").size()).isZero();
+      assertThat(seller.json(seller.get(productPath(first))).get("totalItems").asLong()).isZero();
+      assertThat(buyer.json(buyer.get(searchPath(first))).get("items").size()).isZero();
+      assertThat(buyer.get(searchPath(first) + "/" + offerId).statusCode()).isEqualTo(404);
+      assertThat(
+              seller
+                  .put(offerPath(first, id, DATE), "{\"priceWon\":1,\"onlineQuantity\":1}", true)
+                  .statusCode())
+          .isEqualTo(404);
+      assertThat(seller.put(path, productJson("삭제 상품", "WEIGHT", 1000, "설명"), true).statusCode())
+          .isEqualTo(404);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM products WHERE id = ? AND archived_at IS NOT NULL",
+                  Long.class,
+                  id))
+          .isEqualTo(1);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM daily_offers WHERE id = ?", Long.class, offerId))
+          .isEqualTo(1);
+    }
   }
 
   @Test
@@ -215,7 +257,7 @@ class ProductHttpFlowTest {
               seller
                   .put(
                       windowPath(first, DATE),
-                      "{\"startTime\":\"15:00\",\"endTime\":\"19:00\"}",
+                      "{\"startTime\":\"15:00\",\"endTime\":\"19:00\",\"orderDeadline\":\"14:00\"}",
                       true)
                   .statusCode())
           .isEqualTo(200);
@@ -320,7 +362,7 @@ class ProductHttpFlowTest {
               seller
                   .put(
                       windowPath(otherMarket, DATE),
-                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\"}",
+                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\",\"orderDeadline\":\"13:00\"}",
                       true)
                   .statusCode())
           .isEqualTo(403);
@@ -353,7 +395,7 @@ class ProductHttpFlowTest {
               seller
                   .put(
                       windowPath(first, DATE),
-                      "{\"startTime\":\"15:00\",\"endTime\":\"19:00\"}",
+                      "{\"startTime\":\"15:00\",\"endTime\":\"19:00\",\"orderDeadline\":\"14:00\"}",
                       false)
                   .statusCode())
           .isEqualTo(403);
@@ -403,7 +445,7 @@ class ProductHttpFlowTest {
               "{}",
               "{\"startTime\":\"18:00\",\"endTime\":\"14:00\"}",
               "{\"startTime\":\"14:00\",\"endTime\":\"14:00\"}",
-              "{\"startTime\":\"14:00:01\",\"endTime\":\"18:00\"}")) {
+              "{\"startTime\":\"14:00:01\",\"endTime\":\"18:00\",\"orderDeadline\":\"13:00\"}")) {
         assertThat(seller.put(windowPath(first, DATE), body, true).statusCode()).isEqualTo(400);
       }
       for (String path :
@@ -438,9 +480,17 @@ class ProductHttpFlowTest {
     try (HttpSessionClient seller = new HttpSessionClient(port)) {
       login(seller, first.loginId());
       long productId = create(seller, first, "양파 3kg", "WEIGHT", 3000);
-      clock.set(Instant.parse("2026-10-12T14:59:59Z"));
+      clock.set(Instant.parse("2026-10-13T03:59:59Z"));
       long oldOffer = publish(seller, first, productId, 9000, 20).get("id").asLong();
-      clock.set(Instant.parse("2026-10-12T15:00:00Z"));
+      assertThat(
+              seller
+                  .json(seller.get(productPath(first)))
+                  .get("items")
+                  .get(0)
+                  .get("hasSales")
+                  .asBoolean())
+          .isTrue();
+      clock.set(Instant.parse("2026-10-13T04:00:00Z"));
       assertThat(
               seller
                   .put(
@@ -453,22 +503,33 @@ class ProductHttpFlowTest {
               seller
                   .put(
                       windowPath(first, DATE),
-                      "{\"startTime\":\"15:00\",\"endTime\":\"19:00\"}",
+                      "{\"startTime\":\"15:00\",\"endTime\":\"19:00\",\"orderDeadline\":\"14:00\"}",
                       true)
                   .statusCode())
           .isEqualTo(400);
       assertThat(seller.get(searchPath(first) + "/" + oldOffer).statusCode()).isEqualTo(404);
       assertThat(seller.json(seller.get(searchPath(first))).get("items").size()).isZero();
       assertThat(
+              seller
+                  .json(seller.get(productPath(first)))
+                  .get("items")
+                  .get(0)
+                  .get("hasSales")
+                  .asBoolean())
+          .isTrue();
+      assertThat(
               jdbc.queryForObject(
                   "SELECT price_won FROM daily_offers WHERE id = ?", Integer.class, oldOffer))
           .isEqualTo(9000);
+      assertThat(seller.get(windowPath(first, DATE)).statusCode()).isEqualTo(200);
+      clock.set(Instant.parse("2026-10-13T15:00:00Z"));
+      assertThat(seller.json(seller.get(searchPath(first))).get("items").size()).isZero();
       LocalDate next = DATE.plusDays(1);
       assertThat(
               seller
                   .put(
                       windowPath(first, next),
-                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\"}",
+                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\",\"orderDeadline\":\"13:00\"}",
                       true)
                   .statusCode())
           .isEqualTo(200);
@@ -512,7 +573,7 @@ class ProductHttpFlowTest {
               other
                   .put(
                       windowPath(otherMarket, DATE),
-                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\"}",
+                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\",\"orderDeadline\":\"13:00\"}",
                       true)
                   .statusCode())
           .isEqualTo(200);
@@ -562,7 +623,7 @@ class ProductHttpFlowTest {
               firstSession
                   .put(
                       windowPath(first, DATE),
-                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\"}",
+                      "{\"startTime\":\"14:00\",\"endTime\":\"18:00\",\"orderDeadline\":\"13:00\"}",
                       true)
                   .statusCode())
           .isEqualTo(200);
@@ -617,7 +678,7 @@ class ProductHttpFlowTest {
 
   static class TestClock extends Clock {
     private final AtomicReference<Instant> value =
-        new AtomicReference<>(Instant.parse("2026-10-12T03:00:00Z"));
+        new AtomicReference<>(Instant.parse("2026-10-13T03:00:00Z"));
 
     void set(Instant instant) {
       value.set(instant);

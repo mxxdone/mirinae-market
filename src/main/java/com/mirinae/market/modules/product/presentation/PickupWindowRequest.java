@@ -15,4 +15,10 @@ public record PickupWindowRequest(
             type = "string",
             example = "18:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
-        LocalTime endTime) {}
+        LocalTime endTime,
+    @Schema(
+            description = "분 단위 주문 마감. 수령 시작보다 늦을 수 없으며 정각부터 신규 주문을 받지 않습니다.",
+            type = "string",
+            example = "13:00",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+        LocalTime orderDeadline) {}

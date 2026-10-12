@@ -101,10 +101,11 @@ docker compose exec postgres psql -U mirinae -d mirinae -c "SELECT s.id, a.login
 
 ## 브라우저 연동 검증
 
-데모 프로필 백엔드를 준비하고 테스트 실행 환경에 계정 정보와 실제 매장 번호를 제공한다. 환경 값 누락이나 백엔드·DB 장애를 skip으로 처리하지 않는다. 테스트 가입 정보는 매 실행마다 고유하게 생성하므로 운영 DB를 대상으로 실행하지 않는다.
+테스트용 DB를 연결한 백엔드는 `demo,e2e` 프로필과 `--e2e.fixed-instant=2026-10-13T03:00:00Z`로 실행한다. 브라우저도 동일한 시각을 사용하며 실제 HTTP·PostgreSQL·세션 인증을 검증한다. 일반 시연 서버는 `demo` 프로필만 사용해 실제 시간으로 동작한다. 테스트 환경에 계정 정보와 실제 매장 번호를 제공한다. 설정 누락이나 잘못된 고정 시각·백엔드·DB 장애는 실패하며 skip하지 않는다. 테스트 가입 정보는 매 실행마다 고유하게 생성하므로 운영 DB를 대상으로 실행하지 않는다.
 
 ```powershell
 cd frontend
+$env:E2E_FIXED_INSTANT = '2026-10-13T03:00:00Z'
 $env:E2E_BUYER_LOGIN_ID = Read-Host '데모 구매자 로그인 ID'
 $env:E2E_SELLER_A_LOGIN_ID = Read-Host '데모 판매자 A 로그인 ID'
 $env:E2E_SELLER_B_LOGIN_ID = Read-Host '데모 판매자 B 로그인 ID'
@@ -163,5 +164,3 @@ V2는 상품·수령 시간·판매 조건 테이블을 추가한다. V3·V4는 
 기존 5173 개발 서버를 보존하며 별도 E2E를 실행할 때는 `$env:E2E_PORT = '5175'`를 추가하고 `$env:BACKEND_URL`을 실제 테스트 백엔드 주소로 지정한다. CI와 미지정 환경은 기존 5173을 사용한다. 테스트에는 앞서 설명한 데모 계정 환경 변수와 실제 백엔드·DB가 필요하다. 화면의 시각 검증 PNG는 Git에서 제외한 `output/playwright/`에 생성된다.
 
 상품 단건 삭제는 기록을 보존하고 목록·공개 판매에서 제외합니다. 매장별 주문 마감 정각부터 공개 조회와 판매 조건 변경을 중단합니다. 시간 저장 API에는 orderDeadline이 필수입니다. DB 변경 복구의 제약은 ADR-005를 참조합니다.
-
-당일 판매 E2E는 실행 시간에 따른 마감 실패를 피하도록 시간만 고정합니다. 실제 HTTP·PostgreSQL·세션 인증을 사용하며 서버는 `demo,e2e` 프로필과 `--e2e.fixed-instant=2026-10-13T03:00:00Z`, 브라우저 테스트는 `$env:E2E_FIXED_INSTANT = '2026-10-13T03:00:00Z'`를 함께 지정합니다. 일반 서버는 `demo` 프로필만 사용하므로 실제 시간으로 동작합니다. e2e 프로필에서 고정 시각이 없거나 잘못되면 실패하며 skip하지 않습니다.

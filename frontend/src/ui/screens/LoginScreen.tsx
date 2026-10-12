@@ -89,12 +89,12 @@ export function LoginScreen({
         <BrandIntroPanel
           servicePill="미리내 마켓 · 방문 수령"
           sealText="미리내인"
-          headline="오늘 미리 장보고, 내일 시장에서 만나요"
+          headline="미리 장보고, 오늘 시장에서 만나요"
           subtext="동네 상인들의 정성이 담긴 신선한 식재료를 기다림 없이 매장에서 직접 수령하세요."
           steps={[
             {
               number: 1,
-              title: "전날 장보기 예약",
+              title: "당일 장보기 예약",
               desc: "원하는 시장 상품을 미리 간편하게 지정",
             },
             {

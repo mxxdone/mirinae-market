@@ -49,7 +49,7 @@ export function SignupCompleteScreen({
               </>
             )}
             <br />
-            내일부터 전통시장의 신선함을 예약 방문으로 편리하게 만나보세요.
+            오늘부터 전통시장의 신선함을 예약 방문으로 편리하게 만나보세요.
           </p>
 
           <div className="complete-notice-box">

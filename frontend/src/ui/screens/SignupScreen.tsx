@@ -118,7 +118,7 @@ export function SignupScreen({
               구매자 회원가입
             </h2>
             <p className="form-desc-text">
-              내일 수령할 시장 상품 예약을 위해 기본 정보를 입력해 주세요.
+              오늘 수령할 시장 상품 예약을 위해 기본 정보를 입력해 주세요.
             </p>
           </div>
 

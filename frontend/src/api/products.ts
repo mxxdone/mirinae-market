@@ -1,4 +1,4 @@
-import { apiGet, apiPostJson, apiPutJson } from "./client";
+import { apiGet, apiPostJson, apiPutJson, apiDeleteEmpty } from "./client";
 import {
   ApiError,
   type MarketView,
@@ -7,6 +7,7 @@ import {
   type PickupWindowInput,
   type ProductInput,
   type ProductView,
+  type ProductPage,
   type ResultPage,
   type StoreView,
 } from "./types";
@@ -32,8 +33,11 @@ export function getOffer(
 ): Promise<OfferView> {
   return apiGet(`/api/markets/${marketId}/offers/${offerId}`, signal);
 }
-export function getProducts(storeId: number, page = 0): Promise<ResultPage<ProductView>> {
+export function getProducts(storeId: number, page = 0): Promise<ProductPage> {
   return apiGet(`/api/seller/stores/${storeId}/products?page=${page}&size=20`);
+}
+export function deleteProduct(storeId: number, productId: number): Promise<void> {
+  return apiDeleteEmpty(`/api/seller/stores/${storeId}/products/${productId}`);
 }
 export function createProduct(storeId: number, input: ProductInput): Promise<ProductView> {
   return apiPostJson(`/api/seller/stores/${storeId}/products`, input);

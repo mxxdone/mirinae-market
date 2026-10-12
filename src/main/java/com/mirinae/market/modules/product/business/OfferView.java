@@ -19,5 +19,6 @@ public record OfferView(
     int onlineQuantity,
     LocalTime startTime,
     LocalTime endTime,
+    LocalTime orderDeadline,
     String comparisonUnit,
     BigDecimal comparisonPriceWon) {}

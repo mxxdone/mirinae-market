@@ -225,10 +225,18 @@ export async function apiPostForm<T>(path: string, formData: Record<string, stri
  * POST 빈 본문 요청 (로그아웃 등 204 기대)
  */
 export async function apiPostEmpty(path: string): Promise<void> {
+  return apiEmpty(path, "POST");
+}
+
+export async function apiDeleteEmpty(path: string): Promise<void> {
+  return apiEmpty(path, "DELETE");
+}
+
+async function apiEmpty(path: string, method: "POST" | "DELETE"): Promise<void> {
   const csrf = await getCsrfToken();
 
   const response = await fetchWithTimeout(path, {
-    method: "POST",
+    method,
     credentials: "same-origin",
     headers: {
       [csrf.headerName]: csrf.token,

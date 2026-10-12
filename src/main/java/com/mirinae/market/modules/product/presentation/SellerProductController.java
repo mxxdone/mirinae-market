@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.security.Principal;
 import java.time.LocalDate;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -75,7 +76,8 @@ public class SellerProductController {
 
   @Operation(
       summary = "본인 상품 목록",
-      description = "날짜와 무관한 기본 정보. ID순 페이지, 기본 20건·최대 100건과 hasNext를 제공합니다.")
+      description =
+          "날짜와 무관한 기본 정보. ID순 페이지, 기본 20건·최대 100건과 hasNext·totalItems와 판매 이력 hasSales를 제공합니다.")
   @ApiResponse(responseCode = "200", description = "본인 상품 목록")
   @GetMapping("/products")
   public ProductPage list(
@@ -87,8 +89,20 @@ public class SellerProductController {
   }
 
   @Operation(
+      summary = "본인 상품 삭제",
+      description = "기록은 보존하고 판매자 목록과 공개 판매에서 제외합니다. 이미 삭제된 본인 상품의 재요청도 204입니다. 주문 취소와는 별개입니다.")
+  @SecurityRequirement(name = "csrfToken")
+  @ApiResponse(responseCode = "204", description = "상품 삭제 처리 완료")
+  @DeleteMapping("/products/{productId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void archive(
+      Principal principal, @PathVariable long storeId, @PathVariable long productId) {
+    products.archive(principal.getName(), storeId, productId);
+  }
+
+  @Operation(
       summary = "매장 수령 시간 등록·수정",
-      description = "한국 시간 기준 내일만 허용합니다. 같은 매장·날짜의 모든 판매 조건이 시간을 공유합니다.")
+      description = "한국 시간 기준 오늘만 허용합니다. 같은 매장·날짜의 모든 판매 조건이 시간을 공유합니다.")
   @SecurityRequirement(name = "csrfToken")
   @ApiResponse(responseCode = "200", description = "수령 시간 저장")
   @PutMapping("/pickup-windows/{pickupDate}")
@@ -98,12 +112,17 @@ public class SellerProductController {
       @PathVariable LocalDate pickupDate,
       @RequestBody PickupWindowRequest request) {
     return products.window(
-        principal.getName(), storeId, pickupDate, request.startTime(), request.endTime());
+        principal.getName(),
+        storeId,
+        pickupDate,
+        request.startTime(),
+        request.endTime(),
+        request.orderDeadline());
   }
 
   @Operation(
       summary = "매장 수령 시간 조회",
-      description = "본인 매장의 내일 수령 시간을 복원합니다. 미등록은 404 NOT_FOUND이며 타 매장 정보는 반환하지 않습니다.")
+      description = "본인 매장의 오늘 수령 시간을 복원합니다. 미등록은 404 NOT_FOUND이며 타 매장 정보는 반환하지 않습니다.")
   @ApiResponse(responseCode = "200", description = "저장된 수령 시간")
   @GetMapping("/pickup-windows/{pickupDate}")
   public PickupWindowView window(
@@ -112,9 +131,9 @@ public class SellerProductController {
   }
 
   @Operation(
-      summary = "내일 판매 조건 등록·수정",
+      summary = "오늘 판매 조건 등록·수정",
       description =
-          "한 상품·수령일에 하나. 저장 즉시 공개하며 재등록은 같은 제안 ID의 가격·온라인 수량을 수정합니다. 00시부터 해당 날짜 수정은 거절됩니다. 주문 연동은 Phase 4 범위입니다.")
+          "한 상품·수령일에 하나. 저장 즉시 공개하며 재등록은 같은 제안 ID의 가격·온라인 수량을 수정합니다. 매장이 정한 주문 마감 정각부터 공개 조회와 판매 조건 변경을 거절합니다. 주문 연동은 Phase 4 범위입니다.")
   @SecurityRequirement(name = "csrfToken")
   @ApiResponse(responseCode = "200", description = "공개된 판매 조건과 단위당 보조 가격")
   @ApiResponse(responseCode = "409", description = "매장 수령 시간 미등록: PICKUP_WINDOW_REQUIRED")

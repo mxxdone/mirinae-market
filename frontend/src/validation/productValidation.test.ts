@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { parseSaleUnit, parseOfferInput, tomorrowPickupDate } from "./productValidation";
+import {
+  parseSaleUnit,
+  parseOfferInput,
+  todayPickupDate,
+  convertWeightInput,
+} from "./productValidation";
 
 describe("판매 구성 숫자 입력", () => {
+  it("단위를 바꿔도 실제 중량을 보존한다", () => {
+    expect(convertWeightInput("2.5", "kg", "g")).toBe("2500");
+    expect(convertWeightInput("2500", "g", "kg")).toBe("2.5");
+    expect(convertWeightInput("100", "g", "kg")).toBe("0.1");
+    expect(convertWeightInput("", "kg", "g")).toBe("");
+    expect(convertWeightInput("2.5", "kg", "kg")).toBe("2.5");
+    expect(() => convertWeightInput("abc", "kg", "g")).toThrow();
+  });
   it("kg를 소수 잘라내기 없이 g로 변환한다", () => {
     expect(parseSaleUnit("WEIGHT", "3", "kg")).toBe(3000);
     expect(parseSaleUnit("WEIGHT", "0.1", "kg")).toBe(100);
@@ -34,8 +47,8 @@ describe("판매 구성 숫자 입력", () => {
       expect(() => parseOfferInput(price, quantity)).toThrow();
     }
   });
-  it("한국 시간 자정에 내일 날짜를 전환한다", () => {
-    expect(tomorrowPickupDate(new Date("2026-10-12T14:59:59Z"))).toBe("2026-10-13");
-    expect(tomorrowPickupDate(new Date("2026-10-12T15:00:00Z"))).toBe("2026-10-14");
+  it("한국 시간 자정에 오늘 날짜를 전환한다", () => {
+    expect(todayPickupDate(new Date("2026-10-12T14:59:59Z"))).toBe("2026-10-12");
+    expect(todayPickupDate(new Date("2026-10-12T15:00:00Z"))).toBe("2026-10-13");
   });
 });

@@ -57,7 +57,7 @@ public class ProductService {
         !previous.name().equals(normalizedName)
             || !previous.unitType().equals(unit.kind().name())
             || previous.unitAmount() != unit.amount();
-    if (compositionChanged && data.hasOffers(productId)) {
+    if (compositionChanged && previous.hasSales()) {
       throw new ProductConflictException(
           "PRODUCT_LOCKED", "판매 조건이 있는 상품의 이름·판매 구성 변경은 새 상품으로 등록해 주세요.");
     }
@@ -74,7 +74,8 @@ public class ProductService {
         normalizedName,
         normalizedDescription,
         unit.kind().name(),
-        unit.amount());
+        unit.amount(),
+        previous.hasSales());
   }
 
   public ProductPage products(String loginId, long storeId, int page, int size) {
@@ -85,17 +86,36 @@ public class ProductService {
         rows.stream().limit(size).map(ProductService::productView).toList(),
         page,
         size,
-        rows.size() > size);
+        rows.size() > size,
+        data.productCount(storeId));
+  }
+
+  @Transactional
+  public void archive(String loginId, long storeId, long productId) {
+    authorizeAndLock(loginId, storeId);
+    if (!data.hasProduct(storeId, productId)) {
+      throw new ProductNotFoundException();
+    }
+    data.archive(storeId, productId);
   }
 
   @Transactional
   public PickupWindowView window(
-      String loginId, long storeId, LocalDate date, LocalTime start, LocalTime end) {
+      String loginId,
+      long storeId,
+      LocalDate date,
+      LocalTime start,
+      LocalTime end,
+      LocalTime deadline) {
     authorizeAndLock(loginId, storeId);
-    OfferRules.date(date, clock);
-    OfferRules.window(start, end);
-    data.window(storeId, date, start, end);
-    return new PickupWindowView(storeId, date, start, end);
+    Clock current = Clock.fixed(clock.instant(), clock.getZone());
+    OfferRules.date(date, current);
+    OfferRules.window(start, end, deadline);
+    data.findWindow(storeId, date)
+        .ifPresent(previous -> OfferRules.open(previous.orderDeadline(), current));
+    OfferRules.open(deadline, current);
+    data.window(storeId, date, start, end, deadline);
+    return new PickupWindowView(storeId, date, start, end, deadline);
   }
 
   @Transactional
@@ -107,12 +127,17 @@ public class ProductService {
       Integer price,
       Integer quantity) {
     authorizeAndLock(loginId, storeId);
-    OfferRules.date(date, clock);
+    Clock current = Clock.fixed(clock.instant(), clock.getZone());
+    OfferRules.date(date, current);
     ProductRules.offer(price, quantity);
     data.product(storeId, productId).orElseThrow(ProductNotFoundException::new);
-    if (!data.hasWindow(storeId, date)) {
-      throw new ProductConflictException("PICKUP_WINDOW_REQUIRED", "해당 수령일의 매장 수령 시간을 먼저 등록해 주세요.");
-    }
+    var window =
+        data.findWindow(storeId, date)
+            .orElseThrow(
+                () ->
+                    new ProductConflictException(
+                        "PICKUP_WINDOW_REQUIRED", "해당 수령일의 매장 수령 시간을 먼저 등록해 주세요."));
+    OfferRules.open(window.orderDeadline(), current);
     long id = data.offer(storeId, productId, date, price, quantity);
     long marketId = stores.ownedStore(loginId, storeId).marketId();
     return offerView(data.detail(marketId, date, id).orElseThrow(ProductNotFoundException::new));
@@ -124,14 +149,20 @@ public class ProductService {
     var row =
         data.findWindow(storeId, date)
             .orElseThrow(() -> new ProductNotFoundException("해당 날짜의 매장 수령 시간을 아직 등록하지 않았습니다."));
-    return new PickupWindowView(storeId, date, row.startTime(), row.endTime());
+    return new PickupWindowView(storeId, date, row.startTime(), row.endTime(), row.orderDeadline());
   }
 
   public OfferPage search(long marketId, String query, int page, int size) {
     ProductRules.page(page, size);
+    Clock current = Clock.fixed(clock.instant(), clock.getZone());
     List<OfferRow> rows =
         data.search(
-            marketId, OfferRules.tomorrow(clock), ProductRules.query(query), page * size, size + 1);
+            marketId,
+            OfferRules.today(current),
+            OfferRules.now(current),
+            ProductRules.query(query),
+            page * size,
+            size + 1);
     return new OfferPage(
         rows.stream().limit(size).map(ProductService::offerView).toList(),
         page,
@@ -140,9 +171,13 @@ public class ProductService {
   }
 
   public OfferView detail(long marketId, long offerId) {
-    return offerView(
-        data.detail(marketId, OfferRules.tomorrow(clock), offerId)
-            .orElseThrow(ProductNotFoundException::new));
+    Clock current = Clock.fixed(clock.instant(), clock.getZone());
+    var row =
+        data.detail(marketId, OfferRules.today(current), offerId)
+            .orElseThrow(ProductNotFoundException::new);
+    if (!OfferRules.now(current).isBefore(row.orderDeadline()))
+      throw new ProductNotFoundException();
+    return offerView(row);
   }
 
   private void authorizeAndLock(String loginId, long storeId) {
@@ -153,7 +188,13 @@ public class ProductService {
 
   private static ProductView productView(ProductRow row) {
     return new ProductView(
-        row.id(), row.storeId(), row.name(), row.description(), row.unitType(), row.unitAmount());
+        row.id(),
+        row.storeId(),
+        row.name(),
+        row.description(),
+        row.unitType(),
+        row.unitAmount(),
+        row.hasSales());
   }
 
   private static OfferView offerView(OfferRow row) {
@@ -173,6 +214,7 @@ public class ProductService {
         row.onlineQuantity(),
         row.startTime(),
         row.endTime(),
+        row.orderDeadline(),
         unit.kind() == SaleUnit.Kind.WEIGHT ? "100g" : "1개",
         ProductRules.comparisonPrice(row.priceWon(), unit));
   }

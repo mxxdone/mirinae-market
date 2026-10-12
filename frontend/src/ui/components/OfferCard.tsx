@@ -4,11 +4,8 @@ export function OfferCard({ offer, onOpen }: { offer: OfferView; onOpen: () => v
   return (
     <article className="offer-card">
       <div className="offer-card-top">
-        <span className="product-unit-mark" aria-hidden="true">
-          {offer.unitType === "WEIGHT" ? "g" : "개"}
-        </span>
         <span className={`pill-badge ${offer.onlineQuantity === 0 ? "secondary" : "primary"}`}>
-          {offer.onlineQuantity === 0 ? "품절" : "내일 수령"}
+          {offer.onlineQuantity === 0 ? "품절" : "오늘 수령"}
         </span>
       </div>
       <p className="offer-store-name">{offer.storeName}</p>
@@ -30,6 +27,7 @@ export function OfferCard({ offer, onOpen }: { offer: OfferView; onOpen: () => v
         원
       </p>
       <div className="offer-pickup">
+        <span>주문 {offer.orderDeadline.slice(0, 5)} 마감</span>
         <span>
           수령 {offer.startTime.slice(0, 5)}~{offer.endTime.slice(0, 5)}
         </span>

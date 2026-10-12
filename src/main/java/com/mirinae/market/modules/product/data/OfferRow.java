@@ -17,4 +17,5 @@ public record OfferRow(
     int priceWon,
     int onlineQuantity,
     LocalTime startTime,
-    LocalTime endTime) {}
+    LocalTime endTime,
+    LocalTime orderDeadline) {}

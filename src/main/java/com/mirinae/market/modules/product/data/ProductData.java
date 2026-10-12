@@ -15,11 +15,13 @@ public class ProductData {
       """
       SELECT o.id, p.id AS product_id, s.market_id, s.id AS store_id, s.name AS store_name,
              p.name AS product_name, p.description, p.unit_type, p.unit_amount, o.pickup_date,
-             o.price_won, o.online_quantity, w.start_time, w.end_time
+             o.price_won, o.online_quantity, w.start_time, w.end_time, w.order_deadline
       FROM daily_offers o JOIN products p ON p.id = o.product_id
       JOIN stores s ON s.id = p.store_id
       JOIN pickup_windows w ON w.store_id = o.store_id AND w.pickup_date = o.pickup_date
       """;
+  private static final String PRODUCT_SELECT =
+      "SELECT p.*, EXISTS (SELECT 1 FROM daily_offers o WHERE o.product_id = p.id) AS has_sales FROM products p ";
   private final JdbcTemplate jdbc;
 
   public ProductData(JdbcTemplate jdbc) {
@@ -44,13 +46,13 @@ public class ProductData {
             description,
             unitType,
             unitAmount);
-    return new ProductRow(id, storeId, name, description, unitType, unitAmount);
+    return new ProductRow(id, storeId, name, description, unitType, unitAmount, false);
   }
 
   public Optional<ProductRow> product(long storeId, long productId) {
     return jdbc
         .query(
-            "SELECT * FROM products WHERE store_id = ? AND id = ?",
+            PRODUCT_SELECT + "WHERE p.store_id = ? AND p.id = ? AND p.archived_at IS NULL",
             (rs, row) -> productRow(rs),
             storeId,
             productId)
@@ -60,19 +62,35 @@ public class ProductData {
 
   public List<ProductRow> products(long storeId, int offset, int limit) {
     return jdbc.query(
-        "SELECT * FROM products WHERE store_id = ? ORDER BY id LIMIT ? OFFSET ?",
+        PRODUCT_SELECT
+            + "WHERE p.store_id = ? AND p.archived_at IS NULL ORDER BY p.id LIMIT ? OFFSET ?",
         (rs, row) -> productRow(rs),
         storeId,
         limit,
         offset);
   }
 
-  public boolean hasOffers(long productId) {
+  public long productCount(long storeId) {
+    return jdbc.queryForObject(
+        "SELECT count(*) FROM products WHERE store_id = ? AND archived_at IS NULL",
+        Long.class,
+        storeId);
+  }
+
+  public boolean hasProduct(long storeId, long productId) {
     return Boolean.TRUE.equals(
         jdbc.queryForObject(
-            "SELECT EXISTS (SELECT 1 FROM daily_offers WHERE product_id = ?)",
+            "SELECT EXISTS (SELECT 1 FROM products WHERE store_id = ? AND id = ?)",
             Boolean.class,
+            storeId,
             productId));
+  }
+
+  public void archive(long storeId, long productId) {
+    jdbc.update(
+        "UPDATE products SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP) WHERE store_id = ? AND id = ?",
+        storeId,
+        productId);
   }
 
   public void update(
@@ -90,41 +108,33 @@ public class ProductData {
         productId);
   }
 
-  public void window(long storeId, LocalDate date, LocalTime start, LocalTime end) {
+  public void window(
+      long storeId, LocalDate date, LocalTime start, LocalTime end, LocalTime deadline) {
     jdbc.update(
         """
-        INSERT INTO pickup_windows (store_id, pickup_date, start_time, end_time) VALUES (?, ?, ?, ?)
-        ON CONFLICT (store_id, pickup_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time
+        INSERT INTO pickup_windows (store_id, pickup_date, start_time, end_time, order_deadline) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (store_id, pickup_date) DO UPDATE SET start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, order_deadline = EXCLUDED.order_deadline
         """,
         storeId,
         date,
         start,
-        end);
+        end,
+        deadline);
   }
 
   public Optional<WindowRow> findWindow(long storeId, LocalDate date) {
     return jdbc
         .query(
-            "SELECT start_time, end_time FROM pickup_windows WHERE store_id = ? AND pickup_date = ?",
+            "SELECT start_time, end_time, order_deadline FROM pickup_windows WHERE store_id = ? AND pickup_date = ?",
             (rs, row) ->
                 new WindowRow(
                     rs.getObject("start_time", LocalTime.class),
-                    rs.getObject("end_time", LocalTime.class)),
+                    rs.getObject("end_time", LocalTime.class),
+                    rs.getObject("order_deadline", LocalTime.class)),
             storeId,
             date)
         .stream()
         .findFirst();
-  }
-
-  public boolean hasWindow(long storeId, LocalDate date) {
-    return Boolean.TRUE.equals(
-        jdbc.queryForObject(
-            """
-        SELECT EXISTS (SELECT 1 FROM pickup_windows WHERE store_id = ? AND pickup_date = ?)
-        """,
-            Boolean.class,
-            storeId,
-            date));
   }
 
   public long offer(long storeId, long productId, LocalDate date, int price, int quantity) {
@@ -143,16 +153,18 @@ public class ProductData {
         quantity);
   }
 
-  public List<OfferRow> search(long marketId, LocalDate date, String query, int offset, int limit) {
+  public List<OfferRow> search(
+      long marketId, LocalDate date, LocalTime now, String query, int offset, int limit) {
     return jdbc.query(
         OFFER_SELECT
             + """
-        WHERE s.market_id = ? AND o.pickup_date = ? AND position(lower(?) in lower(p.name)) > 0
+        WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0
         ORDER BY o.id LIMIT ? OFFSET ?
         """,
         (rs, row) -> offerRow(rs),
         marketId,
         date,
+        now,
         query,
         limit,
         offset);
@@ -161,7 +173,8 @@ public class ProductData {
   public Optional<OfferRow> detail(long marketId, LocalDate date, long offerId) {
     return jdbc
         .query(
-            OFFER_SELECT + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ?",
+            OFFER_SELECT
+                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND p.archived_at IS NULL",
             (rs, row) -> offerRow(rs),
             marketId,
             date,
@@ -177,7 +190,8 @@ public class ProductData {
         rs.getString("name"),
         rs.getString("description"),
         rs.getString("unit_type"),
-        rs.getInt("unit_amount"));
+        rs.getInt("unit_amount"),
+        rs.getBoolean("has_sales"));
   }
 
   private static OfferRow offerRow(ResultSet rs) throws SQLException {
@@ -195,6 +209,7 @@ public class ProductData {
         rs.getInt("price_won"),
         rs.getInt("online_quantity"),
         rs.getObject("start_time", LocalTime.class),
-        rs.getObject("end_time", LocalTime.class));
+        rs.getObject("end_time", LocalTime.class),
+        rs.getObject("order_deadline", LocalTime.class));
   }
 }

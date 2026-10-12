@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { installTestClock } from "./fixedTime";
+
+test.beforeEach(async ({ page }) => {
+  await installTestClock(page);
+});
 
 /**
  * 환경 변수 필수 검증 헬퍼

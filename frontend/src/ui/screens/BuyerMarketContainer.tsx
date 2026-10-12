@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getMarkets, searchOffers, getOffer } from "../../api/products";
 import { ApiError, type MarketView, type OfferView } from "../../api/types";
-import { tomorrowPickupDate } from "../../validation/productValidation";
+import { todayPickupDate } from "../../validation/productValidation";
 import { BuyerMarketScreen } from "./BuyerMarketScreen";
 
 export function BuyerMarketContainer({
@@ -20,7 +20,7 @@ export function BuyerMarketContainer({
   const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [date, setDate] = useState(tomorrowPickupDate);
+  const [date, setDate] = useState(todayPickupDate);
   const request = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const mounted = useRef(true);
@@ -84,7 +84,7 @@ export function BuyerMarketContainer({
   }, [initialize]);
   useEffect(() => {
     const timer = setInterval(() => {
-      const next = tomorrowPickupDate();
+      const next = todayPickupDate();
       if (date !== next) {
         setDate(next);
         if (marketId !== null) void load(marketId, query, 0);

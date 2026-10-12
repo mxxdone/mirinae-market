@@ -12,12 +12,12 @@ import org.junit.jupiter.api.Test;
 
 class OfferRulesTest {
   @Test
-  void tomorrowUsesKoreanMidnightEvenWithUtcClock() {
+  void todayUsesKoreanMidnightEvenWithUtcClock() {
     Clock before = Clock.fixed(Instant.parse("2026-10-12T14:59:59Z"), ZoneOffset.UTC);
     Clock midnight = Clock.fixed(Instant.parse("2026-10-12T15:00:00Z"), ZoneOffset.UTC);
-    LocalDate pickup = LocalDate.parse("2026-10-13");
-    assertThat(OfferRules.tomorrow(before)).isEqualTo(pickup);
-    assertThat(OfferRules.tomorrow(midnight)).isEqualTo(pickup.plusDays(1));
+    LocalDate pickup = LocalDate.parse("2026-10-12");
+    assertThat(OfferRules.today(before)).isEqualTo(pickup);
+    assertThat(OfferRules.today(midnight)).isEqualTo(pickup.plusDays(1));
     OfferRules.date(pickup, before);
     assertThatIllegalArgumentException().isThrownBy(() -> OfferRules.date(pickup, midnight));
     assertThatIllegalArgumentException()
@@ -25,6 +25,30 @@ class OfferRulesTest {
     assertThatIllegalArgumentException()
         .isThrownBy(() -> OfferRules.date(pickup.plusDays(1), before));
     assertThatIllegalArgumentException().isThrownBy(() -> OfferRules.date(null, before));
+  }
+
+  @Test
+  void orderDeadlineMustNotExceedPickupStartAndClosesAtExactInstant() {
+    OfferRules.window(LocalTime.of(17, 0), LocalTime.of(19, 0), LocalTime.of(16, 0));
+    OfferRules.window(LocalTime.of(17, 0), LocalTime.of(19, 0), LocalTime.of(17, 0));
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () -> OfferRules.window(LocalTime.of(17, 0), LocalTime.of(19, 0), LocalTime.of(18, 0)));
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> OfferRules.window(LocalTime.of(17, 0), LocalTime.of(19, 0), null));
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                OfferRules.window(
+                    LocalTime.of(17, 0), LocalTime.of(19, 0), LocalTime.of(16, 0, 1)));
+    OfferRules.open(
+        LocalTime.of(16, 0), Clock.fixed(Instant.parse("2026-10-13T06:59:59Z"), ZoneOffset.UTC));
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                OfferRules.open(
+                    LocalTime.of(16, 0),
+                    Clock.fixed(Instant.parse("2026-10-13T07:00:00Z"), ZoneOffset.UTC)));
   }
 
   @Test

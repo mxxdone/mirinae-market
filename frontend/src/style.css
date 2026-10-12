@@ -1100,6 +1100,73 @@ body {
   align-items: center;
   gap: 16px;
 }
+.seller-products .market-pagination {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pagination-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-warm);
+  color: var(--color-text-main);
+  text-decoration: none;
+  cursor: pointer;
+}
+.pagination-button[aria-current="page"] {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+.pagination-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.product-list-heading,
+.product-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.product-list-heading h2 {
+  margin-bottom: 0;
+}
+.product-list-heading {
+  margin-bottom: 10px;
+}
+.product-actions {
+  flex-wrap: wrap;
+}
+.product-actions .btn-submit-primary {
+  flex: 1;
+}
+.product-delete-button {
+  border: 1px solid #a83030;
+  border-radius: var(--radius-md);
+  background: #fff4f2;
+  color: #942424;
+  padding: 12px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.product-delete-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.product-delete-confirm {
+  padding: 14px;
+  border: 1px solid #dba5a0;
+  border-radius: var(--radius-md);
+}
+.product-delete-confirm p {
+  margin-bottom: 12px;
+}
 .market-empty {
   padding: 44px 20px;
   text-align: center;

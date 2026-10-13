@@ -3,6 +3,12 @@ import { getMarkets, searchOffers, getOffer } from "../../api/products";
 import { ApiError, type MarketView, type OfferView } from "../../api/types";
 import { todayPickupDate } from "../../validation/productValidation";
 import { BuyerMarketScreen } from "./BuyerMarketScreen";
+import {
+  hasMarketDetailHistory,
+  isMarketLocation,
+  readMarketLocation,
+  writeMarketLocation,
+} from "../marketLocation";
 
 export function BuyerMarketContainer({
   onAccount,
@@ -33,7 +39,9 @@ export function BuyerMarketContainer({
     [onSessionExpired],
   );
   const load = useCallback(
-    async (market: number, text: string, nextPage: number) => {
+    async (market: number, text: string, nextPage: number, recordLocation = true) => {
+      if (recordLocation)
+        writeMarketLocation({ marketId: market, query: text, page: nextPage, offerId: null });
       controller.current?.abort();
       controller.current = new AbortController();
       const current = ++request.current;
@@ -57,6 +65,32 @@ export function BuyerMarketContainer({
     },
     [handleError],
   );
+  const open = useCallback(
+    async (offer: Pick<OfferView, "marketId" | "id">, recordLocation = true) => {
+      if (recordLocation) {
+        writeMarketLocation(
+          { ...readMarketLocation(), marketId: offer.marketId, offerId: offer.id },
+          true,
+        );
+      }
+      controller.current?.abort();
+      controller.current = new AbortController();
+      const current = ++request.current;
+      setSelected(null);
+      setLoading(true);
+      setError(null);
+      try {
+        const detail = await getOffer(offer.marketId, offer.id, controller.current.signal);
+        if (mounted.current && current === request.current) setSelected(detail);
+      } catch (failure) {
+        if (mounted.current && current === request.current) handleError(failure);
+      } finally {
+        if (mounted.current && current === request.current) setLoading(false);
+      }
+    },
+    [handleError],
+  );
+
   const initialize = useCallback(async () => {
     const current = ++request.current;
     setLoading(true);
@@ -65,7 +99,14 @@ export function BuyerMarketContainer({
       const result = await getMarkets();
       if (!mounted.current || current !== request.current) return;
       setMarkets(result);
-      if (result[0]) await load(result[0].id, "", 0);
+      const location = readMarketLocation();
+      const market = result.find((item) => item.id === location.marketId) ?? result[0];
+      if (market && market.id === location.marketId && location.offerId !== null) {
+        setMarketId(market.id);
+        setQuery(location.query);
+        setPage(location.page);
+        await open({ marketId: market.id, id: location.offerId }, false);
+      } else if (market) await load(market.id, location.query, location.page);
       else setLoading(false);
     } catch (failure) {
       if (mounted.current && current === request.current) {
@@ -73,7 +114,7 @@ export function BuyerMarketContainer({
         setLoading(false);
       }
     }
-  }, [load, handleError]);
+  }, [load, open, handleError]);
   useEffect(() => {
     mounted.current = true;
     void initialize();
@@ -82,6 +123,22 @@ export function BuyerMarketContainer({
       controller.current?.abort();
     };
   }, [initialize]);
+  useEffect(() => {
+    function restoreLocation() {
+      if (!isMarketLocation()) return;
+      const location = readMarketLocation();
+      const market = markets.find((item) => item.id === location.marketId);
+      if (!market) return;
+      if (location.offerId !== null) {
+        setMarketId(market.id);
+        setQuery(location.query);
+        setPage(location.page);
+        void open({ marketId: market.id, id: location.offerId }, false);
+      } else void load(market.id, location.query, location.page, false);
+    }
+    window.addEventListener("popstate", restoreLocation);
+    return () => window.removeEventListener("popstate", restoreLocation);
+  }, [markets, load, open]);
   useEffect(() => {
     const timer = setInterval(() => {
       const next = todayPickupDate();
@@ -92,21 +149,6 @@ export function BuyerMarketContainer({
     }, 30000);
     return () => clearInterval(timer);
   }, [date, marketId, query, load]);
-  async function open(offer: OfferView) {
-    controller.current?.abort();
-    controller.current = new AbortController();
-    const current = ++request.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const detail = await getOffer(offer.marketId, offer.id, controller.current.signal);
-      if (mounted.current && current === request.current) setSelected(detail);
-    } catch (failure) {
-      if (mounted.current && current === request.current) handleError(failure);
-    } finally {
-      if (mounted.current && current === request.current) setLoading(false);
-    }
-  }
   return (
     <BuyerMarketScreen
       markets={markets}
@@ -116,6 +158,7 @@ export function BuyerMarketContainer({
       loading={loading}
       error={error}
       date={date}
+      searchQuery={query}
       page={page}
       hasNext={hasNext}
       onSearch={(market, text) => void load(market, text, 0)}
@@ -124,13 +167,14 @@ export function BuyerMarketContainer({
       }}
       onOpen={(offer) => void open(offer)}
       onBack={() => {
-        setSelected(null);
-        setError(null);
+        if (hasMarketDetailHistory()) window.history.back();
+        else if (marketId !== null) void load(marketId, query, page);
       }}
       onAccount={onAccount}
       onRetry={() => {
+        const location = readMarketLocation();
         if (marketId === null) void initialize();
-        else if (selected) void open(selected);
+        else if (location.offerId !== null) void open({ marketId, id: location.offerId }, false);
         else void load(marketId, query, page);
       }}
     />

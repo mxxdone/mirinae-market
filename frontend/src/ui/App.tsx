@@ -9,6 +9,7 @@ import { LoginScreen } from "./screens/LoginScreen";
 import { SellerStoreScreen } from "./screens/SellerStoreScreen";
 import { SignupCompleteScreen } from "./screens/SignupCompleteScreen";
 import { SignupScreen } from "./screens/SignupScreen";
+import { isMarketLocation, leaveMarketLocation, writeMarketLocation } from "./marketLocation";
 
 export type ScreenId =
   "login" | "signup" | "signup-complete" | "buyer-summary" | "seller-store" | "buyer-market";
@@ -61,7 +62,7 @@ export function App(): ReactElement {
       if (me.role === "SELLER") {
         setCurrentScreen("seller-store");
       } else {
-        setCurrentScreen("buyer-summary");
+        setCurrentScreen(isMarketLocation() ? "buyer-market" : "buyer-summary");
       }
     } catch (err: unknown) {
       if (currentReqId !== requestIdRef.current) return;
@@ -92,7 +93,7 @@ export function App(): ReactElement {
         if (me.role === "SELLER") {
           setCurrentScreen("seller-store");
         } else {
-          setCurrentScreen("buyer-summary");
+          setCurrentScreen(isMarketLocation() ? "buyer-market" : "buyer-summary");
         }
       } catch {
         if (!isMounted || currentReqId !== requestIdRef.current) return;
@@ -114,6 +115,21 @@ export function App(): ReactElement {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (currentUser?.role !== "BUYER") return;
+    function restoreScreen() {
+      setCurrentScreen(isMarketLocation() ? "buyer-market" : "buyer-summary");
+    }
+    window.addEventListener("popstate", restoreScreen);
+    return () => window.removeEventListener("popstate", restoreScreen);
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!isRestoringSession && !currentUser && currentScreen === "login" && isMarketLocation()) {
+      leaveMarketLocation();
+    }
+  }, [isRestoringSession, currentUser, currentScreen]);
 
   /**
    * 로그아웃 처리
@@ -254,7 +270,10 @@ export function App(): ReactElement {
 
           {currentScreen === "buyer-summary" && currentUser && (
             <BuyerSummaryScreen
-              onBrowse={() => setCurrentScreen("buyer-market")}
+              onBrowse={() => {
+                writeMarketLocation({ marketId: null, query: "", page: 0, offerId: null }, true);
+                setCurrentScreen("buyer-market");
+              }}
               user={currentUser}
               isLoggingOut={isLoggingOut}
               logoutError={logoutError}
@@ -265,7 +284,10 @@ export function App(): ReactElement {
           {currentScreen === "buyer-market" && currentUser && (
             <BuyerMarketContainer
               key={currentUser.id}
-              onAccount={() => setCurrentScreen("buyer-summary")}
+              onAccount={() => {
+                leaveMarketLocation(true);
+                setCurrentScreen("buyer-summary");
+              }}
               onSessionExpired={handleSessionExpired}
             />
           )}

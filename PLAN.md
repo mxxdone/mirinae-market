@@ -187,6 +187,13 @@
 - 로그는 .local/verification/same-day-backend-gate.log, same-day-front-gate.log, same-day-front-build-final.log, same-day-e2e-final.log, same-day-backup-restore.txt다. 시각 증거는 output/playwright/same-day-demo-buyer.png와 same-day-demo-seller.png다.
 - diff·인가·CSRF·삭제 기록 보존·마감 경계·계층 의존성·실패 처리 검토 완료. 로컬 필수 검사 미충족은 없다. 사람의 기능 수용 확인·원격 CI·PR 리뷰·main 병합은 남아 있다. 주문·결제·환불은 이번 구현 범위가 아니다.
 
+### 구매자 방문 기록 회귀 수정 · 2026-10-13
+
+- 상품 상세를 React 상태로만 열어 브라우저 뒤로가기가 목록으로 돌아오지 않는 결함을 재현했다. 상세 URL의 방문 기록 생성 검증이 기존 구현에서 실패한 로그는 .local/verification/buyer-history-red.log다.
+- 목록·상세의 URL과 방문 기록을 연결하고 뒤로·앞으로·상세 새로고침·목록으로 버튼에서 시장·검색어·페이지를 복원한다. 방문 기록에는 식별자와 검색 조건만 저장하며 세션 만료·로그아웃 후 보호 화면을 복원하지 않는다. 상세 재시도는 기록을 중복 생성하지 않는다.
+- frontend check의 정적 gate와 Unit 33개, build 통과. 별도 PostgreSQL·자체 백엔드·Edge의 전체 E2E 14개 통과, 실패·오류·retry·skip 0. 새 회귀는 자체 API로 상품을 준비하며 실행 순서에 의존하지 않는다.
+- 검증 로그는 .local/verification/buyer-history-check-final.log, buyer-history-build.log, buyer-history-e2e.log다. 백엔드 소스·계약은 변경하지 않아 기존 유효한 104개 gate 결과를 재사용했다. 시연 서버·DB는 유지했다. URL·비동기 요청 취소·인가 상태·의존성·diff 검토 완료.
+
 ## Phase 4 — 장바구니·재고 확보·통합 결제
 
 목표: 여러 매장 상품을 한 번에 모의 결제하고 재고·가격을 보장한다.

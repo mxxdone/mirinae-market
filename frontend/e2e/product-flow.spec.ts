@@ -19,6 +19,91 @@ async function noOverflow(page: Page) {
   );
 }
 
+test("상품 상세의 브라우저 뒤로·앞으로·새로고침과 로그아웃 후 기록 접근", async ({
+  page,
+  browser,
+}) => {
+  const query = `뒤로가기 양파 ${Date.now()}`;
+  const seller = await browser.newContext();
+  try {
+    let csrf = (await (await seller.request.get("/api/auth/csrf")).json()) as {
+      headerName: string;
+      token: string;
+    };
+    const signedIn = await seller.request.post("/api/auth/login", {
+      headers: { [csrf.headerName]: csrf.token },
+      form: { loginId: required("E2E_SELLER_A_LOGIN_ID"), password: required("E2E_DEMO_PASSWORD") },
+    });
+    expect(signedIn.status()).toBe(200);
+    csrf = (await (await seller.request.get("/api/auth/csrf")).json()) as {
+      headerName: string;
+      token: string;
+    };
+    const store = (await (await seller.request.get("/api/seller/stores/me")).json()) as {
+      id: number;
+    };
+    const headers = { [csrf.headerName]: csrf.token };
+    const product = await seller.request.post(`/api/seller/stores/${store.id}/products`, {
+      headers,
+      data: { name: query, description: "방문 기록 검증", unitType: "WEIGHT", unitAmount: 500 },
+    });
+    expect(product.status()).toBe(201);
+    const productId = ((await product.json()) as { id: number }).id;
+    const date = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(required("E2E_FIXED_INSTANT")));
+    const window = await seller.request.put(
+      `/api/seller/stores/${store.id}/pickup-windows/${date}`,
+      { headers, data: { startTime: "15:00", endTime: "19:00", orderDeadline: "14:00" } },
+    );
+    expect(window.status()).toBe(200);
+    const offer = await seller.request.put(
+      `/api/seller/stores/${store.id}/products/${productId}/offers/${date}`,
+      { headers, data: { priceWon: 9000, onlineQuantity: 1 } },
+    );
+    expect(offer.status()).toBe(200);
+  } finally {
+    await seller.close();
+  }
+  await login(page, required("E2E_BUYER_LOGIN_ID"));
+  await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
+  await page.locator("#productSearch").fill(query);
+  await page.getByRole("button", { name: "상품 검색", exact: true }).click();
+  const card = page.locator(".offer-card").first();
+  const name = await card.getByRole("heading").innerText();
+  const listUrl = page.url();
+  await card.getByRole("button", { name: /^상품 상세 보기/ }).click();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/offer=/);
+  await page.goBack();
+  await expect(page).toHaveURL(listUrl);
+  await expect(page.locator(".offer-card").first()).toBeVisible();
+  await expect(page.locator("#productSearch")).toHaveValue(query);
+  await page.goForward();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await expect(page.locator("#productSearch")).toHaveValue(query);
+  await page.getByRole("button", { name: "← 상품 목록으로", exact: true }).click();
+  await expect(page).toHaveURL(listUrl);
+  await expect(page.locator(".offer-card").first()).toBeVisible();
+  await page.goBack();
+  await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+  await page.goForward();
+  await expect(page.locator(".offer-card").first()).toBeVisible();
+  await page.getByRole("button", { name: "내 계정", exact: true }).click();
+  await page.locator("#btnLogout").click();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await page.goBack();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await expect(page.locator("#heading-market")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("#heading-login")).toBeVisible();
+});
+
 test("판매자 kg 입력→오늘 공개→구매자 시장 검색·상세·타 시장 격리", async ({ page, browser }) => {
   const name = `양파 ${Date.now()} 3kg`;
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));

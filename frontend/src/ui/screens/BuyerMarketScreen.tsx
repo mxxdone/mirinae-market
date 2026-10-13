@@ -13,6 +13,7 @@ interface Props {
   page: number;
   hasNext: boolean;
   date: string;
+  searchQuery: string;
   onSearch: (marketId: number, query: string) => void;
   onPage: (page: number) => void;
   onOpen: (offer: OfferView) => void;
@@ -23,6 +24,9 @@ interface Props {
 export function BuyerMarketScreen(props: Props) {
   const [query, setQuery] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    setQuery(props.searchQuery);
+  }, [props.searchQuery]);
   useEffect(() => {
     if (props.selected) heading.current?.focus();
   }, [props.selected]);

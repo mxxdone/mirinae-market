@@ -27,7 +27,9 @@ public class OfferController {
       summary = "시장별 오늘 판매 상품 검색",
       description =
           "상품명 부분 검색(영문 대소문자 무시). %, _는 일반 문자입니다. 기본 20건·최대 100건 ID순 페이지입니다. 자동 상품 묶기·가격 정렬은 제공하지 않습니다. 가격은 포장 가격과 표시용 100g당·1개당 가격을 구분합니다.")
-  @ApiResponse(responseCode = "200", description = "해당 시장·오늘 수령 조건 목록과 hasNext")
+  @ApiResponse(
+      responseCode = "200",
+      description = "해당 시장·오늘 수령 조건 목록, hasNext와 동일 검색 조건의 전체 건수 totalItems")
   @ApiResponse(responseCode = "400", description = "검색어·페이지 입력 오류: INVALID_INPUT")
   @GetMapping
   public OfferPage search(

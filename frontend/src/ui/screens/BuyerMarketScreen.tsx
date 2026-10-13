@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { MarketView, OfferView } from "../../api/types";
 import { OfferCard } from "../components/OfferCard";
 import { StatusAlert } from "../components/StatusAlert";
+import { Pagination } from "../components/Pagination";
 
 interface Props {
   markets: MarketView[];
@@ -11,7 +12,7 @@ interface Props {
   loading: boolean;
   error: string | null;
   page: number;
-  hasNext: boolean;
+  totalItems: number;
   date: string;
   searchQuery: string;
   onSearch: (marketId: number, query: string) => void;
@@ -168,25 +169,13 @@ export function BuyerMarketScreen(props: Props) {
                 <OfferCard key={offer.id} offer={offer} onOpen={() => props.onOpen(offer)} />
               ))}
             </div>
-            <nav className="market-pagination" aria-label="상품 목록 페이지">
-              <button
-                type="button"
-                className="btn-logout"
-                disabled={props.page === 0}
-                onClick={() => props.onPage(props.page - 1)}
-              >
-                이전
-              </button>
-              <span>{props.page + 1}페이지</span>
-              <button
-                type="button"
-                className="btn-query-store"
-                disabled={!props.hasNext}
-                onClick={() => props.onPage(props.page + 1)}
-              >
-                다음
-              </button>
-            </nav>
+            <Pagination
+              page={props.page}
+              size={20}
+              totalItems={props.totalItems}
+              onPage={props.onPage}
+              label="상품 목록 페이지"
+            />
           </>
         ) : (
           !props.error && (

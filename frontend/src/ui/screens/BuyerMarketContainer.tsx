@@ -23,7 +23,7 @@ export function BuyerMarketContainer({
   const [selected, setSelected] = useState<OfferView | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState(todayPickupDate);
@@ -56,7 +56,7 @@ export function BuyerMarketContainer({
         const result = await searchOffers(market, text, nextPage, controller.current.signal);
         if (!mounted.current || current !== request.current) return;
         setOffers(result.items);
-        setHasNext(result.hasNext);
+        setTotalItems(result.totalItems ?? result.items.length);
       } catch (failure) {
         if (mounted.current && current === request.current) handleError(failure);
       } finally {
@@ -160,7 +160,7 @@ export function BuyerMarketContainer({
       date={date}
       searchQuery={query}
       page={page}
-      hasNext={hasNext}
+      totalItems={totalItems}
       onSearch={(market, text) => void load(market, text, 0)}
       onPage={(next) => {
         if (marketId !== null) void load(marketId, query, next);

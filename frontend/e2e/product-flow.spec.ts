@@ -270,6 +270,17 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
   };
   const prefix = `목록검증${Date.now()}`;
   const ids: number[] = [];
+  const date = new Date(Date.parse(required("E2E_FIXED_INSTANT")) + 9 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const window = await context.request.put(
+    `/api/seller/stores/${store.id}/pickup-windows/${date}`,
+    {
+      headers: { [csrf.headerName]: csrf.token },
+      data: { startTime: "15:00", endTime: "19:00", orderDeadline: "14:00" },
+    },
+  );
+  expect(window.status()).toBe(200);
   for (let index = 0; index < 25; index++) {
     const response = await context.request.post(`/api/seller/stores/${store.id}/products`, {
       headers: { [csrf.headerName]: csrf.token },
@@ -281,10 +292,17 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
       },
     });
     expect(response.status()).toBe(201);
-    ids.push(((await response.json()) as { id: number }).id);
+    const id = ((await response.json()) as { id: number }).id;
+    ids.push(id);
+    const published = await context.request.put(
+      `/api/seller/stores/${store.id}/products/${id}/offers/${date}`,
+      { headers: { [csrf.headerName]: csrf.token }, data: { priceWon: 1000, onlineQuantity: 10 } },
+    );
+    expect(published.status()).toBe(200);
   }
   await page.getByRole("button", { name: "상품 목록 새로고침" }).click();
   const navigation = page.getByRole("navigation", { name: "등록 상품 페이지" });
+  await expect(page.locator(".seller-product-choice")).toHaveCount(5);
   await navigation.getByRole("button", { name: "2페이지", exact: true }).click();
   await expect(navigation.getByRole("button", { name: "2페이지", exact: true })).toHaveAttribute(
     "aria-current",
@@ -305,7 +323,7 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
   const target = list.items.findIndex((item) => item.id === ids[24]);
   expect(target).toBeGreaterThanOrEqual(0);
   await navigation
-    .getByRole("button", { name: `${Math.floor(target / 20) + 1}페이지`, exact: true })
+    .getByRole("button", { name: `${Math.floor(target / 5) + 1}페이지`, exact: true })
     .click();
   await page
     .locator(".seller-product-choice")
@@ -326,4 +344,82 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
   expect(after.totalItems).toBe(list.totalItems - 1);
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
+  await page.locator("#btnLogoutSeller").click();
+  await login(page, required("E2E_BUYER_LOGIN_ID"));
+  await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
+  await page.locator("#productSearch").fill(prefix);
+  await page.getByRole("button", { name: "상품 검색", exact: true }).click();
+  await expect(page.locator(".offer-card")).toHaveCount(20);
+  const buyerPages = page.getByRole("navigation", { name: "상품 목록 페이지" });
+  await expect(buyerPages.getByRole("button", { name: "1페이지", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await buyerPages.getByRole("button", { name: "2페이지", exact: true }).click();
+  await expect(page.locator(".offer-card")).toHaveCount(4);
+  await expect(buyerPages.getByRole("button", { name: "2페이지", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await noOverflow(page);
+});
+
+test("모바일 판매 탭에서 입력을 보존하고 공통 시간 확인 후 실제 판매 공개", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, required("E2E_SELLER_A_LOGIN_ID"));
+  const tabs = page.getByRole("tablist", { name: "판매 관리 화면" });
+  await expect(tabs.getByRole("tab", { name: "상품 목록" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.locator("#productName")).toBeHidden();
+  await page.getByRole("button", { name: "새 상품 등록", exact: true }).click();
+  await expect(tabs.getByRole("tab", { name: "상품 정보" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const name = `모바일탭${Date.now()}`;
+  await page.locator("#productName").fill(name);
+  await page.locator("#productUnitAmount").fill("500");
+  await page.getByRole("button", { name: "상품 등록", exact: true }).click();
+  await expect(tabs.getByRole("tab", { name: "오늘 판매" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.locator("#offerPrice").fill("3500");
+  await page.locator("#offerQuantity").fill("7");
+  await tabs.getByRole("tab", { name: "상품 정보" }).click();
+  await expect(page.locator("#productName")).toHaveValue(name);
+  await expect(page.locator("#offerPrice")).toBeHidden();
+  await tabs.getByRole("tab", { name: "상품 정보" }).press("ArrowRight");
+  await expect(tabs.getByRole("tab", { name: "오늘 판매" })).toBeFocused();
+  await expect(page.locator("#offerPrice")).toHaveValue("3500");
+  await expect(page.locator("#offerQuantity")).toHaveValue("7");
+  await expect(page.locator("#pickupStart")).toHaveValue("15:00");
+  await page.locator("#pickupEnd").fill("18:30");
+  await expect(page.getByRole("button", { name: "오늘 판매 시작", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "수령 시간 저장", exact: true }).click();
+  await expect(page.getByRole("button", { name: "오늘 판매 시작", exact: true })).toBeEnabled();
+  await expect(page.locator("#offerPrice")).toHaveValue("3500");
+  const order = await page.evaluate(() => {
+    const price = document.getElementById("offerPrice");
+    const time = document.getElementById("orderDeadline");
+    return (
+      !!price &&
+      !!time &&
+      !!(price.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING)
+    );
+  });
+  expect(order).toBe(true);
+  await noOverflow(page);
+  await page.screenshot({ path: "../output/playwright/seller-mobile-tabs.png", fullPage: true });
+  await page.getByRole("button", { name: "오늘 판매 시작", exact: true }).click();
+  await expect(page.getByText("오늘 판매가 공개되었습니다.", { exact: false })).toBeVisible();
+  await page.locator("#btnLogoutSeller").click();
+  await login(page, required("E2E_BUYER_LOGIN_ID"));
+  await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
+  await page.locator("#productSearch").fill(name);
+  await page.getByRole("button", { name: "상품 검색", exact: true }).click();
+  await expect(page.locator(".offer-card")).toHaveCount(1);
+  await expect(page.locator(".offer-card")).toContainText("3,500");
 });

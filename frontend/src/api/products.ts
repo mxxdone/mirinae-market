@@ -8,7 +8,7 @@ import {
   type ProductInput,
   type ProductView,
   type ProductPage,
-  type ResultPage,
+  type OfferPage,
   type StoreView,
 } from "./types";
 
@@ -20,7 +20,7 @@ export function searchOffers(
   query: string,
   page = 0,
   signal?: AbortSignal,
-): Promise<ResultPage<OfferView>> {
+): Promise<OfferPage> {
   return apiGet(
     `/api/markets/${marketId}/offers?${new URLSearchParams({ query, page: String(page), size: "20" })}`,
     signal,
@@ -33,8 +33,8 @@ export function getOffer(
 ): Promise<OfferView> {
   return apiGet(`/api/markets/${marketId}/offers/${offerId}`, signal);
 }
-export function getProducts(storeId: number, page = 0): Promise<ProductPage> {
-  return apiGet(`/api/seller/stores/${storeId}/products?page=${page}&size=20`);
+export function getProducts(storeId: number, page = 0, size = 20): Promise<ProductPage> {
+  return apiGet(`/api/seller/stores/${storeId}/products?page=${page}&size=${size}`);
 }
 export function deleteProduct(storeId: number, productId: number): Promise<void> {
   return apiDeleteEmpty(`/api/seller/stores/${storeId}/products/${productId}`);

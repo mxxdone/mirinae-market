@@ -194,6 +194,14 @@
 - frontend check의 정적 gate와 Unit 33개, build 통과. 별도 PostgreSQL·자체 백엔드·Edge의 전체 E2E 14개 통과, 실패·오류·retry·skip 0. 새 회귀는 자체 API로 상품을 준비하며 실행 순서에 의존하지 않는다.
 - 검증 로그는 .local/verification/buyer-history-check-final.log, buyer-history-build.log, buyer-history-e2e.log다. 백엔드 소스·계약은 변경하지 않아 기존 유효한 104개 gate 결과를 재사용했다. 시연 서버·DB는 유지했다. URL·비동기 요청 취소·인가 상태·의존성·diff 검토 완료.
 
+### 번호 페이징·모바일 판매 관리 개선 · 2026-10-13
+
+- 구매자·판매자 목록의 번호 버튼과 현재 페이지 강조를 공통으로 구현했다. 공개 목록에 같은 검색 조건의 totalItems를 추가하고 OpenAPI를 동기화했다. 구매자는 20개, 판매자 편집 목록은 5개씩 조회하며 목록 높이·등록 버튼 간격을 조정했다.
+- 판매 관리 제목을 정리하고 PC는 판매 가격·수량을 공통 시간보다 먼저 배치했다. 모바일은 상품 목록·상품 정보·오늘 판매 탭을 직접 이동하며 입력을 유지한다. 상품 등록 성공 후 오늘 판매로 안내하고 미등록·미확인·수정 후 미저장 시간으로 공개하는 것을 차단한다.
+- 공개 건수 회귀의 구현 전 실패는 .local/verification/pagination-count-red.log다. 최종 backend spotlessApply check build는 104개, frontend check는 정적 gate·Unit 33개, build는 통과했다. 최종 자체 PostgreSQL·백엔드·Edge E2E는 15개 통과, 실패·오류·retry·skip 0이다. 테스트 선택자 수정 후 해당 파일의 ESLint·Prettier도 재검증했다.
+- 최종 증거는 .local/verification/pagination-backend-final.log, pagination-front-final-3.log, pagination-build-final-3.log, pagination-e2e-final-2.log다. 최초 E2E의 테스트 서버 연결 실패와 이후 잘못된 판매자 로그아웃 선택자를 수정한 실패 기록은 별도로 보존했다. 검사 기준·제한 시간은 완화하지 않았다.
+- 실제 시간의 기존 시연 서버를 갱신하고 구매자·판매자·모바일 탭 smoke와 PC·모바일 화면을 확인했다. diff·계층 의존성·공개 검색 필터·입력 보존·시간 저장 전 공개 차단 검토 완료. 사람의 수용 확인과 원격 CI·PR 리뷰는 남아 있다.
+
 ## Phase 4 — 장바구니·재고 확보·통합 결제
 
 목표: 여러 매장 상품을 한 번에 모의 결제하고 재고·가격을 보장한다.

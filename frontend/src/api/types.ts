@@ -111,3 +111,7 @@ export interface ResultPage<T> {
 export interface ProductPage extends ResultPage<ProductView> {
   totalItems: number;
 }
+
+export interface OfferPage extends ResultPage<OfferView> {
+  totalItems: number;
+}

@@ -23,6 +23,10 @@ import {
   convertWeightInput,
 } from "../../validation/productValidation";
 import { StatusAlert } from "./StatusAlert";
+import { Pagination } from "./Pagination";
+
+const PRODUCT_PAGE_SIZE = 5;
+const SELLER_TABS = ["상품 목록", "상품 정보", "오늘 판매"] as const;
 
 export function SellerProductsPanel({
   store,
@@ -33,9 +37,9 @@ export function SellerProductsPanel({
 }) {
   const [products, setProducts] = useState<ProductView[]>([]);
   const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
   const saleHeading = useRef<HTMLHeadingElement>(null);
   const [selected, setSelected] = useState<ProductView | null>(null);
   const [offer, setOffer] = useState<OfferView | null>(null);
@@ -55,6 +59,7 @@ export function SellerProductsPanel({
   const [busy, setBusy] = useState(false);
   const [windowLoading, setWindowLoading] = useState(true);
   const [windowRegistered, setWindowRegistered] = useState<boolean | null>(null);
+  const [savedWindow, setSavedWindow] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -79,11 +84,10 @@ export function SellerProductsPanel({
       setLoading(true);
       setError(null);
       try {
-        const result = await getProducts(store.id, nextPage);
+        const result = await getProducts(store.id, nextPage, PRODUCT_PAGE_SIZE);
         if (!mounted.current || current !== listRequest.current) return;
         setProducts(result.items);
         setPage(nextPage);
-        setHasNext(result.hasNext);
         setTotalItems(result.totalItems);
       } catch (failure) {
         if (current === listRequest.current) handleError(failure);
@@ -139,6 +143,7 @@ export function SellerProductsPanel({
     const controller = new AbortController();
     setWindowLoading(true);
     setWindowRegistered(null);
+    setSavedWindow(null);
     setStart("");
     setEnd("");
     setDeadline("");
@@ -150,6 +155,11 @@ export function SellerProductsPanel({
           setStart(window?.startTime.slice(0, 5) ?? "14:00");
           setEnd(window?.endTime.slice(0, 5) ?? "18:00");
           setDeadline(window?.orderDeadline.slice(0, 5) ?? "13:00");
+          setSavedWindow(
+            window
+              ? `${window.orderDeadline.slice(0, 5)}|${window.startTime.slice(0, 5)}|${window.endTime.slice(0, 5)}`
+              : null,
+          );
         }
       })
       .catch((failure: unknown) => {
@@ -175,6 +185,13 @@ export function SellerProductsPanel({
     setError(null);
     setSuccess(null);
   }
+  function showSale() {
+    setActiveTab(2);
+    requestAnimationFrame(() => {
+      saleHeading.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      saleHeading.current?.focus({ preventScroll: true });
+    });
+  }
   async function removeProduct() {
     if (!selected) return;
     setBusy(true);
@@ -184,8 +201,11 @@ export function SellerProductsPanel({
       await deleteProduct(store.id, selected.id);
       if (!mounted.current) return;
       choose(null);
+      setActiveTab(0);
       setSuccess("상품이 삭제되었습니다. 판매 기록은 보존되며 공개 판매도 종료됩니다.");
-      await loadList(Math.min(page, Math.max(0, Math.ceil((totalItems - 1) / 20) - 1)));
+      await loadList(
+        Math.min(page, Math.max(0, Math.ceil((totalItems - 1) / PRODUCT_PAGE_SIZE) - 1)),
+      );
     } catch (failure) {
       handleError(failure);
     } finally {
@@ -222,8 +242,7 @@ export function SellerProductsPanel({
       choose(saved);
       setSuccess("상품 정보가 저장되었습니다. 오늘 판매할 가격과 수량을 설정해 주세요.");
       await loadList(0);
-      saleHeading.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      saleHeading.current?.focus({ preventScroll: true });
+      showSale();
     } catch (failure) {
       handleError(failure);
     } finally {
@@ -248,7 +267,10 @@ export function SellerProductsPanel({
         endTime: end,
         orderDeadline: deadline,
       });
-      if (mounted.current) setWindowRegistered(true);
+      if (mounted.current) {
+        setWindowRegistered(true);
+        setSavedWindow(`${deadline}|${start}|${end}`);
+      }
       if (mounted.current)
         setSuccess("매장 수령 시간이 저장되었습니다. 같은 날 모든 상품이 이 시간을 공유합니다.");
     } catch (failure) {
@@ -265,6 +287,12 @@ export function SellerProductsPanel({
     setBusy(true);
     try {
       const input = parseOfferInput(price, quantity);
+      if (
+        windowLoading ||
+        windowRegistered !== true ||
+        savedWindow !== `${deadline}|${start}|${end}`
+      )
+        throw new Error("판매를 시작하기 전에 매장 공통 시간을 확인하고 저장해 주세요.");
       if (date !== todayPickupDate()) {
         setDate(todayPickupDate());
         throw new Error("수령 날짜가 바뀌었습니다. 새 날짜의 조건을 확인해 주세요.");
@@ -283,9 +311,8 @@ export function SellerProductsPanel({
     <section aria-labelledby="heading-products" className="seller-products">
       <div className="summary-tag-row">
         <div>
-          <span className="pill-badge primary">상인의 오늘 준비</span>
           <h2 id="heading-products" className="summary-heading">
-            상품과 오늘 판매 관리
+            판매 관리
           </h2>
         </div>
         <span className="field-help-text">{date} 수령 · 한국 시간 기준</span>
@@ -302,8 +329,46 @@ export function SellerProductsPanel({
           {success}
         </p>
       )}
+      <div className="seller-mobile-tabs" role="tablist" aria-label="판매 관리 화면">
+        {SELLER_TABS.map((label, index) => (
+          <button
+            key={label}
+            id={`seller-tab-${index}`}
+            type="button"
+            role="tab"
+            aria-controls={`seller-panel-${index}`}
+            aria-selected={activeTab === index}
+            tabIndex={activeTab === index ? 0 : -1}
+            onClick={() => setActiveTab(index)}
+            onKeyDown={(event) => {
+              const next =
+                event.key === "ArrowRight"
+                  ? (index + 1) % SELLER_TABS.length
+                  : event.key === "ArrowLeft"
+                    ? (index + SELLER_TABS.length - 1) % SELLER_TABS.length
+                    : event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? SELLER_TABS.length - 1
+                        : null;
+              if (next === null) return;
+              event.preventDefault();
+              setActiveTab(next);
+              document.getElementById(`seller-tab-${next}`)?.focus();
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <div className="seller-product-layout">
-        <div className="seller-product-panel">
+        <div
+          className="seller-product-panel seller-tab-panel"
+          id="seller-panel-0"
+          role="tabpanel"
+          aria-labelledby="seller-tab-0"
+          data-active={activeTab === 0}
+        >
           <div className="product-list-heading">
             <h2>등록 상품</h2>
             <button
@@ -331,9 +396,12 @@ export function SellerProductsPanel({
           <p className="field-help-text">상품을 선택해 수정하거나 오늘 판매를 등록하세요.</p>
           <button
             type="button"
-            className="btn-query-store"
+            className="btn-query-store new-product-button"
             disabled={busy}
-            onClick={() => choose(null)}
+            onClick={() => {
+              choose(null);
+              setActiveTab(1);
+            }}
           >
             새 상품 등록
           </button>
@@ -350,7 +418,10 @@ export function SellerProductsPanel({
                   className="seller-product-choice"
                   aria-pressed={selected?.id === product.id}
                   disabled={busy}
-                  onClick={() => choose(product)}
+                  onClick={() => {
+                    choose(product);
+                    setActiveTab(1);
+                  }}
                 >
                   <span>
                     {product.name}
@@ -365,48 +436,22 @@ export function SellerProductsPanel({
               ))}
             </div>
           )}
-          <nav className="market-pagination" aria-label="등록 상품 페이지">
-            <button
-              type="button"
-              className="pagination-button"
-              aria-label="이전 페이지"
-              disabled={page === 0 || busy || loading}
-              onClick={() => void loadList(page - 1)}
-            >
-              ‹
-            </button>
-            {Array.from(
-              { length: Math.min(5, Math.max(1, Math.ceil(totalItems / 20))) },
-              (_, index) => {
-                const startPage = Math.max(0, Math.min(page - 2, Math.ceil(totalItems / 20) - 5));
-                const number = startPage + index;
-                return (
-                  <button
-                    type="button"
-                    key={number}
-                    className="pagination-button"
-                    aria-label={`${number + 1}페이지`}
-                    aria-current={page === number ? "page" : undefined}
-                    disabled={busy || loading}
-                    onClick={() => void loadList(number)}
-                  >
-                    {number + 1}
-                  </button>
-                );
-              },
-            )}
-            <button
-              type="button"
-              className="pagination-button"
-              aria-label="다음 페이지"
-              disabled={!hasNext || busy || loading}
-              onClick={() => void loadList(page + 1)}
-            >
-              ›
-            </button>
-          </nav>
+          <Pagination
+            page={page}
+            size={PRODUCT_PAGE_SIZE}
+            totalItems={totalItems}
+            disabled={busy || loading}
+            onPage={(next) => void loadList(next)}
+            label="등록 상품 페이지"
+          />
         </div>
-        <div className="seller-product-panel">
+        <div
+          className="seller-product-panel seller-tab-panel"
+          id="seller-panel-1"
+          role="tabpanel"
+          aria-labelledby="seller-tab-1"
+          data-active={activeTab === 1}
+        >
           <h2>{selected ? "상품 정보 수정" : "새 상품 등록"}</h2>
           <form className="market-form" onSubmit={(event) => void submitProduct(event)}>
             <div className="field-group">
@@ -510,6 +555,11 @@ export function SellerProductsPanel({
               </p>
             )}
             <div className="product-actions">
+              {selected && (
+                <button type="button" className="pagination-button" onClick={showSale}>
+                  오늘 판매 설정
+                </button>
+              )}
               <button
                 type="submit"
                 className="btn-submit-primary"
@@ -555,134 +605,164 @@ export function SellerProductsPanel({
             )}
           </form>
         </div>
-        <div className="seller-product-panel">
-          <h2>오늘 주문·수령 시간</h2>
-          <p className="field-help-text">
-            {windowLoading
-              ? "저장된 시간을 확인하고 있습니다."
-              : windowRegistered === null
-                ? "수령 시간을 확인하지 못했습니다. 다시 시도해 주세요."
-                : windowRegistered
-                  ? "저장된 수령 시간을 불러왔습니다."
-                  : "수령 시간을 먼저 저장해 주세요."}
-          </p>
-          <p className="field-help-text">{date} · 같은 날 모든 상품이 공유합니다.</p>
-          <form className="market-form" onSubmit={(event) => void submitWindow(event)}>
-            <div className="field-group">
-              <label className="field-label" htmlFor="orderDeadline">
-                주문 마감
-              </label>
-              <input
-                type="time"
-                id="orderDeadline"
-                className="input-box"
-                required
-                value={deadline}
-                disabled={busy || offerLoading || windowLoading}
-                onChange={(event) => setDeadline(event.target.value)}
-              />
+        <div
+          className="seller-sale-panels seller-tab-panel"
+          id="seller-panel-2"
+          role="tabpanel"
+          aria-labelledby="seller-tab-2"
+          data-active={activeTab === 2}
+        >
+          <div className="seller-product-panel">
+            <h2 ref={saleHeading} tabIndex={-1}>
+              오늘 판매 설정
+            </h2>
+            {!selected ? (
               <p className="field-help-text">
-                수령 시작보다 늦지 않게 설정하세요. 마감 정각부터 주문을 받지 않습니다.
+                상품을 등록하거나 목록에서 선택하면 오늘 판매할 가격·수량을 설정할 수 있습니다.
               </p>
-            </div>
-            <div className="product-form-row">
-              <div className="field-group">
-                <label className="field-label" htmlFor="pickupStart">
-                  수령 시작
-                </label>
-                <input
-                  type="time"
-                  id="pickupStart"
-                  className="input-box"
-                  required
-                  value={start}
-                  disabled={busy || offerLoading || windowLoading}
-                  onChange={(event) => setStart(event.target.value)}
-                />
-              </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor="pickupEnd">
-                  수령 마감
-                </label>
-                <input
-                  type="time"
-                  id="pickupEnd"
-                  className="input-box"
-                  required
-                  value={end}
-                  disabled={busy || offerLoading || windowLoading}
-                  onChange={(event) => setEnd(event.target.value)}
-                />
-              </div>
-            </div>
-            <button
-              className="btn-submit-primary"
-              type="submit"
-              disabled={busy || offerLoading || windowLoading}
-            >
-              수령 시간 저장
-            </button>
-          </form>
-        </div>
-        <div className="seller-product-panel">
-          <h2 ref={saleHeading} tabIndex={-1}>
-            오늘 판매 설정
-          </h2>
-          {!selected ? (
-            <p className="field-help-text">
-              상품을 등록하거나 목록에서 선택하면 오늘 판매할 가격·수량을 설정할 수 있습니다.
-            </p>
-          ) : offerLoading ? (
-            <p role="status">기존 판매 조건을 확인하고 있습니다.</p>
-          ) : (
-            <>
-              <p className="field-help-text">
-                {selected.name} · {date} 수령
-              </p>
-              <form className="market-form" onSubmit={(event) => void submitSale(event)}>
-                <div className="field-group">
-                  <label className="field-label" htmlFor="offerPrice">
-                    한 포장 가격 (원)
-                  </label>
-                  <input
-                    id="offerPrice"
-                    className="input-box"
-                    inputMode="numeric"
-                    required
-                    value={price}
-                    disabled={busy}
-                    onChange={(event) => setPrice(event.target.value)}
-                  />
-                </div>
-                <div className="field-group">
-                  <label className="field-label" htmlFor="offerQuantity">
-                    온라인 판매 수량 (포장)
-                  </label>
-                  <input
-                    id="offerQuantity"
-                    className="input-box"
-                    inputMode="numeric"
-                    required
-                    value={quantity}
-                    disabled={busy}
-                    onChange={(event) => setQuantity(event.target.value)}
-                  />
-                  <p className="field-help-text">
-                    0은 품절입니다. 현장 재고와 구분해 준비해 주세요.
-                  </p>
-                </div>
-                <button className="btn-submit-primary" type="submit" disabled={busy}>
-                  {busy ? "저장 중…" : offer ? "판매 조건 저장" : "오늘 판매 시작"}
-                </button>
-              </form>
-              {offer && (
-                <p className="comparison-price">
-                  공개 가격: 포장당 {offer.priceWon.toLocaleString()}원 · {offer.comparisonUnit}당{" "}
-                  {offer.comparisonPriceWon.toLocaleString("ko-KR", { minimumFractionDigits: 2 })}원
+            ) : offerLoading ? (
+              <p role="status">기존 판매 조건을 확인하고 있습니다.</p>
+            ) : (
+              <>
+                <p className="field-help-text">
+                  {selected.name} · {date} 수령
                 </p>
-              )}
-            </>
-          )}
+                <form
+                  id="seller-sale-form"
+                  className="market-form"
+                  onSubmit={(event) => void submitSale(event)}
+                >
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="offerPrice">
+                      한 포장 가격 (원)
+                    </label>
+                    <input
+                      id="offerPrice"
+                      className="input-box"
+                      inputMode="numeric"
+                      required
+                      value={price}
+                      disabled={busy}
+                      onChange={(event) => setPrice(event.target.value)}
+                    />
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="offerQuantity">
+                      온라인 판매 수량 (포장)
+                    </label>
+                    <input
+                      id="offerQuantity"
+                      className="input-box"
+                      inputMode="numeric"
+                      required
+                      value={quantity}
+                      disabled={busy}
+                      onChange={(event) => setQuantity(event.target.value)}
+                    />
+                    <p className="field-help-text">
+                      0은 품절입니다. 현장 재고와 구분해 준비해 주세요.
+                    </p>
+                  </div>
+                </form>
+                {offer && (
+                  <p className="comparison-price">
+                    공개 가격: 포장당 {offer.priceWon.toLocaleString()}원 · {offer.comparisonUnit}당{" "}
+                    {offer.comparisonPriceWon.toLocaleString("ko-KR", { minimumFractionDigits: 2 })}
+                    원
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          <div className="seller-product-panel">
+            <h2>오늘 주문·수령 시간</h2>
+            <p className="field-help-text">
+              {windowLoading
+                ? "저장된 시간을 확인하고 있습니다."
+                : windowRegistered === null
+                  ? "수령 시간을 확인하지 못했습니다. 다시 시도해 주세요."
+                  : windowRegistered
+                    ? "저장된 수령 시간을 불러왔습니다."
+                    : "판매를 시작하기 전에 매장 공통 시간을 저장해 주세요."}
+            </p>
+            <p className="field-help-text">{date} · 같은 날 모든 상품이 공유합니다.</p>
+            {savedWindow !== null && savedWindow !== `${deadline}|${start}|${end}` && (
+              <p className="field-help-text">
+                변경한 시간을 저장한 뒤 판매를 시작하세요. 오늘의 모든 상품에 적용됩니다.
+              </p>
+            )}
+            <form className="market-form" onSubmit={(event) => void submitWindow(event)}>
+              <div className="field-group">
+                <label className="field-label" htmlFor="orderDeadline">
+                  주문 마감
+                </label>
+                <input
+                  type="time"
+                  id="orderDeadline"
+                  className="input-box"
+                  required
+                  value={deadline}
+                  disabled={busy || offerLoading || windowLoading}
+                  onChange={(event) => setDeadline(event.target.value)}
+                />
+                <p className="field-help-text">
+                  수령 시작보다 늦지 않게 설정하세요. 마감 정각부터 주문을 받지 않습니다.
+                </p>
+              </div>
+              <div className="product-form-row">
+                <div className="field-group">
+                  <label className="field-label" htmlFor="pickupStart">
+                    수령 시작
+                  </label>
+                  <input
+                    type="time"
+                    id="pickupStart"
+                    className="input-box"
+                    required
+                    value={start}
+                    disabled={busy || offerLoading || windowLoading}
+                    onChange={(event) => setStart(event.target.value)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label className="field-label" htmlFor="pickupEnd">
+                    수령 마감
+                  </label>
+                  <input
+                    type="time"
+                    id="pickupEnd"
+                    className="input-box"
+                    required
+                    value={end}
+                    disabled={busy || offerLoading || windowLoading}
+                    onChange={(event) => setEnd(event.target.value)}
+                  />
+                </div>
+              </div>
+              <button
+                className="btn-submit-primary"
+                type="submit"
+                disabled={busy || offerLoading || windowLoading}
+              >
+                수령 시간 저장
+              </button>
+            </form>
+            {selected && !offerLoading && (
+              <button
+                className="btn-submit-primary sale-publish-button"
+                type="submit"
+                form="seller-sale-form"
+                disabled={
+                  busy ||
+                  windowLoading ||
+                  windowRegistered !== true ||
+                  savedWindow !== `${deadline}|${start}|${end}`
+                }
+              >
+                {busy ? "저장 중…" : offer ? "판매 조건 저장" : "오늘 판매 시작"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </section>

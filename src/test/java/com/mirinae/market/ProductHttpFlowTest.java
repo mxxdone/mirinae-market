@@ -148,6 +148,7 @@ class ProductHttpFlowTest {
       assertThat(seller.json(seller.get(productPath(first))).get("items").size()).isZero();
       assertThat(seller.json(seller.get(productPath(first))).get("totalItems").asLong()).isZero();
       assertThat(buyer.json(buyer.get(searchPath(first))).get("items").size()).isZero();
+      assertThat(buyer.json(buyer.get(searchPath(first))).get("totalItems").asLong()).isZero();
       assertThat(buyer.get(searchPath(first) + "/" + offerId).statusCode()).isEqualTo(404);
       assertThat(
               seller
@@ -204,6 +205,7 @@ class ProductHttpFlowTest {
           buyer.get(
               searchPath(first) + "?query=" + URLEncoder.encode("양파", StandardCharsets.UTF_8));
       assertThat(buyer.json(search).get("items").size()).isEqualTo(1);
+      assertThat(buyer.json(search).get("totalItems").asLong()).isEqualTo(1);
       assertThat(buyer.get(searchPath(first) + "/" + offer.get("id").asLong()).statusCode())
           .isEqualTo(200);
       JsonNode large =

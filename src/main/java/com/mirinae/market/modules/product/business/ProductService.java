@@ -155,19 +155,22 @@ public class ProductService {
   public OfferPage search(long marketId, String query, int page, int size) {
     ProductRules.page(page, size);
     Clock current = Clock.fixed(clock.instant(), clock.getZone());
+    String normalizedQuery = ProductRules.query(query);
     List<OfferRow> rows =
         data.search(
             marketId,
             OfferRules.today(current),
             OfferRules.now(current),
-            ProductRules.query(query),
+            normalizedQuery,
             page * size,
             size + 1);
     return new OfferPage(
         rows.stream().limit(size).map(ProductService::offerView).toList(),
         page,
         size,
-        rows.size() > size);
+        rows.size() > size,
+        data.offerCount(
+            marketId, OfferRules.today(current), OfferRules.now(current), normalizedQuery));
   }
 
   public OfferView detail(long marketId, long offerId) {

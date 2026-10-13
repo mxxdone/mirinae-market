@@ -22,6 +22,8 @@ public class ProductData {
       """;
   private static final String PRODUCT_SELECT =
       "SELECT p.*, EXISTS (SELECT 1 FROM daily_offers o WHERE o.product_id = p.id) AS has_sales FROM products p ";
+  private static final String OFFER_FILTER =
+      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
   private final JdbcTemplate jdbc;
 
   public ProductData(JdbcTemplate jdbc) {
@@ -156,11 +158,7 @@ public class ProductData {
   public List<OfferRow> search(
       long marketId, LocalDate date, LocalTime now, String query, int offset, int limit) {
     return jdbc.query(
-        OFFER_SELECT
-            + """
-        WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0
-        ORDER BY o.id LIMIT ? OFFSET ?
-        """,
+        OFFER_SELECT + OFFER_FILTER + "ORDER BY o.id LIMIT ? OFFSET ?",
         (rs, row) -> offerRow(rs),
         marketId,
         date,
@@ -168,6 +166,16 @@ public class ProductData {
         query,
         limit,
         offset);
+  }
+
+  public long offerCount(long marketId, LocalDate date, LocalTime now, String query) {
+    return jdbc.queryForObject(
+        "SELECT count(*) FROM (" + OFFER_SELECT + OFFER_FILTER + ") visible",
+        Long.class,
+        marketId,
+        date,
+        now,
+        query);
   }
 
   public Optional<OfferRow> detail(long marketId, LocalDate date, long offerId) {

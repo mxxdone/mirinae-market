@@ -28,6 +28,11 @@
 - 공통 코드 변경은 의존 기능까지 검증. 테스트 삭제·skip·검사 완화로 통과 금지.
 - 구조/검사 설정 변경 시 관련 gate·차단 확인; 의도적 위반 실험은 검사 설정 변경 때만 반복. 억제·예외 사유 기록; 미설정·미실행 필수 검사는 통과 아님.
 
+## Git Workflow
+
+- 기능 개발은 짧은 기능 브랜치에서 진행한다. PR의 필수 CI 통과와 리뷰 후 main에 병합한다. 사용자가 main 직접 작업을 명시한 경우 해당 지시를 따른다.
+- 커밋 메시지는 Conventional Commits 형식 `<type>[optional scope][!]: <설명>`을 따른다. `feat`, `fix`, `docs`, `refactor`, `test`, `chore` 등의 타입은 변경 성격에 맞게 영어로 쓰고, 제목의 설명과 본문은 한국어로 작성한다. 코드 식별자·기술명은 원문을 유지할 수 있다. 예: `feat: 판매 관리 일괄 저장 구현`, `docs: 커밋 메시지 작성 규칙 추가`.
+
 ## Review
 - 대상: diff·영향 범위. 고위험 변경: 실패 시나리오·누락 테스트 집중 검증.
 - Correctness: AC 충족·회귀 없음.
@@ -71,3 +76,12 @@
 - 테스트 예외: 동시 중복 가입을 검증하는 `AccountHttpFlowTest.concurrentDuplicateIdOrEmailPersistsOnlyOneAccount`에만 `PMD.DoNotUseThreads`를 억제한다. 웹 컨테이너 밖 테스트 클라이언트의 병렬 실행을 위한 것으로, executor를 종료하고 생산 코드의 동시성 규칙은 유지한다.
 - 예외: `gradlew`·`gradlew.bat`·`gradle-wrapper.jar`는 Gradle이 생성한 upstream 산출물이므로 한국어 주석 규칙 적용 대상에서 제외한다.
 - Phase 2: PostgreSQL·Flyway·JPA와 세션 인증을 구성한다. `check`의 HTTP·DB integration은 Docker 엔진과 Testcontainers PostgreSQL을 사용하며 환경 실패 시 skip하지 않는다. 프런트엔드·Playwright는 별도 작업이다. 원격 CI의 실행 결과는 GitHub Actions를 참조하며 로컬 검증과 구분한다. `.local/`은 로컬 캐시·증거 경로로 Git에서 제외한다.
+
+## 프런트엔드 빌드·검사 구성 (Phase 1~2)
+
+- `frontend/`는 Node.js 24·React·TypeScript strict·Vite·npm lockfile을 사용한다. 설치는 `npm ci`, 개발은 `npm run dev`, 필수 정적·단위 gate는 `npm run check`, 배포 번들은 `npm run build`다.
+- `src/main.tsx`는 composition root다. `src/ui/`는 `src/api/`의 공개 HTTP 함수와 일반 타입을 사용한다. HTTP·쿠키·CSRF 처리는 `src/api/`에 격리한다. `src/validation/`는 입력 규칙을 검증하며 UI를 참조하지 않는다. API의 UI 역참조·서버 코드 참조·소스 순환은 금지한다.
+- `check`에는 TypeScript·ESLint 미사용/도달 불가/미처리 Promise·Prettier·dependency-cruiser 경계/순환 검사·Vitest를 연결한다. 상대 경로와 별칭·재수출로 경계를 우회하지 않는다. 생산 코드에서 API 밖의 직접 HTTP 호출은 허용하지 않는다.
+- 첫 가입 흐름의 핵심 E2E는 `npm run test:e2e`로 실제 PostgreSQL·자체 백엔드·Vite·Playwright를 포함한다. 로컬은 설치된 Edge를 선택할 수 있으며 CI는 Chromium을 사용한다. 준비 방법과 환경 변수는 README를 참조한다. 미설정 계정이나 환경 실패를 skip하지 않는다.
+- 브라우저 저장소에 비밀번호·세션·CSRF 토큰을 저장하지 않는다. 가입 완료는 자동 로그인하지 않으며 세션 만료·로그아웃 성공 시 개인/매장 상태를 폐기한다. 전송 실패를 성공으로 안내하지 않는다.
+- `.github/workflows/frontend.yml`은 정적 gate·빌드와 실제 백엔드를 포함한 E2E를 정의한다. 로컬 통과와 미실행 원격 CI를 구분하며 CI 테스트 계정은 GitHub Secrets에서 받는다. 검사 구성 변경은 정상 통과와 의도적 위반의 실제 차단을 확인한다.

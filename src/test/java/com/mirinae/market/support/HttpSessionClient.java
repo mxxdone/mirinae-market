@@ -53,15 +53,43 @@ public final class HttpSessionClient implements AutoCloseable {
 
   public HttpResponse<String> post(
       String path, String body, String contentType, boolean includeCsrf) throws Exception {
+    return mutation("POST", path, body, contentType, includeCsrf);
+  }
+
+  public HttpResponse<String> put(String path, String body, boolean includeCsrf) throws Exception {
+    return mutation("PUT", path, body, "application/json", includeCsrf);
+  }
+
+  public HttpResponse<String> delete(String path, boolean includeCsrf) throws Exception {
+    return mutation("DELETE", path, "", "application/json", includeCsrf);
+  }
+
+  public java.util.concurrent.CompletableFuture<HttpResponse<String>> putAsync(
+      String path, String body) {
+    return client.sendAsync(
+        mutationRequest("PUT", path, body, "application/json", true),
+        HttpResponse.BodyHandlers.ofString());
+  }
+
+  private HttpResponse<String> mutation(
+      String method, String path, String body, String contentType, boolean includeCsrf)
+      throws Exception {
+    return client.send(
+        mutationRequest(method, path, body, contentType, includeCsrf),
+        HttpResponse.BodyHandlers.ofString());
+  }
+
+  private HttpRequest mutationRequest(
+      String method, String path, String body, String contentType, boolean includeCsrf) {
     HttpRequest.Builder request =
         HttpRequest.newBuilder(URI.create(baseUrl + path))
             .timeout(java.time.Duration.ofSeconds(20))
             .header("Content-Type", contentType)
-            .POST(HttpRequest.BodyPublishers.ofString(body));
+            .method(method, HttpRequest.BodyPublishers.ofString(body));
     if (includeCsrf) {
       request.header("X-CSRF-TOKEN", csrf);
     }
-    return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    return request.build();
   }
 
   public HttpResponse<String> signup(String loginId, String email) throws Exception {

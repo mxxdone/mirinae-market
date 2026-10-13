@@ -4,6 +4,7 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.account.business.AccountView;
 import com.mirinae.market.modules.store.data.StoreData;
 import com.mirinae.market.modules.store.data.StoreRow;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,6 +17,10 @@ public class StoreService {
     this.accounts = accounts;
   }
 
+  public List<MarketView> markets() {
+    return data.markets().stream().map(row -> new MarketView(row.id(), row.name())).toList();
+  }
+
   public StoreView ownedStore(String loginId, long storeId) {
     AccountView account = accounts.current(loginId);
     if (!"SELLER".equals(account.role())) {
@@ -25,6 +30,15 @@ public class StoreService {
     if (!StoreAccess.allowed(account.role(), account.id(), row.ownerAccountId())) {
       throw new StoreForbiddenException();
     }
+    return view(row);
+  }
+
+  public StoreView currentStore(String loginId) {
+    AccountView account = accounts.current(loginId);
+    if (!"SELLER".equals(account.role())) {
+      throw new StoreForbiddenException();
+    }
+    StoreRow row = data.findByOwner(account.id()).orElseThrow(StoreForbiddenException::new);
     return view(row);
   }
 

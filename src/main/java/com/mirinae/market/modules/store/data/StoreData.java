@@ -1,5 +1,6 @@
 package com.mirinae.market.modules.store.data;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,8 +16,20 @@ public class StoreData {
   }
 
   @Transactional(readOnly = true)
+  public List<MarketRow> markets() {
+    return markets.findAll(org.springframework.data.domain.Sort.by("id")).stream()
+        .map(MarketEntity::toRow)
+        .toList();
+  }
+
+  @Transactional(readOnly = true)
   public Optional<StoreRow> find(long storeId) {
     return stores.findById(storeId).map(StoreEntity::toRow);
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<StoreRow> findByOwner(long ownerId) {
+    return stores.findByOwnerAccountId(ownerId).map(StoreEntity::toRow);
   }
 
   @Transactional

@@ -6,8 +6,8 @@
 
 Phase 3까지 백엔드 API·검증과 프런트엔드 연결을 완료했다. 이후 주문·결제·수령·집계는 사용자 요청에 따라 기능별로 진행한다. 집계 성능 실험은 동작하는 시연 흐름을 확보한 뒤 측정 근거에 따라 수행한다.
 
-- 요구사항·수용 기준: [Spec](docs/SPEC.md)
-- 용어와 설계 이유: [CONTEXT](CONTEXT.md), [ADR](ADR.md)
+- 요구사항·수용 기준: [Spec](SPEC.md)
+- 용어와 설계 이유: [CONTEXT](docs/CONTEXT.md), [ADR](docs/ADR.md)
 - 개발·검증·리뷰 규칙: [AGENTS](AGENTS.md)
 
 제품 규칙은 Spec에 유지한다. 이 계획은 구현 순서·남은 일·완료 조건을 관리한다.
@@ -44,9 +44,9 @@ Phase 3까지 백엔드 API·검증과 프런트엔드 연결을 완료했다. �
 
 | 결정 시점 | 남은 계약 |
 |---|---|
-| Phase 2 전 | 확정: [Spec의 Phase 2 계정·권한 계약](docs/SPEC.md) |
-| Phase 3 전 | 확정: [Spec의 상품·당일 판매·통합 표 계약](docs/SPEC.md) |
-| Phase 4 전 | 확정: [Spec의 Phase 4 계약](docs/SPEC.md)·[ADR-007](ADR.md) — 사전 선점 없음·원자적 모의 결제·재고 버전·응답 유실 |
+| Phase 2 전 | 확정: [Spec의 Phase 2 계정·권한 계약](SPEC.md) |
+| Phase 3 전 | 확정: [Spec의 상품·당일 판매·통합 표 계약](SPEC.md) |
+| Phase 4 전 | 확정: [Spec의 Phase 4 계약](SPEC.md)·[ADR-007](docs/ADR.md) — 사전 선점 없음·원자적 모의 결제·재고 버전·응답 유실 |
 | Phase 5 전 | 취소 시 재고 반환, 환불 실패·재시도, 수령 코드·시간 경계, 판매 실패 처리 기한 |
 | Phase 6 전 | 집계 상태·준비 수량·중복 구매자 정의, 월별 금액 귀속과 환불 반영 기준 |
 
@@ -129,7 +129,7 @@ Phase 1 완료 조건: backend gate·build와 health·OpenAPI·Swagger, frontend
 
 ### Phase 2 결과 · 2026-10-12
 
-- 범위: 백엔드 구현·검증 완료. 입력 계약·수용 기준은 [Spec](docs/SPEC.md)의 Phase 2 계약을 따른다. 사람의 기능 수용 확인은 아직 받지 않았다.
+- 범위: 백엔드 구현·검증 완료. 입력 계약·수용 기준은 [Spec](SPEC.md)의 Phase 2 계약을 따른다. 사람의 기능 수용 확인은 아직 받지 않았다.
 - PostgreSQL 17.10·Flyway V1·JPA 검증과 구매자 가입, 세션 로그인/로그아웃·현재 사용자·CSRF·판매자 역할/매장 소유권을 연결했다. demo 프로필의 시장·매장·계정 초기화는 재기동 시 중복되지 않는다.
 - 핵심 규칙 TDD: 구현 전 26개 실패 확인 후 구현·통과. 이후 이메일 최대 길이 검증을 보완했다.
 - 최종 명령: Windows Temurin 21.0.5에서 `gradlew.bat spotlessApply check build --console=plain --no-daemon` 통과. 테스트 58개, 실패·오류·skip 0. Spotless·컴파일 경고 실패·PMD·ArchUnit을 유지하고 jar를 생성했다.

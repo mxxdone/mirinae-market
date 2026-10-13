@@ -3,8 +3,10 @@
 Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품 등록·수정·삭제, 통합 판매 표의 오늘 판매 일괄 적용, 시장 검색·단위당 보조 가격을 제공한다. 주문·결제는 후속 페이즈다.
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
-- 요구사항·계정 입력 규칙·API 계약: [docs/SPEC.md](docs/SPEC.md)
+- 요구사항·계정 입력 규칙·API 계약: [SPEC.md](SPEC.md)
 - 진행 상태: [PLAN.md](PLAN.md)
+- 서비스 맥락·용어: [docs/CONTEXT.md](docs/CONTEXT.md)
+- 설계 결정과 이유: [docs/ADR.md](docs/ADR.md)
 
 ## 실행
 

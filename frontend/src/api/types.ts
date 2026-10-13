@@ -48,17 +48,20 @@ export interface StoreView {
 export interface ApiErrorPayload {
   code: string;
   message: string;
+  issues?: SaleIssue[];
 }
 
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly issues: SaleIssue[];
 
-  constructor(status: number, code: string, message: string) {
+  constructor(status: number, code: string, message: string, issues: SaleIssue[] = []) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.issues = issues;
   }
 }
 
@@ -114,4 +117,27 @@ export interface ProductPage extends ResultPage<ProductView> {
 
 export interface OfferPage extends ResultPage<OfferView> {
   totalItems: number;
+}
+
+export interface SaleIssue {
+  productId: number | null;
+  message: string;
+}
+export interface SaleChange {
+  productId: number;
+  selling: boolean;
+  priceWon: number | null;
+  onlineQuantity: number | null;
+}
+export interface SaleProductView {
+  product: ProductView;
+  selling: boolean;
+  priceWon: number | null;
+  onlineQuantity: number | null;
+}
+export interface SaleProductPage extends ResultPage<SaleProductView> {
+  totalItems: number;
+}
+export interface SaleBatchInput extends PickupWindowInput {
+  products: SaleChange[];
 }

@@ -1,327 +1,302 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  createProduct,
-  updateProduct,
-  getProducts,
-  findProductOffer,
-  savePickupWindow,
-  saveOffer,
-  getPickupWindow,
-  deleteProduct,
-} from "../../api/products";
+import { applySales, getSaleProducts, getPickupWindow } from "../../api/products";
 import {
   ApiError,
-  type OfferView,
+  type PickupWindowInput,
   type ProductView,
+  type SaleProductView,
+  type SaleIssue,
   type StoreView,
-  type UnitType,
 } from "../../api/types";
-import {
-  parseOfferInput,
-  parseSaleUnit,
-  todayPickupDate,
-  convertWeightInput,
-} from "../../validation/productValidation";
-import { StatusAlert } from "./StatusAlert";
+import { todayPickupDate } from "../../validation/productValidation";
+import { parseSaleDrafts, type SaleDraft } from "../../validation/salesValidation";
 import { Pagination } from "./Pagination";
+import { ProductEditor } from "./ProductEditor";
+import { StatusAlert } from "./StatusAlert";
 
-const PRODUCT_PAGE_SIZE = 5;
-const SELLER_TABS = ["상품 목록", "상품 정보", "오늘 판매"] as const;
+function draftOf(row: SaleProductView): SaleDraft {
+  return {
+    productId: row.product.id,
+    selling: row.selling,
+    price: row.priceWon === null ? "" : String(row.priceWon),
+    quantity: row.onlineQuantity === null ? "" : String(row.onlineQuantity),
+  };
+}
+function sameDraft(a: SaleDraft, b: SaleDraft) {
+  return a.selling === b.selling && a.price === b.price && a.quantity === b.quantity;
+}
+function windowKey(value: PickupWindowInput) {
+  return `${value.orderDeadline}|${value.startTime}|${value.endTime}`;
+}
+const INITIAL_WINDOW: PickupWindowInput = {
+  orderDeadline: "14:00",
+  startTime: "15:00",
+  endTime: "19:00",
+};
+function koreanTime(): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date());
+}
 
 export function SellerProductsPanel({
   store,
   onSessionExpired,
+  editorId,
+  onProductPage,
 }: {
   store: StoreView;
   onSessionExpired: () => void;
+  editorId: number | "new" | null;
+  onProductPage: (id: number | "new" | null) => void;
 }) {
-  const [products, setProducts] = useState<ProductView[]>([]);
+  const [rows, setRows] = useState<SaleProductView[]>([]);
   const [page, setPage] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [activeTab, setActiveTab] = useState(0);
-  const saleHeading = useRef<HTMLHeadingElement>(null);
-  const [selected, setSelected] = useState<ProductView | null>(null);
-  const [offer, setOffer] = useState<OfferView | null>(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [unitType, setUnitType] = useState<UnitType>("WEIGHT");
-  const [amount, setAmount] = useState("");
-  const [weightUnit, setWeightUnit] = useState<"g" | "kg">("g");
-  const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [start, setStart] = useState("14:00");
-  const [end, setEnd] = useState("18:00");
-  const [deadline, setDeadline] = useState("13:00");
-  const [date, setDate] = useState(todayPickupDate);
-  const [loading, setLoading] = useState(false);
-  const [offerLoading, setOfferLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [windowLoading, setWindowLoading] = useState(true);
-  const [windowRegistered, setWindowRegistered] = useState<boolean | null>(null);
+  const [drafts, setDrafts] = useState<Record<number, SaleDraft>>({});
+  const [snapshots, setSnapshots] = useState<Record<number, SaleProductView>>({});
+  const [windowInput, setWindowInput] = useState<PickupWindowInput>(INITIAL_WINDOW);
   const [savedWindow, setSavedWindow] = useState<string | null>(null);
-  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [windowReady, setWindowReady] = useState(false);
+  const [windowLoading, setWindowLoading] = useState(true);
+  const [date, setDate] = useState(todayPickupDate);
+  const [expired, setExpired] = useState(false);
+  const [currentTime, setCurrentTime] = useState(koreanTime);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [issues, setIssues] = useState<SaleIssue[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
+  const [confirmRefresh, setConfirmRefresh] = useState(false);
   const mounted = useRef(true);
   const listRequest = useRef(0);
+  const windowRequest = useRef(0);
+  const changes = Object.values(drafts);
+  const timeChanged = windowReady && savedWindow !== windowKey(windowInput);
+  const closed =
+    windowReady && savedWindow !== null && currentTime >= (savedWindow.split("|")[0] ?? "24:00");
   const handleError = useCallback(
     (failure: unknown) => {
       if (!mounted.current) return;
-      if (failure instanceof ApiError && failure.status === 401) {
-        onSessionExpired();
-        return;
+      if (failure instanceof ApiError && failure.status === 401) onSessionExpired();
+      else {
+        setError(failure instanceof Error ? failure.message : "판매 정보를 불러오지 못했습니다.");
+        if (failure instanceof ApiError) setIssues(failure.issues);
       }
-      setError(
-        failure instanceof Error ? failure.message : "처리하지 못했습니다. 다시 시도해 주세요.",
-      );
     },
     [onSessionExpired],
   );
   const loadList = useCallback(
     async (nextPage: number) => {
-      const current = ++listRequest.current;
+      const version = ++listRequest.current;
       setLoading(true);
-      setError(null);
       try {
-        const result = await getProducts(store.id, nextPage, PRODUCT_PAGE_SIZE);
-        if (!mounted.current || current !== listRequest.current) return;
-        setProducts(result.items);
-        setPage(nextPage);
+        let result = await getSaleProducts(store.id, date, nextPage);
+        const actualPage = Math.min(nextPage, Math.max(0, Math.ceil(result.totalItems / 20) - 1));
+        if (actualPage !== nextPage) result = await getSaleProducts(store.id, date, actualPage);
+        if (!mounted.current || version !== listRequest.current) return;
+        setRows(result.items);
+        setPage(actualPage);
         setTotalItems(result.totalItems);
+        setSnapshots((previous) => ({
+          ...previous,
+          ...Object.fromEntries(result.items.map((row) => [row.product.id, row])),
+        }));
       } catch (failure) {
-        if (current === listRequest.current) handleError(failure);
+        if (version === listRequest.current) handleError(failure);
       } finally {
-        if (mounted.current && current === listRequest.current) setLoading(false);
+        if (mounted.current && version === listRequest.current) setLoading(false);
       }
     },
-    [store.id, handleError],
+    [store.id, date, handleError],
   );
+  const loadWindow = useCallback(async () => {
+    const version = ++windowRequest.current;
+    setWindowLoading(true);
+    setWindowReady(false);
+    try {
+      const value = await getPickupWindow(store.id, date);
+      if (!mounted.current || version !== windowRequest.current) return;
+      const input = value
+        ? {
+            orderDeadline: value.orderDeadline.slice(0, 5),
+            startTime: value.startTime.slice(0, 5),
+            endTime: value.endTime.slice(0, 5),
+          }
+        : INITIAL_WINDOW;
+      setWindowInput(input);
+      setSavedWindow(value ? windowKey(input) : null);
+      setWindowReady(true);
+    } catch (failure) {
+      if (version === windowRequest.current) handleError(failure);
+    } finally {
+      if (mounted.current && version === windowRequest.current) setWindowLoading(false);
+    }
+  }, [store.id, date, handleError]);
   useEffect(() => {
     mounted.current = true;
     void loadList(0);
-    const timer = setInterval(() => setDate(todayPickupDate()), 30000);
+    void loadWindow();
     return () => {
       mounted.current = false;
-      clearInterval(timer);
+      ++listRequest.current;
+      ++windowRequest.current;
     };
-  }, [loadList]);
+  }, [loadList, loadWindow]);
   useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setOffer(null);
-    setPrice("");
-    setQuantity("");
-    if (!selected) {
-      setOfferLoading(false);
-      return;
-    }
-    setOfferLoading(true);
-    async function loadExisting() {
-      try {
-        const existing = await findProductOffer(store, selected as ProductView, controller.signal);
-        if (!active) return;
-        setOffer(existing);
-        if (existing) {
-          setPrice(String(existing.priceWon));
-          setQuantity(String(existing.onlineQuantity));
-        }
-      } catch (failure) {
-        if (active) handleError(failure);
-      } finally {
-        if (active) setOfferLoading(false);
-      }
-    }
-    void loadExisting();
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [selected, store, date, handleError, refreshVersion]);
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-    setWindowLoading(true);
-    setWindowRegistered(null);
-    setSavedWindow(null);
-    setStart("");
-    setEnd("");
-    setDeadline("");
-    void getPickupWindow(store.id, date, controller.signal)
-      .then((window) => {
-        if (active) {
-          setWindowRegistered(window !== null);
-          setWindowLoading(false);
-          setStart(window?.startTime.slice(0, 5) ?? "14:00");
-          setEnd(window?.endTime.slice(0, 5) ?? "18:00");
-          setDeadline(window?.orderDeadline.slice(0, 5) ?? "13:00");
-          setSavedWindow(
-            window
-              ? `${window.orderDeadline.slice(0, 5)}|${window.startTime.slice(0, 5)}|${window.endTime.slice(0, 5)}`
-              : null,
-          );
-        }
-      })
-      .catch((failure: unknown) => {
-        if (active) handleError(failure);
-      })
-      .finally(() => {
-        if (active) setWindowLoading(false);
-      });
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [store.id, date, handleError, refreshVersion]);
-  function choose(product: ProductView | null) {
-    setSelected(product);
-    setName(product?.name ?? "");
-    setDescription(product?.description ?? "");
-    setUnitType(product?.unitType ?? "WEIGHT");
-    const displayKg = product?.unitType === "WEIGHT" && product.unitAmount >= 1000;
-    setAmount(product ? String(displayKg ? product.unitAmount / 1000 : product.unitAmount) : "");
-    setWeightUnit(displayKg ? "kg" : "g");
-    setConfirmDelete(false);
-    setError(null);
+    const timer = setInterval(() => {
+      setExpired(date !== todayPickupDate());
+      setCurrentTime(koreanTime());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [date]);
+  function patch(row: SaleProductView, value: Partial<SaleDraft>) {
     setSuccess(null);
-  }
-  function showSale() {
-    setActiveTab(2);
-    requestAnimationFrame(() => {
-      saleHeading.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-      saleHeading.current?.focus({ preventScroll: true });
+    setIssues((previous) => previous.filter((issue) => issue.productId !== row.product.id));
+    setDrafts((previous) => {
+      const updated = { ...(previous[row.product.id] ?? draftOf(row)), ...value };
+      const next = { ...previous };
+      if (sameDraft(updated, draftOf(row))) delete next[row.product.id];
+      else next[row.product.id] = updated;
+      return next;
     });
   }
-  async function removeProduct() {
-    if (!selected) return;
-    setBusy(true);
+  function openProduct(id: number | "new") {
+    setSuccess(null);
+    setError(null);
+    onProductPage(id);
+  }
+  function excludeChange(id: number) {
+    setDrafts((previous) => {
+      const next = { ...previous };
+      delete next[id];
+      return next;
+    });
+    setIssues((previous) => previous.filter((issue) => issue.productId !== id));
+    void loadList(page);
+  }
+  async function refreshAll() {
+    setConfirmRefresh(false);
+    setDrafts({});
+    setSnapshots({});
+    setIssues([]);
     setError(null);
     setSuccess(null);
-    try {
-      await deleteProduct(store.id, selected.id);
-      if (!mounted.current) return;
-      choose(null);
-      setActiveTab(0);
-      setSuccess("상품이 삭제되었습니다. 판매 기록은 보존되며 공개 판매도 종료됩니다.");
-      await loadList(
-        Math.min(page, Math.max(0, Math.ceil((totalItems - 1) / PRODUCT_PAGE_SIZE) - 1)),
+    setExpired(false);
+    const nextDate = todayPickupDate();
+    if (nextDate !== date) {
+      setRows([]);
+      setDate(nextDate);
+    } else await Promise.all([loadList(page), loadWindow()]);
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setIssues([]);
+    if (date !== todayPickupDate()) {
+      setExpired(true);
+      setError("수령 날짜가 바뀌었습니다. 작성한 내용을 확인하고 새 날짜로 새로고침해 주세요.");
+      return;
+    }
+    const parsed = parseSaleDrafts(changes);
+    if (closed) {
+      setError("주문 마감 시각이 지났습니다. 오늘 판매 조건은 변경할 수 없습니다.");
+      return;
+    }
+    if (parsed.issues.length) {
+      setIssues(parsed.issues);
+      setError(
+        parsed.issues.find((issue) => issue.productId === null)?.message ??
+          "오류 행을 확인해 주세요. 모든 변경을 적용하지 않았습니다.",
       );
-    } catch (failure) {
-      handleError(failure);
-    } finally {
-      if (mounted.current) setBusy(false);
+      return;
     }
-  }
-  async function submitProduct(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    setSuccess(null);
+    if (!windowReady) {
+      setError("공통 시간을 먼저 조회해 주세요.");
+      return;
+    }
+    if (
+      !windowInput.startTime ||
+      !windowInput.endTime ||
+      windowInput.startTime >= windowInput.endTime ||
+      !windowInput.orderDeadline ||
+      windowInput.orderDeadline > windowInput.startTime
+    ) {
+      setError("주문 마감 ≤ 수령 시작 < 수령 마감 순서로 시간을 입력해 주세요.");
+      return;
+    }
     setBusy(true);
     try {
-      const normalized = name.trim();
-      if (
-        !normalized ||
-        [...normalized].length > 100 ||
-        Array.from(normalized).some((character) => {
-          const code = character.codePointAt(0) ?? 0;
-          return code < 32 || (code >= 127 && code <= 159);
-        })
-      )
-        throw new Error("상품명은 제어 문자 없이 1~100자로 입력해 주세요.");
-      if ([...description.trim()].length > 1000) throw new Error("설명은 최대 1,000자입니다.");
-      const input = {
-        name: normalized,
-        description: description.trim(),
-        unitType,
-        unitAmount: parseSaleUnit(unitType, amount, weightUnit),
+      await applySales(store.id, date, { ...windowInput, products: parsed.products });
+      if (!mounted.current) return;
+      const apply = (row: SaleProductView): SaleProductView => {
+        const change = parsed.products.find((item) => item.productId === row.product.id);
+        return change
+          ? {
+              ...row,
+              selling: change.selling,
+              priceWon: change.selling ? change.priceWon : row.priceWon,
+              onlineQuantity: change.selling ? change.onlineQuantity : row.onlineQuantity,
+              product: { ...row.product, hasSales: row.product.hasSales || change.selling },
+            }
+          : row;
       };
-      const saved = selected
-        ? await updateProduct(store.id, selected.id, input)
-        : await createProduct(store.id, input);
-      if (!mounted.current) return;
-      choose(saved);
-      setSuccess("상품 정보가 저장되었습니다. 오늘 판매할 가격과 수량을 설정해 주세요.");
-      await loadList(0);
-      showSale();
+      setRows((previous) => previous.map(apply));
+      setSnapshots((previous) =>
+        Object.fromEntries(Object.entries(previous).map(([id, row]) => [id, apply(row)])),
+      );
+      setDrafts({});
+      setSavedWindow(windowKey(windowInput));
+      setSuccess("변경 사항이 모두 적용되었습니다. 판매 체크한 상품이 공개됩니다.");
+      await loadList(page);
     } catch (failure) {
       handleError(failure);
     } finally {
       if (mounted.current) setBusy(false);
     }
   }
-  async function submitWindow(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    setSuccess(null);
-    setBusy(true);
-    try {
-      if (!start || !end || start >= end) throw new Error("수령 시작은 마감보다 빨라야 합니다.");
-      if (!deadline || deadline > start)
-        throw new Error("주문 마감은 수령 시작보다 늦을 수 없습니다.");
-      if (date !== todayPickupDate()) {
-        setDate(todayPickupDate());
-        throw new Error("수령 날짜가 바뀌었습니다. 새 날짜의 조건을 확인해 주세요.");
-      }
-      await savePickupWindow(store.id, date, {
-        startTime: start,
-        endTime: end,
-        orderDeadline: deadline,
-      });
-      if (mounted.current) {
-        setWindowRegistered(true);
-        setSavedWindow(`${deadline}|${start}|${end}`);
-      }
-      if (mounted.current)
-        setSuccess("매장 수령 시간이 저장되었습니다. 같은 날 모든 상품이 이 시간을 공유합니다.");
-    } catch (failure) {
-      handleError(failure);
-    } finally {
-      if (mounted.current) setBusy(false);
-    }
+  async function productSaved(product: ProductView) {
+    if (!mounted.current) return;
+    onProductPage(null);
+    setSuccess("상품 정보가 저장되었습니다. 판매할 상품을 체크하고 가격·수량을 적용해 주세요.");
+    await loadList(editorId === "new" ? Math.floor(totalItems / 20) : page);
+    setSnapshots((previous) => {
+      const row = previous[product.id];
+      return {
+        ...previous,
+        [product.id]: row
+          ? { ...row, product }
+          : { product, selling: false, priceWon: null, onlineQuantity: null },
+      };
+    });
   }
-  async function submitSale(event: FormEvent) {
-    event.preventDefault();
-    if (!selected) return;
-    setError(null);
-    setSuccess(null);
-    setBusy(true);
-    try {
-      const input = parseOfferInput(price, quantity);
-      if (
-        windowLoading ||
-        windowRegistered !== true ||
-        savedWindow !== `${deadline}|${start}|${end}`
-      )
-        throw new Error("판매를 시작하기 전에 매장 공통 시간을 확인하고 저장해 주세요.");
-      if (date !== todayPickupDate()) {
-        setDate(todayPickupDate());
-        throw new Error("수령 날짜가 바뀌었습니다. 새 날짜의 조건을 확인해 주세요.");
-      }
-      const saved = await saveOffer(store.id, selected.id, date, input);
-      if (!mounted.current) return;
-      setOffer(saved);
-      setSuccess("오늘 판매가 공개되었습니다. 구매자가 시장에서 검색할 수 있습니다.");
-    } catch (failure) {
-      handleError(failure);
-    } finally {
-      if (mounted.current) setBusy(false);
-    }
+  async function productDeleted(id: number) {
+    if (!mounted.current) return;
+    setDrafts((previous) => {
+      const next = { ...previous };
+      delete next[id];
+      return next;
+    });
+    setIssues((previous) => previous.filter((issue) => issue.productId !== id));
+    onProductPage(null);
+    setSuccess("상품이 삭제되었습니다. 상품·판매 기록은 보존됩니다.");
+    await loadList(Math.min(page, Math.max(0, Math.ceil((totalItems - 1) / 20) - 1)));
   }
   return (
-    <section aria-labelledby="heading-products" className="seller-products">
-      <div className="summary-tag-row">
-        <div>
-          <h2 id="heading-products" className="summary-heading">
-            판매 관리
-          </h2>
-        </div>
-        <span className="field-help-text">{date} 수령 · 한국 시간 기준</span>
-      </div>
+    <section className="seller-sales" aria-labelledby="heading-products">
+      <h2 id="heading-products" className="sr-only">
+        판매 상품 목록
+      </h2>
       <StatusAlert
         message={error}
         onRetry={() => {
-          setRefreshVersion((version) => version + 1);
+          setError(null);
           void loadList(page);
+          if (!windowReady) void loadWindow();
         }}
       />
       {success && (
@@ -329,387 +304,106 @@ export function SellerProductsPanel({
           {success}
         </p>
       )}
-      <div className="seller-mobile-tabs" role="tablist" aria-label="판매 관리 화면">
-        {SELLER_TABS.map((label, index) => (
-          <button
-            key={label}
-            id={`seller-tab-${index}`}
-            type="button"
-            role="tab"
-            aria-controls={`seller-panel-${index}`}
-            aria-selected={activeTab === index}
-            tabIndex={activeTab === index ? 0 : -1}
-            onClick={() => setActiveTab(index)}
-            onKeyDown={(event) => {
-              const next =
-                event.key === "ArrowRight"
-                  ? (index + 1) % SELLER_TABS.length
-                  : event.key === "ArrowLeft"
-                    ? (index + SELLER_TABS.length - 1) % SELLER_TABS.length
-                    : event.key === "Home"
-                      ? 0
-                      : event.key === "End"
-                        ? SELLER_TABS.length - 1
-                        : null;
-              if (next === null) return;
-              event.preventDefault();
-              setActiveTab(next);
-              document.getElementById(`seller-tab-${next}`)?.focus();
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="seller-product-layout">
-        <div
-          className="seller-product-panel seller-tab-panel"
-          id="seller-panel-0"
-          role="tabpanel"
-          aria-labelledby="seller-tab-0"
-          data-active={activeTab === 0}
-        >
-          <div className="product-list-heading">
-            <h2>등록 상품</h2>
-            <button
-              type="button"
-              className="pagination-button"
-              aria-label="상품 목록 새로고침"
-              title="새로고침"
-              disabled={busy || loading}
-              onClick={() => void loadList(page)}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                aria-hidden="true"
+      {editorId !== null ? (
+        <ProductEditor
+          key={editorId}
+          storeId={store.id}
+          productId={editorId === "new" ? null : editorId}
+          onSaved={productSaved}
+          onDeleted={productDeleted}
+          onBack={() => onProductPage(null)}
+          onSessionExpired={onSessionExpired}
+        />
+      ) : (
+        <>
+          <div className="sales-toolbar">
+            <span>{date} 수령 · 한국 시간 기준</span>
+            <div className="product-actions">
+              <button
+                type="button"
+                className="btn-query-store"
+                onClick={() => openProduct("new")}
+                disabled={busy}
               >
-                <path d="M20 7v5h-5" />
-                <path d="M20 12a8 8 0 1 0-2.3 5.7M20 7l-2.3-2.3" />
-              </svg>
-            </button>
+                상품 추가
+              </button>
+              <button
+                type="button"
+                className="pagination-button"
+                aria-label="상품 목록 새로고침"
+                title="새로고침"
+                disabled={busy || loading}
+                onClick={() => {
+                  if (changes.length || timeChanged) setConfirmRefresh(true);
+                  else void refreshAll();
+                }}
+              >
+                ↻
+              </button>
+            </div>
           </div>
-          <p className="field-help-text">상품을 선택해 수정하거나 오늘 판매를 등록하세요.</p>
-          <button
-            type="button"
-            className="btn-query-store new-product-button"
-            disabled={busy}
-            onClick={() => {
-              choose(null);
-              setActiveTab(1);
-            }}
-          >
-            새 상품 등록
-          </button>
-          {loading ? (
-            <p role="status">상품 목록을 불러오는 중입니다.</p>
-          ) : products.length === 0 ? (
-            <p className="field-help-text">아직 등록된 상품이 없습니다.</p>
-          ) : (
-            <div className="seller-product-list">
-              {products.map((product) => (
+          {confirmRefresh && (
+            <div
+              className="product-delete-confirm"
+              role="group"
+              aria-label="판매 작성값 새로고침 확인"
+            >
+              <p>새로고침하면 작성한 변경을 취소하고 저장된 값을 다시 불러옵니다.</p>
+              <div className="product-actions">
                 <button
-                  key={product.id}
                   type="button"
-                  className="seller-product-choice"
-                  aria-pressed={selected?.id === product.id}
-                  disabled={busy}
-                  onClick={() => {
-                    choose(product);
-                    setActiveTab(1);
-                  }}
+                  className="pagination-button"
+                  onClick={() => void refreshAll()}
                 >
-                  <span>
-                    {product.name}
-                    <br />
-                    <small>
-                      {product.unitAmount.toLocaleString()}
-                      {product.unitType === "WEIGHT" ? "g" : "개"} / 포장
-                    </small>
-                  </span>
-                  <span aria-hidden="true">→</span>
+                  변경 취소 후 새로고침
                 </button>
-              ))}
+                <button
+                  type="button"
+                  className="pagination-button"
+                  onClick={() => setConfirmRefresh(false)}
+                >
+                  계속 작성
+                </button>
+              </div>
             </div>
           )}
-          <Pagination
-            page={page}
-            size={PRODUCT_PAGE_SIZE}
-            totalItems={totalItems}
-            disabled={busy || loading}
-            onPage={(next) => void loadList(next)}
-            label="등록 상품 페이지"
-          />
-        </div>
-        <div
-          className="seller-product-panel seller-tab-panel"
-          id="seller-panel-1"
-          role="tabpanel"
-          aria-labelledby="seller-tab-1"
-          data-active={activeTab === 1}
-        >
-          <h2>{selected ? "상품 정보 수정" : "새 상품 등록"}</h2>
-          <form className="market-form" onSubmit={(event) => void submitProduct(event)}>
-            <div className="field-group">
-              <label className="field-label" htmlFor="productName">
-                상품명
-              </label>
-              <input
-                id="productName"
-                className="input-box"
-                maxLength={100}
-                required
-                value={name}
-                disabled={busy || offerLoading || !!selected?.hasSales || !!offer}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="국내산 양파 3kg"
-              />
-            </div>
-            <div className="product-form-row">
-              <div className="field-group">
-                <label className="field-label" htmlFor="productUnitType">
-                  판매 구성 방식
-                </label>
-                <select
-                  id="productUnitType"
-                  className="input-box"
-                  value={unitType}
-                  disabled={busy || offerLoading || !!selected?.hasSales || !!offer}
-                  onChange={(event) => {
-                    setUnitType(event.target.value === "COUNT" ? "COUNT" : "WEIGHT");
-                    setAmount("");
-                  }}
-                >
-                  <option value="WEIGHT">중량</option>
-                  <option value="COUNT">개수</option>
-                </select>
-              </div>
-              {unitType === "WEIGHT" && (
-                <div className="field-group">
-                  <label className="field-label" htmlFor="weightUnit">
-                    중량 단위
-                  </label>
-                  <select
-                    id="weightUnit"
-                    className="input-box"
-                    value={weightUnit}
-                    disabled={busy || offerLoading || !!selected?.hasSales || !!offer}
-                    onChange={(event) => {
-                      const nextUnit = event.target.value === "kg" ? "kg" : "g";
-                      try {
-                        setAmount(convertWeightInput(amount, weightUnit, nextUnit));
-                        setWeightUnit(nextUnit);
-                        setError(null);
-                      } catch (failure) {
-                        handleError(failure);
-                      }
-                    }}
-                  >
-                    <option value="g">g</option>
-                    <option value="kg">kg</option>
-                  </select>
-                </div>
-              )}
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="productUnitAmount">
-                {unitType === "WEIGHT" ? "한 포장 중량" : "한 포장 개수"} (
-                {unitType === "COUNT" ? "개" : weightUnit})
-              </label>
-              <input
-                id="productUnitAmount"
-                className="input-box"
-                inputMode={unitType === "WEIGHT" && weightUnit === "kg" ? "decimal" : "numeric"}
-                required
-                value={amount}
-                disabled={busy || offerLoading || !!selected?.hasSales || !!offer}
-                onChange={(event) => setAmount(event.target.value)}
-              />
-              <p className="field-help-text">
-                {unitType === "WEIGHT"
-                  ? "100g(0.1kg)의 배수로 입력하세요. 상품명에서 중량을 추출하지 않습니다."
-                  : "한 포장에 포함되는 양의 정수 개수를 입력하세요."}
-              </p>
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="productDescription">
-                상품 설명 (선택)
-              </label>
-              <textarea
-                id="productDescription"
-                className="input-box product-textarea"
-                maxLength={1000}
-                value={description}
-                disabled={busy}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </div>
-            {(selected?.hasSales || offer) && (
-              <p className="field-help-text">
-                판매 이력이 있는 상품의 이름·구성 변경은 새 상품으로 등록하세요. 설명은 수정할 수
-                있습니다.
-              </p>
-            )}
-            <div className="product-actions">
-              {selected && (
-                <button type="button" className="pagination-button" onClick={showSale}>
-                  오늘 판매 설정
-                </button>
-              )}
-              <button
-                type="submit"
-                className="btn-submit-primary"
-                disabled={busy || offerLoading || windowLoading}
-              >
-                {busy ? "저장 중…" : selected ? "상품 정보 저장" : "상품 등록"}
-              </button>
-              {selected && (
-                <button
-                  type="button"
-                  className="product-delete-button"
-                  disabled={busy}
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  상품 삭제
-                </button>
-              )}
-            </div>
-            {confirmDelete && selected && (
-              <div className="product-delete-confirm" role="group" aria-label="상품 삭제 확인">
-                <p>
-                  ‘{selected.name}’ 상품을 삭제할까요? 공개 판매도 종료되며 판매 기록은 보존됩니다.
-                </p>
-                <div className="product-actions">
-                  <button
-                    type="button"
-                    className="product-delete-button"
-                    disabled={busy}
-                    onClick={() => void removeProduct()}
-                  >
-                    삭제 확인
-                  </button>
-                  <button
-                    type="button"
-                    className="pagination-button"
-                    disabled={busy}
-                    onClick={() => setConfirmDelete(false)}
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            )}
-          </form>
-        </div>
-        <div
-          className="seller-sale-panels seller-tab-panel"
-          id="seller-panel-2"
-          role="tabpanel"
-          aria-labelledby="seller-tab-2"
-          data-active={activeTab === 2}
-        >
-          <div className="seller-product-panel">
-            <h2 ref={saleHeading} tabIndex={-1}>
-              오늘 판매 설정
-            </h2>
-            {!selected ? (
-              <p className="field-help-text">
-                상품을 등록하거나 목록에서 선택하면 오늘 판매할 가격·수량을 설정할 수 있습니다.
-              </p>
-            ) : offerLoading ? (
-              <p role="status">기존 판매 조건을 확인하고 있습니다.</p>
-            ) : (
-              <>
-                <p className="field-help-text">
-                  {selected.name} · {date} 수령
-                </p>
-                <form
-                  id="seller-sale-form"
-                  className="market-form"
-                  onSubmit={(event) => void submitSale(event)}
-                >
-                  <div className="field-group">
-                    <label className="field-label" htmlFor="offerPrice">
-                      한 포장 가격 (원)
-                    </label>
-                    <input
-                      id="offerPrice"
-                      className="input-box"
-                      inputMode="numeric"
-                      required
-                      value={price}
-                      disabled={busy}
-                      onChange={(event) => setPrice(event.target.value)}
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label className="field-label" htmlFor="offerQuantity">
-                      온라인 판매 수량 (포장)
-                    </label>
-                    <input
-                      id="offerQuantity"
-                      className="input-box"
-                      inputMode="numeric"
-                      required
-                      value={quantity}
-                      disabled={busy}
-                      onChange={(event) => setQuantity(event.target.value)}
-                    />
-                    <p className="field-help-text">
-                      0은 품절입니다. 현장 재고와 구분해 준비해 주세요.
-                    </p>
-                  </div>
-                </form>
-                {offer && (
-                  <p className="comparison-price">
-                    공개 가격: 포장당 {offer.priceWon.toLocaleString()}원 · {offer.comparisonUnit}당{" "}
-                    {offer.comparisonPriceWon.toLocaleString("ko-KR", { minimumFractionDigits: 2 })}
-                    원
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-          <div className="seller-product-panel">
-            <h2>오늘 주문·수령 시간</h2>
+          {expired && <p role="alert">날짜가 바뀌었습니다. 새로고침 전에는 적용할 수 없습니다.</p>}
+          {closed && (
             <p className="field-help-text">
-              {windowLoading
-                ? "저장된 시간을 확인하고 있습니다."
-                : windowRegistered === null
-                  ? "수령 시간을 확인하지 못했습니다. 다시 시도해 주세요."
-                  : windowRegistered
-                    ? "저장된 수령 시간을 불러왔습니다."
-                    : "판매를 시작하기 전에 매장 공통 시간을 저장해 주세요."}
+              주문 마감 시각이 지났습니다. 오늘 판매 조건은 변경할 수 없습니다.
             </p>
-            <p className="field-help-text">{date} · 같은 날 모든 상품이 공유합니다.</p>
-            {savedWindow !== null && savedWindow !== `${deadline}|${start}|${end}` && (
-              <p className="field-help-text">
-                변경한 시간을 저장한 뒤 판매를 시작하세요. 오늘의 모든 상품에 적용됩니다.
-              </p>
-            )}
-            <form className="market-form" onSubmit={(event) => void submitWindow(event)}>
-              <div className="field-group">
-                <label className="field-label" htmlFor="orderDeadline">
-                  주문 마감
-                </label>
-                <input
-                  type="time"
-                  id="orderDeadline"
-                  className="input-box"
-                  required
-                  value={deadline}
-                  disabled={busy || offerLoading || windowLoading}
-                  onChange={(event) => setDeadline(event.target.value)}
-                />
-                <p className="field-help-text">
-                  수령 시작보다 늦지 않게 설정하세요. 마감 정각부터 주문을 받지 않습니다.
-                </p>
-              </div>
-              <div className="product-form-row">
+          )}
+          <form className="sales-form" onSubmit={(event) => void submit(event)} noValidate>
+            <fieldset
+              className="sales-common-time"
+              disabled={busy || closed || windowLoading || !windowReady}
+            >
+              <legend>공통 주문·수령 시간</legend>
+              {windowLoading ? (
+                <p role="status">저장된 시간을 확인하고 있습니다.</p>
+              ) : !windowReady ? (
+                <p>수령 시간을 확인하지 못했습니다. 다시 시도해 주세요.</p>
+              ) : (
+                <p className="field-help-text">오늘 판매하는 모든 상품에 적용됩니다.</p>
+              )}
+              <div className="sales-time-fields">
+                <div className="field-group">
+                  <label className="field-label" htmlFor="orderDeadline">
+                    주문 마감
+                  </label>
+                  <input
+                    type="time"
+                    id="orderDeadline"
+                    className="input-box"
+                    value={windowInput.orderDeadline}
+                    onChange={(event) =>
+                      setWindowInput((previous) => ({
+                        ...previous,
+                        orderDeadline: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
                 <div className="field-group">
                   <label className="field-label" htmlFor="pickupStart">
                     수령 시작
@@ -718,10 +412,10 @@ export function SellerProductsPanel({
                     type="time"
                     id="pickupStart"
                     className="input-box"
-                    required
-                    value={start}
-                    disabled={busy || offerLoading || windowLoading}
-                    onChange={(event) => setStart(event.target.value)}
+                    value={windowInput.startTime}
+                    onChange={(event) =>
+                      setWindowInput((previous) => ({ ...previous, startTime: event.target.value }))
+                    }
                   />
                 </div>
                 <div className="field-group">
@@ -732,39 +426,227 @@ export function SellerProductsPanel({
                     type="time"
                     id="pickupEnd"
                     className="input-box"
-                    required
-                    value={end}
-                    disabled={busy || offerLoading || windowLoading}
-                    onChange={(event) => setEnd(event.target.value)}
+                    value={windowInput.endTime}
+                    onChange={(event) =>
+                      setWindowInput((previous) => ({ ...previous, endTime: event.target.value }))
+                    }
                   />
                 </div>
               </div>
+            </fieldset>
+            <p className="field-help-text">
+              체크·가격·수량 변경은 ‘변경 사항 적용’을 누른 뒤 반영됩니다.
+            </p>
+            {loading ? (
+              <p role="status">상품 목록을 불러오는 중입니다.</p>
+            ) : rows.length === 0 ? (
+              <p>등록한 상품이 없습니다. 상품 추가부터 시작하세요.</p>
+            ) : (
+              <table className="sale-table">
+                <caption className="sr-only">오늘 판매 여부와 상품별 가격·수량</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">판매</th>
+                    <th scope="col">상품·포장 규격</th>
+                    <th scope="col">포장 가격(원)</th>
+                    <th scope="col">판매 수량(포장)</th>
+                    <th scope="col">현재 상태</th>
+                    <th scope="col">수정</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const product = row.product;
+                    const draft = drafts[product.id] ?? draftOf(row);
+                    const issue = issues.find((item) => item.productId === product.id);
+                    const changed = drafts[product.id] !== undefined;
+                    const status = row.selling
+                      ? closed
+                        ? "마감"
+                        : row.onlineQuantity === 0
+                          ? "품절"
+                          : "판매 중"
+                      : row.priceWon === null
+                        ? "미판매"
+                        : "판매 중단";
+                    const pending = changed
+                      ? row.selling !== draft.selling
+                        ? draft.selling
+                          ? "공개 예정"
+                          : "중단 예정"
+                        : "수정 예정"
+                      : null;
+                    return (
+                      <tr
+                        key={product.id}
+                        className="sale-table-row"
+                        data-product-id={product.id}
+                        data-error={!!issue}
+                      >
+                        <td className="sale-check-cell">
+                          <input
+                            type="checkbox"
+                            aria-label={`${product.name} 오늘 판매`}
+                            checked={draft.selling}
+                            disabled={busy || closed}
+                            onChange={(event) => patch(row, { selling: event.target.checked })}
+                          />
+                        </td>
+                        <th scope="row" className="sale-product-cell">
+                          <button
+                            type="button"
+                            className="sale-product-name"
+                            disabled={busy}
+                            onClick={() => openProduct(product.id)}
+                          >
+                            {product.name}
+                          </button>
+                          <small>
+                            {product.unitType === "WEIGHT"
+                              ? product.unitAmount >= 1000
+                                ? `${product.unitAmount / 1000}kg`
+                                : `${product.unitAmount}g`
+                              : `${product.unitAmount}개`}{" "}
+                            / 포장
+                            <span className="sale-mobile-state">
+                              {" "}
+                              · {status}
+                              {pending ? ` · ${pending}` : ""}
+                            </span>
+                          </small>
+                        </th>
+                        <td className="sale-price-cell">
+                          <label htmlFor={`sale-price-${product.id}`} className="sale-input-label">
+                            포장 가격(원)
+                          </label>
+                          <input
+                            id={`sale-price-${product.id}`}
+                            className="input-box"
+                            inputMode="numeric"
+                            aria-label={`${product.name} 포장 가격`}
+                            aria-invalid={!!issue}
+                            aria-describedby={issue ? `sale-issue-${product.id}` : undefined}
+                            disabled={busy || closed || !draft.selling}
+                            value={draft.price}
+                            onChange={(event) => patch(row, { price: event.target.value })}
+                          />
+                        </td>
+                        <td className="sale-quantity-cell">
+                          <label
+                            htmlFor={`sale-quantity-${product.id}`}
+                            className="sale-input-label"
+                          >
+                            수량(포장)
+                          </label>
+                          <input
+                            id={`sale-quantity-${product.id}`}
+                            className="input-box"
+                            inputMode="numeric"
+                            aria-label={`${product.name} 판매 수량`}
+                            aria-invalid={!!issue}
+                            aria-describedby={issue ? `sale-issue-${product.id}` : undefined}
+                            disabled={busy || closed || !draft.selling}
+                            value={draft.quantity}
+                            onChange={(event) => patch(row, { quantity: event.target.value })}
+                          />
+                        </td>
+                        <td className="sale-status-cell">
+                          <span>{status}</span>
+                          {pending && <small>{pending}</small>}
+                          {issue && (
+                            <div>
+                              <p
+                                id={`sale-issue-${product.id}`}
+                                className="sale-row-error"
+                                role="alert"
+                              >
+                                {issue.message}
+                              </p>
+                              <button
+                                type="button"
+                                className="pagination-button"
+                                onClick={() => excludeChange(product.id)}
+                              >
+                                변경 제외
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                        <td className="sale-edit-cell">
+                          <button
+                            type="button"
+                            className="pagination-button"
+                            aria-label={`${product.name} 상품 수정`}
+                            disabled={busy}
+                            onClick={() => openProduct(product.id)}
+                          >
+                            수정
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+            <Pagination
+              page={page}
+              size={20}
+              totalItems={totalItems}
+              disabled={busy || loading}
+              onPage={(next) => void loadList(next)}
+              label="등록 상품 페이지"
+            />
+            {issues.some(
+              (issue) =>
+                issue.productId !== null && !rows.some((row) => row.product.id === issue.productId),
+            ) && (
+              <ul className="sale-row-error">
+                {issues
+                  .filter(
+                    (issue) =>
+                      issue.productId !== null &&
+                      !rows.some((row) => row.product.id === issue.productId),
+                  )
+                  .map((issue) => (
+                    <li key={issue.productId}>
+                      {snapshots[issue.productId as number]?.product.name ??
+                        `상품 ${issue.productId}`}
+                      : {issue.message}
+                      <button
+                        type="button"
+                        className="pagination-button"
+                        aria-label={`${snapshots[issue.productId as number]?.product.name ?? `상품 ${issue.productId}`} 변경 제외`}
+                        onClick={() => excludeChange(issue.productId as number)}
+                      >
+                        변경 제외
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+            <div className="sales-apply-bar">
+              <span>
+                변경 상품 {changes.length}개{timeChanged ? " · 공통 시간 변경" : ""}
+              </span>
               <button
+                type="submit"
                 className="btn-submit-primary"
-                type="submit"
-                disabled={busy || offerLoading || windowLoading}
-              >
-                수령 시간 저장
-              </button>
-            </form>
-            {selected && !offerLoading && (
-              <button
-                className="btn-submit-primary sale-publish-button"
-                type="submit"
-                form="seller-sale-form"
                 disabled={
                   busy ||
-                  windowLoading ||
-                  windowRegistered !== true ||
-                  savedWindow !== `${deadline}|${start}|${end}`
+                  loading ||
+                  !windowReady ||
+                  expired ||
+                  closed ||
+                  (!changes.length && !timeChanged)
                 }
               >
-                {busy ? "저장 중…" : offer ? "판매 조건 저장" : "오늘 판매 시작"}
+                {busy ? "적용 중…" : "변경 사항 적용"}
               </button>
-            )}
-          </div>
-        </div>
-      </div>
+            </div>
+          </form>
+        </>
+      )}
     </section>
   );
 }

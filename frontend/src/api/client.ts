@@ -120,7 +120,12 @@ async function parseApiError(response: Response, defaultMessage: string): Promis
     const payload = (await response.json()) as Partial<ApiErrorPayload>;
     const code = payload.code || mapStatusToDefaultCode(response.status);
     const message = payload.message || defaultMessage;
-    return new ApiError(response.status, code, message);
+    return new ApiError(
+      response.status,
+      code,
+      message,
+      Array.isArray(payload.issues) ? payload.issues : [],
+    );
   } catch {
     const code = mapStatusToDefaultCode(response.status);
     return new ApiError(response.status, code, defaultMessage);
@@ -271,5 +276,6 @@ export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
       "저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
     );
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }

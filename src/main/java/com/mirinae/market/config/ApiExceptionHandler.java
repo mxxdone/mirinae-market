@@ -3,6 +3,7 @@ package com.mirinae.market.config;
 import com.mirinae.market.modules.account.business.DuplicateAccountException;
 import com.mirinae.market.modules.product.business.ProductConflictException;
 import com.mirinae.market.modules.product.business.ProductNotFoundException;
+import com.mirinae.market.modules.product.business.SaleBatchException;
 import com.mirinae.market.modules.store.business.StoreForbiddenException;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,19 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(SaleBatchException.class)
+  public ResponseEntity<Map<String, Object>> invalidSales(SaleBatchException exception) {
+    return ResponseEntity.badRequest()
+        .body(
+            Map.of(
+                "code",
+                "SALE_BATCH_INVALID",
+                "message",
+                exception.getMessage(),
+                "issues",
+                exception.issues()));
+  }
+
   @ExceptionHandler(ProductNotFoundException.class)
   public ResponseEntity<Map<String, String>> notFound(ProductNotFoundException exception) {
     return ResponseEntity.status(404)

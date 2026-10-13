@@ -9,7 +9,8 @@ import {
   type ProductView,
   type ProductPage,
   type OfferPage,
-  type StoreView,
+  type SaleBatchInput,
+  type SaleProductPage,
 } from "./types";
 
 export function getMarkets(): Promise<MarketView[]> {
@@ -35,6 +36,19 @@ export function getOffer(
 }
 export function getProducts(storeId: number, page = 0, size = 20): Promise<ProductPage> {
   return apiGet(`/api/seller/stores/${storeId}/products?page=${page}&size=${size}`);
+}
+export function getProduct(
+  storeId: number,
+  productId: number,
+  signal?: AbortSignal,
+): Promise<ProductView> {
+  return apiGet(`/api/seller/stores/${storeId}/products/${productId}`, signal);
+}
+export function getSaleProducts(storeId: number, date: string, page = 0): Promise<SaleProductPage> {
+  return apiGet(`/api/seller/stores/${storeId}/sales/${date}?page=${page}&size=20`);
+}
+export function applySales(storeId: number, date: string, input: SaleBatchInput): Promise<void> {
+  return apiPutJson<void>(`/api/seller/stores/${storeId}/sales/${date}`, input);
 }
 export function deleteProduct(storeId: number, productId: number): Promise<void> {
   return apiDeleteEmpty(`/api/seller/stores/${storeId}/products/${productId}`);
@@ -75,22 +89,4 @@ export function saveOffer(
   input: OfferInput,
 ): Promise<OfferView> {
   return apiPutJson(`/api/seller/stores/${storeId}/products/${productId}/offers/${date}`, input);
-}
-/** 공개된 동일 상품 ID만 페이지를 넘어 확인한다. */
-export async function findProductOffer(
-  store: StoreView,
-  product: ProductView,
-  signal?: AbortSignal,
-): Promise<OfferView | null> {
-  let page = 0;
-  while (!signal?.aborted) {
-    const result = await searchOffers(store.marketId, product.name, page, signal);
-    const offer = result.items.find(
-      (item) => item.storeId === store.id && item.productId === product.id,
-    );
-    if (offer) return offer;
-    if (!result.hasNext) return null;
-    ++page;
-  }
-  return null;
 }

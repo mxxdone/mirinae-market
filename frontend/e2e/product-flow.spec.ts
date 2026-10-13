@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
 
 function required(name: string): string {
@@ -12,6 +12,9 @@ async function login(page: Page, id: string) {
   await page.locator("#loginUserId").fill(id);
   await page.locator("#loginPassword").fill(required("E2E_DEMO_PASSWORD"));
   await page.locator("#btnLoginSubmit").click();
+  if (id === required("E2E_BUYER_LOGIN_ID"))
+    await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+  else await expect(page.getByRole("button", { name: "상품 추가", exact: true })).toBeVisible();
 }
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -104,13 +107,38 @@ test("상품 상세의 브라우저 뒤로·앞으로·새로고침과 로그아
   await expect(page.locator("#heading-login")).toBeVisible();
 });
 
-test("판매자 kg 입력→오늘 공개→구매자 시장 검색·상세·타 시장 격리", async ({ page, browser }) => {
+function saleRow(page: Page, name: string) {
+  return page.locator(".sale-table-row").filter({ hasText: name });
+}
+async function addProduct(page: Page, name: string, amount = "500", unit = "g") {
+  await page.getByRole("button", { name: "상품 추가", exact: true }).click();
+  await page.locator("#productName").fill(name);
+  await page.locator("#weightUnit").selectOption(unit);
+  await page.locator("#productUnitAmount").fill(amount);
+  await page.getByRole("button", { name: "상품 등록", exact: true }).click();
+  await expect(saleRow(page, name)).toBeVisible();
+}
+async function sellerApi(context: BrowserContext) {
+  const csrf = (await (await context.request.get("/api/auth/csrf")).json()) as {
+    headerName: string;
+    token: string;
+  };
+  const store = (await (await context.request.get("/api/seller/stores/me")).json()) as {
+    id: number;
+    marketId: number;
+  };
+  const date = new Date(Date.parse(required("E2E_FIXED_INSTANT")) + 9 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  return { headers: { [csrf.headerName]: csrf.token }, store, date };
+}
+
+test("판매자 kg 입력→일괄 공개→구매자 시장 검색·상세·타 시장 격리", async ({ page, browser }) => {
   const name = `양파 ${Date.now()} 3kg`;
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  await expect(page.locator("#heading-products")).toBeVisible();
+  await page.getByRole("button", { name: "상품 추가", exact: true }).click();
   await page.locator("#productName").fill(name);
   await page.locator("#weightUnit").selectOption("kg");
-  await page.locator("#productUnitAmount").fill("3");
   await page.locator("#productUnitAmount").fill("2.5");
   await page.locator("#weightUnit").selectOption("g");
   await expect(page.locator("#productUnitAmount")).toHaveValue("2500");
@@ -119,25 +147,28 @@ test("판매자 kg 입력→오늘 공개→구매자 시장 검색·상세·타
   await page.locator("#productUnitAmount").fill("3");
   await page.locator("#productDescription").fill("한 포장 3kg, 오늘 매장 방문 수령");
   await page.getByRole("button", { name: "상품 등록", exact: true }).click();
-  await expect(page.getByText("상품 정보가 저장되었습니다.", { exact: false })).toBeVisible();
+  const row = saleRow(page, name);
+  await expect(row).toBeVisible();
+  await row.getByRole("checkbox").check();
+  await row.getByRole("textbox").nth(0).fill("9000");
+  await row.getByRole("textbox").nth(1).fill("20");
   await page.locator("#orderDeadline").fill("14:00");
   await page.locator("#pickupStart").fill("15:00");
   await page.locator("#pickupEnd").fill("19:00");
-  await page.getByRole("button", { name: "수령 시간 저장", exact: true }).click();
-  await expect(page.getByText("매장 수령 시간이 저장되었습니다.", { exact: false })).toBeVisible();
-  await page.locator("#offerPrice").fill("9000");
-  await page.locator("#offerQuantity").fill("20");
-  await page.getByRole("button", { name: "오늘 판매 시작", exact: true }).click();
-  await expect(page.getByText("오늘 판매가 공개되었습니다.", { exact: false })).toBeVisible();
-  await expect(page.getByText("100g당 300.00원", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(page.getByText("변경 사항이 모두 적용되었습니다.", { exact: false })).toBeVisible();
+  await expect(row.locator(".sale-status-cell > span")).toHaveText("판매 중");
+  await row.getByRole("button", { name: `${name} 상품 수정`, exact: true }).click();
   await expect(page.locator("#productName")).toBeDisabled();
   await expect(page.locator("#weightUnit")).toBeDisabled();
   await page.reload();
+  await expect(page.locator("#productUnitAmount")).toHaveValue("3");
+  await page.getByRole("button", { name: "목록으로", exact: true }).click();
   await expect(page.locator("#pickupStart")).toHaveValue("15:00");
   await expect(page.locator("#pickupEnd")).toHaveValue("19:00");
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
-  await page.screenshot({ path: "../output/playwright/phase3-seller-mobile.png", fullPage: true });
+  await page.screenshot({ path: "../output/playwright/sales-table-mobile.png", fullPage: true });
   const buyer = await browser.newContext();
   try {
     const buyerPage = await buyer.newPage();
@@ -149,27 +180,15 @@ test("판매자 kg 입력→오늘 공개→구매자 시장 검색·상세·타
     const card = buyerPage.locator(".offer-card").filter({ hasText: name });
     await expect(card).toContainText("9,000");
     await expect(card).toContainText("100g당 300.00원");
-    await expect(card).toContainText("3,000g");
-    await expect(card).toContainText("주문 14:00 마감");
-    await buyerPage.screenshot({
-      path: "../output/playwright/phase3-buyer-desktop.png",
-      fullPage: true,
-    });
     await card.getByRole("button", { name: /^상품 상세 보기/ }).click();
     await expect(buyerPage.getByRole("heading", { name, exact: true })).toBeVisible();
-    await expect(buyerPage.locator(".offer-facts")).toContainText("15:00~19:00");
-    await buyerPage.setViewportSize({ width: 390, height: 844 });
-    await noOverflow(buyerPage);
-    await buyerPage.screenshot({
-      path: "../output/playwright/phase3-buyer-mobile.png",
-      fullPage: true,
-    });
+    await expect(buyerPage.getByText("15:00~19:00", { exact: false })).toBeVisible();
+    await buyerPage.getByRole("button", { name: "← 상품 목록으로", exact: true }).click();
     await buyerPage.locator("#marketSelect").selectOption({ label: "은하시장" });
-    await expect(buyerPage.getByRole("heading", { name, exact: true })).toHaveCount(0);
-    await buyerPage.locator("#productSearch").fill(name);
     await buyerPage.getByRole("button", { name: "상품 검색", exact: true }).click();
     await expect(buyerPage.locator(".offer-card")).toHaveCount(0);
-    await expect(buyerPage.getByText("오늘 판매할 상품을 기다리고 있어요")).toBeVisible();
+    await buyerPage.setViewportSize({ width: 390, height: 844 });
+    await noOverflow(buyerPage);
   } finally {
     await buyer.close();
   }
@@ -180,7 +199,7 @@ test("입력 실패·통신 실패를 성공으로 표시하지 않고 세션 �
   context,
 }) => {
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  await expect(page.locator("#heading-products")).toBeVisible();
+  await page.getByRole("button", { name: "상품 추가", exact: true }).click();
   await page.locator("#productName").fill(`실패검증${Date.now()}`);
   await page.locator("#productUnitAmount").fill("550");
   await page.getByRole("button", { name: "상품 등록", exact: true }).click();
@@ -196,7 +215,11 @@ test("입력 실패·통신 실패를 성공으로 표시하지 않고 세션 �
   await expect(page.locator("#productUnitAmount")).toHaveValue("500");
   await context.unroute("**/api/seller/stores/*/products");
   await context.clearCookies();
+  await page.getByRole("button", { name: "목록으로", exact: true }).click();
   await page.getByRole("button", { name: "상품 목록 새로고침" }).click();
+  const confirmation = page.getByRole("group", { name: "판매 작성값 새로고침 확인" });
+  if (await confirmation.isVisible())
+    await confirmation.getByRole("button", { name: "변경 취소 후 새로고침" }).click();
   await expect(page.locator("#heading-login")).toBeVisible();
   await expect(page.locator("#heading-products")).toHaveCount(0);
   await expect(page.locator("#storeInfoName")).toHaveCount(0);
@@ -214,25 +237,25 @@ test("수령 시간 조회 실패 후 로딩을 끝내고 재조회로 복원", 
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
   await expect(page.getByRole("alert")).toContainText("통신할 수 없습니다");
   await expect(page.getByText("저장된 시간을 확인하고 있습니다.")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "상품 등록", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "상품 추가", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "변경 사항 적용", exact: true })).toBeDisabled();
   await context.unroute("**/api/seller/stores/*/pickup-windows/*");
   await page.getByRole("alert").getByRole("button", { name: "다시 시도" }).click();
   await expect(page.locator("#pickupStart")).toHaveValue("15:00");
-  await expect(page.getByText("저장된 수령 시간을 불러왔습니다.")).toBeVisible();
+  await expect(page.locator("#orderDeadline")).toBeEnabled();
 });
 
 test("작성 중인 수령일을 자정 경계에서도 다른 날짜로 자동 변경해 전송하지 않음", async ({
   page,
 }) => {
+  const name = `날짜검증${Date.now()}`;
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  await page.locator("#productName").fill(`날짜검증${Date.now()}`);
-  await page.locator("#productUnitAmount").fill("100");
-  await page.getByRole("button", { name: "상품 등록", exact: true }).click();
-  await page.locator("#offerPrice").fill("1000");
-  await page.locator("#offerQuantity").fill("1");
-  const label = await page
-    .locator(".seller-products > .summary-tag-row .field-help-text")
-    .innerText();
+  await addProduct(page, name, "100");
+  const row = saleRow(page, name);
+  await row.getByRole("checkbox").check();
+  await row.getByRole("textbox").nth(0).fill("1000");
+  await row.getByRole("textbox").nth(1).fill("1");
+  const label = await page.locator(".sales-toolbar > span").innerText();
   const intendedDate = label.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
   expect(intendedDate).toBeTruthy();
   await page.evaluate(() => {
@@ -250,42 +273,31 @@ test("작성 중인 수령일을 자정 경계에서도 다른 날짜로 자동 
     });
   });
   const request = page.waitForRequest(
-    (request) => request.method() === "PUT" && request.url().includes("/offers/"),
+    (request) => request.method() === "PUT" && request.url().includes("/sales/"),
   );
-  await page.getByRole("button", { name: "오늘 판매 시작", exact: true }).click();
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
   expect((await request).url()).toMatch(new RegExp(`/${intendedDate}$`));
-  await expect(page.getByText("오늘 판매가 공개되었습니다.", { exact: false })).toBeVisible();
+  await expect(page.getByText("변경 사항이 모두 적용되었습니다.", { exact: false })).toBeVisible();
 });
 
 test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반영됨", async ({ page, context }) => {
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  await expect(page.locator("#heading-products")).toBeVisible();
-  const csrf = (await (await context.request.get("/api/auth/csrf")).json()) as {
-    headerName: string;
-    token: string;
-  };
-  const store = (await (await context.request.get("/api/seller/stores/me")).json()) as {
-    id: number;
-    marketId: number;
-  };
+  const { headers, store, date } = await sellerApi(context);
   const prefix = `목록검증${Date.now()}`;
   const ids: number[] = [];
-  const date = new Date(Date.parse(required("E2E_FIXED_INSTANT")) + 9 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
-  const window = await context.request.put(
-    `/api/seller/stores/${store.id}/pickup-windows/${date}`,
-    {
-      headers: { [csrf.headerName]: csrf.token },
-      data: { startTime: "15:00", endTime: "19:00", orderDeadline: "14:00" },
-    },
-  );
-  expect(window.status()).toBe(200);
-  for (let index = 0; index < 25; index++) {
+  expect(
+    (
+      await context.request.put(`/api/seller/stores/${store.id}/pickup-windows/${date}`, {
+        headers,
+        data: { startTime: "15:00", endTime: "19:00", orderDeadline: "14:00" },
+      })
+    ).status(),
+  ).toBe(200);
+  for (let i = 0; i < 25; i++) {
     const response = await context.request.post(`/api/seller/stores/${store.id}/products`, {
-      headers: { [csrf.headerName]: csrf.token },
+      headers,
       data: {
-        name: `${prefix}-${index}`,
+        name: `${prefix}-${i}`,
         description: "목록 검증",
         unitType: "WEIGHT",
         unitAmount: 2500,
@@ -294,15 +306,18 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
     expect(response.status()).toBe(201);
     const id = ((await response.json()) as { id: number }).id;
     ids.push(id);
-    const published = await context.request.put(
-      `/api/seller/stores/${store.id}/products/${id}/offers/${date}`,
-      { headers: { [csrf.headerName]: csrf.token }, data: { priceWon: 1000, onlineQuantity: 10 } },
-    );
-    expect(published.status()).toBe(200);
+    expect(
+      (
+        await context.request.put(`/api/seller/stores/${store.id}/products/${id}/offers/${date}`, {
+          headers,
+          data: { priceWon: 1000, onlineQuantity: 10 },
+        })
+      ).status(),
+    ).toBe(200);
   }
   await page.getByRole("button", { name: "상품 목록 새로고침" }).click();
   const navigation = page.getByRole("navigation", { name: "등록 상품 페이지" });
-  await expect(page.locator(".seller-product-choice")).toHaveCount(5);
+  await expect(page.locator(".sale-table-row")).toHaveCount(20);
   await navigation.getByRole("button", { name: "2페이지", exact: true }).click();
   await expect(navigation.getByRole("button", { name: "2페이지", exact: true })).toHaveAttribute(
     "aria-current",
@@ -313,22 +328,14 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
     "aria-current",
     "page",
   );
-  const listResponse = await context.request.get(
-    `/api/seller/stores/${store.id}/products?page=0&size=100`,
-  );
-  const list = (await listResponse.json()) as {
-    items: { id: number; name: string }[];
-    totalItems: number;
-  };
+  const list = await catalog(context, store.id);
   const target = list.items.findIndex((item) => item.id === ids[24]);
   expect(target).toBeGreaterThanOrEqual(0);
   await navigation
-    .getByRole("button", { name: `${Math.floor(target / 5) + 1}페이지`, exact: true })
+    .getByRole("button", { name: `${Math.floor(target / 20) + 1}페이지`, exact: true })
     .click();
-  await page
-    .locator(".seller-product-choice")
-    .filter({ hasText: `${prefix}-24` })
-    .click();
+  const row = page.locator(`.sale-table-row[data-product-id="${ids[24]}"]`);
+  await row.getByRole("button", { name: `${prefix}-24 상품 수정`, exact: true }).click();
   await expect(page.locator("#weightUnit")).toHaveValue("kg");
   await expect(page.locator("#productUnitAmount")).toHaveValue("2.5");
   await page.getByRole("button", { name: "상품 삭제", exact: true }).click();
@@ -345,6 +352,7 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
   await page.setViewportSize({ width: 390, height: 844 });
   await noOverflow(page);
   await page.locator("#btnLogoutSeller").click();
+  await expect(page.locator("#heading-login")).toBeVisible();
   await login(page, required("E2E_BUYER_LOGIN_ID"));
   await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
   await page.locator("#productSearch").fill(prefix);
@@ -364,64 +372,39 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
   await noOverflow(page);
 });
 
-test("모바일 판매 탭에서 입력을 보존하고 공통 시간 확인 후 실제 판매 공개", async ({ page }) => {
+test("모바일 판매 표에서 입력을 보존하고 공통 시간과 실제 판매를 함께 적용", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  const tabs = page.getByRole("tablist", { name: "판매 관리 화면" });
-  await expect(tabs.getByRole("tab", { name: "상품 목록" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await expect(page.locator("#productName")).toBeHidden();
-  await page.getByRole("button", { name: "새 상품 등록", exact: true }).click();
-  await expect(tabs.getByRole("tab", { name: "상품 정보" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  const name = `모바일탭${Date.now()}`;
-  await page.locator("#productName").fill(name);
-  await page.locator("#productUnitAmount").fill("500");
-  await page.getByRole("button", { name: "상품 등록", exact: true }).click();
-  await expect(tabs.getByRole("tab", { name: "오늘 판매" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await page.locator("#offerPrice").fill("3500");
-  await page.locator("#offerQuantity").fill("7");
-  await tabs.getByRole("tab", { name: "상품 정보" }).click();
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "판매 관리", exact: true })).toHaveCount(0);
+  const name = `모바일표${Date.now()}`;
+  await addProduct(page, name);
+  const row = saleRow(page, name);
+  await row.getByRole("checkbox").check();
+  await row.getByRole("textbox").nth(0).fill("3500");
+  await row.getByRole("textbox").nth(1).fill("7");
+  await row.getByRole("button", { name: `${name} 상품 수정`, exact: true }).click();
   await expect(page.locator("#productName")).toHaveValue(name);
-  await expect(page.locator("#offerPrice")).toBeHidden();
-  await tabs.getByRole("tab", { name: "상품 정보" }).press("ArrowRight");
-  await expect(tabs.getByRole("tab", { name: "오늘 판매" })).toBeFocused();
-  await expect(page.locator("#offerPrice")).toHaveValue("3500");
-  await expect(page.locator("#offerQuantity")).toHaveValue("7");
-  await expect(page.locator("#pickupStart")).toHaveValue("15:00");
+  await page.getByRole("button", { name: "목록으로", exact: true }).click();
+  await expect(row.getByRole("textbox").nth(0)).toHaveValue("3500");
+  await expect(row.getByRole("textbox").nth(1)).toHaveValue("7");
   await page.locator("#pickupEnd").fill("18:30");
-  await expect(page.getByRole("button", { name: "오늘 판매 시작", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "수령 시간 저장", exact: true }).click();
-  await expect(page.getByRole("button", { name: "오늘 판매 시작", exact: true })).toBeEnabled();
-  await expect(page.locator("#offerPrice")).toHaveValue("3500");
-  const order = await page.evaluate(() => {
-    const price = document.getElementById("offerPrice");
-    const time = document.getElementById("orderDeadline");
-    return (
-      !!price &&
-      !!time &&
-      !!(price.compareDocumentPosition(time) & Node.DOCUMENT_POSITION_FOLLOWING)
-    );
-  });
-  expect(order).toBe(true);
   await noOverflow(page);
-  await page.screenshot({ path: "../output/playwright/seller-mobile-tabs.png", fullPage: true });
-  await page.getByRole("button", { name: "오늘 판매 시작", exact: true }).click();
-  await expect(page.getByText("오늘 판매가 공개되었습니다.", { exact: false })).toBeVisible();
+  await page.screenshot({
+    path: "../output/playwright/sales-table-mobile-edit.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(page.getByText("변경 사항이 모두 적용되었습니다.", { exact: false })).toBeVisible();
   await page.locator("#btnLogoutSeller").click();
+  await expect(page.locator("#heading-login")).toBeVisible();
   await login(page, required("E2E_BUYER_LOGIN_ID"));
   await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
   await page.locator("#productSearch").fill(name);
   await page.getByRole("button", { name: "상품 검색", exact: true }).click();
   await expect(page.locator(".offer-card")).toHaveCount(1);
   await expect(page.locator(".offer-card")).toContainText("3,500");
+  await expect(page.locator(".offer-card")).toContainText("18:30");
 });
 
 test("매장 정보 별도 화면의 방문 기록·새로고침·판매 입력 보존과 로그아웃 보호", async ({
@@ -429,21 +412,23 @@ test("매장 정보 별도 화면의 방문 기록·새로고침·판매 입력 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  await expect(page.locator("#heading-products")).toBeVisible();
+  await expect(page.locator(".sale-table")).toBeVisible();
   await expect(page.locator("#storeInfoId")).toHaveCount(0);
   const menu = page.getByRole("navigation", { name: "매장 메뉴" });
   await expect(menu.getByRole("link", { name: "판매 관리" })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await page.getByRole("button", { name: "새 상품 등록", exact: true }).click();
+  await page.getByRole("button", { name: "상품 추가", exact: true }).click();
   await page.locator("#productName").fill("화면 이동 중 작성 상품");
   await page.locator("#productUnitAmount").fill("500");
   await menu.getByRole("link", { name: "매장 정보" }).click();
   await expect(page).toHaveURL(/#seller\/store$/);
   await expect(page.locator("#storeInfoId")).toBeVisible();
-  await expect(page.locator("#heading-products")).toBeHidden();
   await expect(page.locator("#productName")).toBeHidden();
+  await menu.getByRole("link", { name: "판매 관리" }).click();
+  await expect(page.locator("#productName")).toHaveValue("화면 이동 중 작성 상품");
+  await menu.getByRole("link", { name: "매장 정보" }).click();
   await page.goBack();
   await expect(page.locator("#productName")).toBeVisible();
   await expect(page.locator("#productName")).toHaveValue("화면 이동 중 작성 상품");
@@ -452,15 +437,11 @@ test("매장 정보 별도 화면의 방문 기록·새로고침·판매 입력 
   await expect(page.locator("#storeInfoId")).toBeVisible();
   await page.reload();
   await expect(page.locator("#storeInfoId")).toBeVisible();
-  await expect(page.locator("#heading-products")).toBeHidden();
+  await expect(page.locator(".sale-table")).toBeHidden();
   await menu.getByRole("link", { name: "판매 관리" }).click();
-  await expect(page.locator("#heading-products")).toBeVisible();
+  await expect(page.locator(".sale-table")).toBeVisible();
   await expect(page.locator("#storeInfoId")).toHaveCount(0);
   await noOverflow(page);
-  await page.screenshot({
-    path: "../output/playwright/seller-sales-compact-mobile.png",
-    fullPage: true,
-  });
   await page.locator("#btnLogoutSeller").click();
   await expect(page.locator("#heading-login")).toBeVisible();
   await page.goBack();
@@ -469,4 +450,229 @@ test("매장 정보 별도 화면의 방문 기록·새로고침·판매 입력 
   await page.reload();
   await expect(page.locator("#heading-login")).toBeVisible();
   await expect(page.locator("#heading-products")).toHaveCount(0);
+});
+
+async function catalog(context: BrowserContext, storeId: number) {
+  const items: { id: number }[] = [];
+  let page = 0;
+  while (true) {
+    const response = await context.request.get(
+      `/api/seller/stores/${storeId}/products?page=${page}&size=100`,
+    );
+    expect(response.status()).toBe(200);
+    const result = (await response.json()) as {
+      items: { id: number }[];
+      hasNext: boolean;
+      totalItems: number;
+    };
+    items.push(...result.items);
+    if (!result.hasNext) return { items, totalItems: result.totalItems };
+    page++;
+  }
+}
+async function goToProduct(page: Page, context: BrowserContext, storeId: number, id: number) {
+  const list = await catalog(context, storeId);
+  const index = list.items.findIndex((item) => item.id === id);
+  expect(index).toBeGreaterThanOrEqual(0);
+  const navigation = page.getByRole("navigation", { name: "등록 상품 페이지" });
+  const target = Math.floor(index / 20) + 1;
+  const targetButton = navigation.getByRole("button", { name: `${target}페이지`, exact: true });
+  while (!(await targetButton.count())) {
+    const current = Number(await navigation.locator('[aria-current="page"]').innerText());
+    await navigation
+      .getByRole("button", { name: target > current ? "다음 페이지" : "이전 페이지", exact: true })
+      .click();
+    await expect(navigation.locator('[aria-current="page"]')).not.toHaveText(String(current));
+  }
+  await targetButton.click();
+  return page.locator(`.sale-table-row[data-product-id="${id}"]`);
+}
+
+test("페이지별 일괄 작성·오류 전체 미적용·입력 유지·삭제된 행 제외 후 재적용", async ({
+  page,
+  context,
+}) => {
+  await login(page, required("E2E_SELLER_A_LOGIN_ID"));
+  const { headers, store, date } = await sellerApi(context);
+  const prefix = `일괄오류${Date.now()}`;
+  async function create(name: string) {
+    const response = await context.request.post(`/api/seller/stores/${store.id}/products`, {
+      headers,
+      data: { name, description: "일괄 검증", unitType: "COUNT", unitAmount: 1 },
+    });
+    expect(response.status()).toBe(201);
+    return ((await response.json()) as { id: number }).id;
+  }
+  const a = await create(`${prefix}-a`);
+  for (let i = 0; i < 20; i++) await create(`${prefix}-보관${i}`);
+  const b = await create(`${prefix}-b`);
+  expect(
+    (
+      await context.request.put(`/api/seller/stores/${store.id}/pickup-windows/${date}`, {
+        headers,
+        data: { orderDeadline: "14:00", startTime: "15:00", endTime: "19:00" },
+      })
+    ).status(),
+  ).toBe(200);
+  expect(
+    (
+      await context.request.put(`/api/seller/stores/${store.id}/products/${a}/offers/${date}`, {
+        headers,
+        data: { priceWon: 1000, onlineQuantity: 10 },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.reload();
+  let mutations = 0;
+  page.on("request", (request) => {
+    if (request.method() === "PUT" && request.url().includes("/sales/")) mutations++;
+  });
+  const rowA = await goToProduct(page, context, store.id, a);
+  await rowA.getByRole("textbox").nth(0).fill("2000");
+  await rowA.getByRole("textbox").nth(1).fill("0");
+  await page.locator("#pickupEnd").fill("18:30");
+  const rowB = await goToProduct(page, context, store.id, b);
+  await rowB.getByRole("checkbox").check();
+  await rowB.getByRole("textbox").nth(0).fill("0");
+  await rowB.getByRole("textbox").nth(1).fill("1");
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(rowB.locator(".sale-row-error")).toBeVisible();
+  expect(mutations).toBe(0);
+  await rowB.getByRole("textbox").nth(0).fill("1000");
+  expect(
+    (
+      await context.request.delete(`/api/seller/stores/${store.id}/products/${b}`, { headers })
+    ).status(),
+  ).toBe(204);
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(rowB.locator(".sale-row-error")).toContainText("삭제");
+  expect(mutations).toBe(1);
+  await expect(rowB.getByRole("textbox").nth(0)).toHaveValue("1000");
+  await expect(page.locator("#pickupEnd")).toHaveValue("18:30");
+  await expect(page.locator(".market-success")).toHaveCount(0);
+  const savedIndex = (await catalog(context, store.id)).items.findIndex((item) => item.id === a);
+  expect(savedIndex).toBeGreaterThanOrEqual(0);
+  const salesPath = `/api/seller/stores/${store.id}/sales/${date}?page=${Math.floor(savedIndex / 100)}&size=100`;
+  const saved = (await (await context.request.get(salesPath)).json()) as {
+    items: { product: { id: number }; priceWon: number; onlineQuantity: number }[];
+  };
+  expect(saved.items.find((row) => row.product.id === a)).toMatchObject({
+    priceWon: 1000,
+    onlineQuantity: 10,
+  });
+  const window = (await (
+    await context.request.get(`/api/seller/stores/${store.id}/pickup-windows/${date}`)
+  ).json()) as { endTime: string };
+  expect(window.endTime).toBe("19:00:00");
+  await goToProduct(page, context, store.id, a);
+  await expect(rowA.getByRole("textbox").nth(0)).toHaveValue("2000");
+  await expect(rowA.getByRole("textbox").nth(1)).toHaveValue("0");
+  await page.getByRole("button", { name: `${prefix}-b 변경 제외`, exact: true }).click();
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(page.getByText("변경 사항이 모두 적용되었습니다.", { exact: false })).toBeVisible();
+  await expect(rowA).toContainText("품절");
+  const applied = (await (await context.request.get(salesPath)).json()) as {
+    items: {
+      product: { id: number };
+      priceWon: number;
+      onlineQuantity: number;
+      selling: boolean;
+    }[];
+  };
+  expect(applied.items.find((row) => row.product.id === a)).toMatchObject({
+    priceWon: 2000,
+    onlineQuantity: 0,
+    selling: true,
+  });
+  const appliedWindow = (await (
+    await context.request.get(`/api/seller/stores/${store.id}/pickup-windows/${date}`)
+  ).json()) as { endTime: string };
+  expect(appliedWindow.endTime).toBe("18:30:00");
+});
+
+test("오늘 판매 중단은 상품·가격·수량·이력을 보존하고 재공개 시 같은 제안으로 복원", async ({
+  page,
+  context,
+}) => {
+  await login(page, required("E2E_SELLER_A_LOGIN_ID"));
+  const { headers, store, date } = await sellerApi(context);
+  const prefix = `중단검증${Date.now()}`;
+  expect(
+    (
+      await context.request.put(`/api/seller/stores/${store.id}/pickup-windows/${date}`, {
+        headers,
+        data: { orderDeadline: "14:00", startTime: "15:00", endTime: "19:00" },
+      })
+    ).status(),
+  ).toBe(200);
+  const ids: number[] = [];
+  let offerId = 0;
+  for (let i = 0; i < 2; i++) {
+    const created = await context.request.post(`/api/seller/stores/${store.id}/products`, {
+      headers,
+      data: { name: `${prefix}-${i}`, description: "중단 검증", unitType: "COUNT", unitAmount: 1 },
+    });
+    expect(created.status()).toBe(201);
+    const id = ((await created.json()) as { id: number }).id;
+    ids.push(id);
+    const published = await context.request.put(
+      `/api/seller/stores/${store.id}/products/${id}/offers/${date}`,
+      { headers, data: { priceWon: 1000, onlineQuantity: i === 0 ? 0 : 10 } },
+    );
+    expect(published.status()).toBe(200);
+    if (i === 1) offerId = ((await published.json()) as { id: number }).id;
+  }
+  const stoppedId = ids[1];
+  expect(stoppedId).toBeDefined();
+  await page.reload();
+  const row = await goToProduct(page, context, store.id, stoppedId as number);
+  await row.getByRole("checkbox").uncheck();
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(row).toContainText("판매 중단");
+  expect(
+    (await context.request.get(`/api/markets/${store.marketId}/offers/${offerId}`)).status(),
+  ).toBe(404);
+  const publicPage = (await (
+    await context.request.get(
+      `/api/markets/${store.marketId}/offers?query=${encodeURIComponent(prefix)}`,
+    )
+  ).json()) as { totalItems: number; items: { onlineQuantity: number }[] };
+  expect(publicPage.totalItems).toBe(1);
+  expect(publicPage.items[0]?.onlineQuantity).toBe(0);
+  const productIndex = (await catalog(context, store.id)).items.findIndex(
+    (item) => item.id === stoppedId,
+  );
+  expect(productIndex).toBeGreaterThanOrEqual(0);
+  const privatePage = (await (
+    await context.request.get(
+      `/api/seller/stores/${store.id}/sales/${date}?page=${Math.floor(productIndex / 100)}&size=100`,
+    )
+  ).json()) as {
+    items: {
+      product: { id: number; hasSales: boolean };
+      selling: boolean;
+      priceWon: number;
+      onlineQuantity: number;
+    }[];
+  };
+  expect(privatePage.items.find((item) => item.product.id === stoppedId)).toMatchObject({
+    selling: false,
+    priceWon: 1000,
+    onlineQuantity: 10,
+    product: { hasSales: true },
+  });
+  await row.getByRole("checkbox").check();
+  await expect(row.getByRole("textbox").nth(0)).toHaveValue("1000");
+  await expect(row.getByRole("textbox").nth(1)).toHaveValue("10");
+  await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
+  await expect(row.locator(".sale-status-cell > span")).toHaveText("판매 중");
+  expect(
+    (await context.request.get(`/api/markets/${store.marketId}/offers/${offerId}`)).status(),
+  ).toBe(200);
+  const restored = (await (
+    await context.request.get(
+      `/api/markets/${store.marketId}/offers?query=${encodeURIComponent(prefix)}`,
+    )
+  ).json()) as { totalItems: number };
+  expect(restored.totalItems).toBe(2);
 });

@@ -212,7 +212,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#storeInfoId")).toHaveCount(0);
 
     // 초기 상품·수령 시간 조회가 완료된 뒤 세션을 만료시켜 재조회 자체의 401을 검증한다.
-    await expect(page.getByRole("button", { name: "수령 시간 저장", exact: true })).toBeEnabled();
+    await expect(page.locator("#orderDeadline")).toBeEnabled();
     await expect(page.getByText("상품 목록을 불러오는 중입니다.", { exact: true })).toHaveCount(0);
     await page
       .getByRole("navigation", { name: "매장 메뉴" })

@@ -1,6 +1,6 @@
 # 미리내 마켓 개발 PLAN
 
-상태: 기존 Phase 3를 b311f1b와 archive/phase3-next-day로 보존했다. feat/phase3-same-day에서 당일 판매 계약·판매자 화면·실제 API 연결·필수 로컬 검증을 완료했다. 사람의 기능 수용 확인과 원격 CI·PR 리뷰·main 병합은 남아 있다.
+상태: 통합 판매 표·원자적 일괄 적용·상품 등록/수정 화면과 실제 API 연결을 구현했다. 백엔드·프런트 gate, 실제 연동 E2E 전체 시나리오 및 시연 DB 백업·복원·갱신 검증을 완료했다. 기존 Phase 3를 b311f1b와 archive/phase3-next-day로 보존했다. 사람의 기능 수용 확인과 원격 CI·PR 리뷰·main 병합은 남아 있다.
 
 ## 목표와 참조
 
@@ -302,3 +302,12 @@
 ## 다음 행동
 
 http://127.0.0.1:5175의 당일 판매 화면을 수용 확인하고 원격 CI·PR 리뷰와 main 병합을 진행한다. Phase 4 주문·결제·판매 실패 환불은 별도 요청을 기다린다.
+
+## 통합 판매 표 검증 · 2026-10-13
+
+- 상품 추가·수정은 목록에서 별도 화면으로 이동한다. 판매 체크·가격·수량과 매장 공통 시간을 한 번에 적용하며 오류가 있으면 전체 미적용과 입력 보존을 확인한다. 오늘 판매 중단은 상품과 판매 이력을 보존한다. 계약과 설계 이유는 Spec·ADR-006을 참조한다.
+- 최종 백엔드 `spotlessApply check build`: 111개 테스트 통과, 실패·오류·skip 0. 원자적 롤백·인가·동시 변경·판매 중단/재공개를 실제 PostgreSQL에서 검증했다. 증거: `.local/verification/sales-batch-backend-final.log`.
+- 최종 프런트 `npm run check`의 정적 gate와 단위 36개, `npm run build` 통과. 증거: `.local/verification/sales-table-check-complete.log`, `sales-table-build-complete.log`. ESLint의 요청 버전 ref 정리 경고 2개는 남아 있으며 오류는 없다.
+- 실제 PostgreSQL·자체 백엔드·Vite·Edge E2E 18개 시나리오를 검증했다. 전체 실행에서 17개 통과 후 반복 실행으로 누적된 상품의 생략 페이지·100건 이후 조회를 테스트에서 수정했다. 영향받는 페이징·일괄 오류·중단/재공개 3개 재실행은 모두 통과했고 변경된 테스트의 ESLint도 통과했다. 검증을 제외하거나 timeout·retry를 늘리지 않았다. 증거: `.local/verification/sales-table-e2e-verified.log`, `sales-table-e2e-pagination-complete.log`. 전체 18개가 한 번의 실행에서 모두 통과한 결과와는 구분한다.
+- 시연 DB 갱신 전 `.local/demo/pre-sales-batch-20261013.dump`를 백업하고 별도 PostgreSQL 복원으로 계정 3·상품 6·판매 제안 4·Flyway V4를 확인했다. 실제 DB에 V5 적용 후 기존 건수와 활성 판매 4건을 확인했다. 시연 연결과 PC·모바일 표시·수정 화면 새로고침을 실제 백엔드에서 확인했다.
+- 시연 서버는 재빌드로 실행 중인 jar가 바뀌지 않도록 `.local/demo/sales-batch-runtime.jar`를 사용한다. 기존 상품 데이터는 보존했고 시연용 주문 마감만 20시, 수령 20~23시로 연장했다. 이전 앱 복구 순서는 ADR-006을 따른다. 원격 CI는 이번 변경에서 실행하지 않았다.

@@ -7,6 +7,7 @@ import com.mirinae.market.modules.store.business.StoreService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +77,11 @@ public class ProductService {
         unit.kind().name(),
         unit.amount(),
         previous.hasSales());
+  }
+
+  public ProductView product(String loginId, long storeId, long productId) {
+    stores.ownedStore(loginId, storeId);
+    return productView(data.product(storeId, productId).orElseThrow(ProductNotFoundException::new));
   }
 
   public ProductPage products(String loginId, long storeId, int page, int size) {
@@ -150,6 +156,59 @@ public class ProductService {
         data.findWindow(storeId, date)
             .orElseThrow(() -> new ProductNotFoundException("해당 날짜의 매장 수령 시간을 아직 등록하지 않았습니다."));
     return new PickupWindowView(storeId, date, row.startTime(), row.endTime(), row.orderDeadline());
+  }
+
+  public SaleProductPage sales(String loginId, long storeId, LocalDate date, int page, int size) {
+    stores.ownedStore(loginId, storeId);
+    OfferRules.date(date, clock);
+    ProductRules.page(page, size);
+    var rows = data.saleProducts(storeId, date, page * size, size + 1);
+    return new SaleProductPage(
+        rows.stream()
+            .limit(size)
+            .map(
+                row ->
+                    new SaleProductView(
+                        productView(row.product()),
+                        row.selling(),
+                        row.priceWon(),
+                        row.onlineQuantity()))
+            .toList(),
+        page,
+        size,
+        rows.size() > size,
+        data.productCount(storeId));
+  }
+
+  @Transactional
+  public void applySales(
+      String loginId,
+      long storeId,
+      LocalDate date,
+      LocalTime start,
+      LocalTime end,
+      LocalTime deadline,
+      List<SaleChange> changes) {
+    authorizeAndLock(loginId, storeId);
+    Clock current = Clock.fixed(clock.instant(), clock.getZone());
+    OfferRules.date(date, current);
+    OfferRules.window(start, end, deadline);
+    data.findWindow(storeId, date)
+        .ifPresent(previous -> OfferRules.open(previous.orderDeadline(), current));
+    OfferRules.open(deadline, current);
+    SaleBatchRules.validate(changes);
+    var issues = new ArrayList<SaleIssue>();
+    for (SaleChange change : changes) {
+      if (data.product(storeId, change.productId()).isEmpty())
+        issues.add(new SaleIssue(change.productId(), "상품이 없거나 삭제되었습니다. 본인 상품 목록을 확인해 주세요."));
+    }
+    if (!issues.isEmpty()) throw new SaleBatchException(issues);
+    data.window(storeId, date, start, end, deadline);
+    for (SaleChange change : changes) {
+      if (change.selling())
+        data.offer(storeId, change.productId(), date, change.priceWon(), change.onlineQuantity());
+      else data.stopOffer(storeId, change.productId(), date);
+    }
   }
 
   public OfferPage search(long marketId, String query, int page, int size) {

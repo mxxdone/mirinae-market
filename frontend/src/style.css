@@ -1376,3 +1376,239 @@ body {
   flex-direction: column;
   gap: 20px;
 }
+.sales-toolbar,
+.sales-apply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.sales-toolbar {
+  margin-bottom: 20px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+.sales-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sales-common-time {
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 0 20px;
+  margin: 0;
+  min-width: 0;
+}
+.sales-common-time legend {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.sales-time-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.sale-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+  table-layout: fixed;
+}
+.sale-table th,
+.sale-table td {
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+.sale-table thead {
+  background: var(--color-surface-warm);
+}
+.sale-table thead th {
+  font-size: 12px;
+  font-weight: 700;
+}
+.sale-table thead th:nth-child(1) {
+  width: 44px;
+}
+.sale-table thead th:nth-child(2) {
+  width: 29%;
+}
+.sale-table thead th:nth-child(5) {
+  width: 90px;
+}
+.sale-table thead th:nth-child(6) {
+  width: 62px;
+}
+.sale-check-cell input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.sale-product-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-main);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.sale-product-name:hover {
+  color: var(--color-primary);
+}
+.sale-product-cell small,
+.sale-status-cell small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.sale-status-cell small {
+  color: var(--color-primary);
+}
+.sale-table .input-box {
+  height: 42px;
+  padding: 8px 10px;
+  text-align: right;
+}
+.sale-table-row[data-error="true"] {
+  background: var(--color-error-bg);
+}
+.sale-row-error {
+  color: var(--color-error);
+  font-size: 12px;
+  margin-top: 6px;
+}
+.sale-input-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.sales-apply-bar {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 14px;
+}
+.product-editor .market-form {
+  margin-top: 20px;
+}
+@media (max-width: 700px) {
+  .sales-time-fields {
+    gap: 8px;
+  }
+  .sales-time-fields .input-box {
+    padding: 8px 4px;
+  }
+  .sale-table,
+  .sale-table tbody {
+    display: block;
+  }
+  .sale-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+  .sale-table-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) 48px;
+    gap: 8px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .sale-table th,
+  .sale-table td {
+    padding: 0;
+    border: 0;
+  }
+  .sale-check-cell {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: start;
+    padding-top: 3px !important;
+  }
+  .sale-product-cell {
+    grid-column: 2 / 4;
+    grid-row: 1;
+  }
+  .sale-price-cell {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .sale-quantity-cell {
+    grid-column: 3 / 5;
+    grid-row: 2;
+  }
+  .sale-edit-cell {
+    grid-column: 4;
+    grid-row: 1;
+  }
+  .sale-status-cell {
+    grid-column: 2 / 5;
+    grid-row: 3;
+    font-size: 12px;
+  }
+  .sale-status-cell small {
+    display: inline;
+    margin-left: 10px;
+  }
+  .sale-input-label {
+    position: static;
+    width: auto;
+    height: auto;
+    clip: auto;
+    overflow: visible;
+    display: block;
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .sales-apply-bar .btn-submit-primary {
+    width: 100%;
+  }
+}
+
+.sale-mobile-state {
+  display: none;
+}
+.sale-edit-cell .pagination-button {
+  padding: 8px;
+  white-space: nowrap;
+  min-width: 44px;
+}
+.sale-check-cell input {
+  width: 24px;
+  height: 24px;
+}
+@media (max-width: 700px) {
+  .sales-time-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sales-time-fields > .field-group:first-child {
+    grid-column: 1 / -1;
+  }
+  .sales-time-fields .input-box {
+    padding: 8px 10px;
+  }
+  .sale-mobile-state {
+    display: inline;
+  }
+  .sale-status-cell {
+    display: none;
+  }
+  .sale-table-row[data-error="true"] .sale-status-cell {
+    display: block;
+  }
+}

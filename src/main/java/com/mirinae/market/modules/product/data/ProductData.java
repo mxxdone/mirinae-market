@@ -23,7 +23,7 @@ public class ProductData {
   private static final String PRODUCT_SELECT =
       "SELECT p.*, EXISTS (SELECT 1 FROM daily_offers o WHERE o.product_id = p.id) AS has_sales FROM products p ";
   private static final String OFFER_FILTER =
-      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
+      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND o.active AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
   private final JdbcTemplate jdbc;
 
   public ProductData(JdbcTemplate jdbc) {
@@ -144,7 +144,7 @@ public class ProductData {
         """
         INSERT INTO daily_offers (store_id, product_id, pickup_date, price_won, online_quantity)
         VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT (product_id, pickup_date) DO UPDATE SET price_won = EXCLUDED.price_won, online_quantity = EXCLUDED.online_quantity
+        ON CONFLICT (product_id, pickup_date) DO UPDATE SET price_won = EXCLUDED.price_won, online_quantity = EXCLUDED.online_quantity, active = true
         RETURNING id
         """,
         Long.class,
@@ -182,13 +182,41 @@ public class ProductData {
     return jdbc
         .query(
             OFFER_SELECT
-                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND p.archived_at IS NULL",
+                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND o.active AND p.archived_at IS NULL",
             (rs, row) -> offerRow(rs),
             marketId,
             date,
             offerId)
         .stream()
         .findFirst();
+  }
+
+  public void stopOffer(long storeId, long productId, LocalDate date) {
+    jdbc.update(
+        "UPDATE daily_offers SET active = false WHERE store_id = ? AND product_id = ? AND pickup_date = ?",
+        storeId,
+        productId,
+        date);
+  }
+
+  public List<SaleProductRow> saleProducts(long storeId, LocalDate date, int offset, int limit) {
+    return jdbc.query(
+        """
+      SELECT p.*, EXISTS (SELECT 1 FROM daily_offers h WHERE h.product_id = p.id) AS has_sales,
+             o.active AS selling, o.price_won, o.online_quantity
+      FROM products p LEFT JOIN daily_offers o ON o.product_id = p.id AND o.pickup_date = ?
+      WHERE p.store_id = ? AND p.archived_at IS NULL ORDER BY p.id LIMIT ? OFFSET ?
+      """,
+        (rs, row) ->
+            new SaleProductRow(
+                productRow(rs),
+                rs.getBoolean("selling"),
+                rs.getObject("price_won", Integer.class),
+                rs.getObject("online_quantity", Integer.class)),
+        date,
+        storeId,
+        limit,
+        offset);
   }
 
   private static ProductRow productRow(ResultSet rs) throws SQLException {

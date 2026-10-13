@@ -8,6 +8,8 @@ import {
   readSellerPage,
   writeSellerPage,
   type SellerPage,
+  readProductPage,
+  writeProductPage,
 } from "../sellerLocation";
 
 interface SellerStoreScreenProps {
@@ -33,12 +35,18 @@ export function SellerStoreScreen({
   const [store, setStore] = useState<StoreView | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorAlert, setErrorAlert] = useState<string | null>(null);
-  const [page, setPage] = useState(readSellerPage);
+  const [location, setLocation] = useState(() => window.location.hash);
+  const [salesLocation, setSalesLocation] = useState(() =>
+    readSellerPage() === "store" ? "#seller" : window.location.hash,
+  );
+  const page = readSellerPage(location);
 
   useEffect(() => {
     if (!isSellerLocation()) writeSellerPage("sales", false);
     function restorePage() {
-      setPage(readSellerPage());
+      const next = window.location.hash;
+      setLocation(next);
+      if (readSellerPage(next) === "sales") setSalesLocation(next);
     }
     window.addEventListener("popstate", restorePage);
     window.addEventListener("hashchange", restorePage);
@@ -49,8 +57,16 @@ export function SellerStoreScreen({
   }, []);
 
   function navigate(next: SellerPage) {
-    writeSellerPage(next);
-    setPage(next);
+    if (next === "sales" && page === "store") writeProductPage(readProductPage(salesLocation));
+    else writeSellerPage(next);
+    setLocation(window.location.hash);
+    if (next === "sales") setSalesLocation(window.location.hash);
+  }
+
+  function navigateProduct(id: number | "new" | null) {
+    writeProductPage(id);
+    setLocation(window.location.hash);
+    setSalesLocation(window.location.hash);
   }
 
   useEffect(() => {
@@ -199,6 +215,8 @@ export function SellerStoreScreen({
                 key={store.id}
                 store={store}
                 onSessionExpired={onSessionExpired}
+                editorId={readProductPage(salesLocation)}
+                onProductPage={navigateProduct}
               />
             </div>
           )}

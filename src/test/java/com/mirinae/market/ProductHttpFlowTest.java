@@ -667,6 +667,235 @@ class ProductHttpFlowTest {
     }
   }
 
+  private static String salesPath(Seller seller) {
+    return "/api/seller/stores/" + seller.storeId() + "/sales/" + DATE;
+  }
+
+  private static String batchJson(String rows) {
+    return "{\"orderDeadline\":\"14:00\",\"startTime\":\"15:00\",\"endTime\":\"19:00\",\"products\":["
+        + rows
+        + "]}";
+  }
+
+  private static String saleJson(long id, boolean selling, int price, int quantity) {
+    return "{\"productId\":"
+        + id
+        + ",\"selling\":"
+        + selling
+        + ",\"priceWon\":"
+        + price
+        + ",\"onlineQuantity\":"
+        + quantity
+        + "}";
+  }
+
+  @Test
+  void batchSalesRollBackEveryChangeAndPreserveStoppedOfferHistory() throws Exception {
+    try (HttpSessionClient seller = new HttpSessionClient(port);
+        HttpSessionClient buyer = new HttpSessionClient(port)) {
+      login(seller, first.loginId());
+      login(buyer, buyerId);
+      long a = create(seller, first, "양파", "WEIGHT", 1000);
+      long b = create(seller, first, "사과", "COUNT", 2);
+      publish(seller, first, a, 1000, 10);
+      long offerId =
+          jdbc.queryForObject("SELECT id FROM daily_offers WHERE product_id = ?", Long.class, a);
+      var invalid =
+          seller.put(
+              salesPath(first),
+              batchJson(saleJson(a, false, 0, 0) + "," + saleJson(b, true, -1, 10)),
+              true);
+      assertThat(invalid.statusCode()).isEqualTo(400);
+      assertThat(seller.json(invalid).get("code").asString()).isEqualTo("SALE_BATCH_INVALID");
+      assertThat(seller.json(invalid).get("issues").get(0).get("productId").asLong()).isEqualTo(b);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT active FROM daily_offers WHERE id = ?", Boolean.class, offerId))
+          .isTrue();
+      assertThat(seller.json(seller.get(windowPath(first, DATE))).get("orderDeadline").asString())
+          .isEqualTo("13:00:00");
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM daily_offers WHERE product_id = ?", Long.class, b))
+          .isZero();
+      assertThat(
+              seller
+                  .put(
+                      salesPath(first),
+                      batchJson(saleJson(a, true, 2000, 20) + "," + saleJson(b, true, 3000, 0)),
+                      true)
+                  .statusCode())
+          .isEqualTo(204);
+      assertThat(buyer.json(buyer.get(searchPath(first))).get("totalItems").asLong()).isEqualTo(2);
+      assertThat(
+              seller.put(salesPath(first), batchJson(saleJson(a, false, 0, 0)), true).statusCode())
+          .isEqualTo(204);
+      assertThat(buyer.get(searchPath(first) + "/" + offerId).statusCode()).isEqualTo(404);
+      assertThat(buyer.json(buyer.get(searchPath(first))).get("totalItems").asLong()).isEqualTo(1);
+      JsonNode rows = seller.json(seller.get(salesPath(first))).get("items");
+      assertThat(rows.get(0).get("selling").asBoolean()).isFalse();
+      assertThat(rows.get(0).get("priceWon").asInt()).isEqualTo(2000);
+      assertThat(rows.get(0).get("product").get("hasSales").asBoolean()).isTrue();
+      assertThat(
+              seller
+                  .put(salesPath(first), batchJson(saleJson(a, true, 4000, 40)), true)
+                  .statusCode())
+          .isEqualTo(204);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT id FROM daily_offers WHERE product_id = ?", Long.class, a))
+          .isEqualTo(offerId);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM daily_offers WHERE product_id = ?", Long.class, b))
+          .isEqualTo(1);
+      assertThat(
+              seller
+                  .json(seller.get(salesPath(first) + "?page=1&size=1"))
+                  .get("totalItems")
+                  .asLong())
+          .isEqualTo(2);
+    }
+  }
+
+  @Test
+  void batchSalesRejectUnauthorizedMissingDeletedAndExpiredRowsWithoutSaving() throws Exception {
+    try (HttpSessionClient seller = new HttpSessionClient(port);
+        HttpSessionClient other = new HttpSessionClient(port);
+        HttpSessionClient buyer = new HttpSessionClient(port);
+        HttpSessionClient anonymous = new HttpSessionClient(port)) {
+      login(seller, first.loginId());
+      login(other, otherMarket.loginId());
+      login(buyer, buyerId);
+      long a = create(seller, first, "본인 상품", "COUNT", 1);
+      long foreign = create(other, otherMarket, "타 매장 상품", "COUNT", 1);
+      long deleted = create(seller, first, "삭제 상품", "COUNT", 1);
+      assertThat(seller.delete(productPath(first) + "/" + deleted, true).statusCode())
+          .isEqualTo(204);
+      String valid = batchJson(saleJson(a, true, 1000, 1));
+      assertThat(seller.get(productPath(first) + "/" + a).statusCode()).isEqualTo(200);
+      assertThat(seller.get(productPath(first) + "/" + deleted).statusCode()).isEqualTo(404);
+      assertThat(seller.get(productPath(first) + "/" + foreign).statusCode()).isEqualTo(404);
+      assertThat(other.get(productPath(first) + "/" + a).statusCode()).isEqualTo(403);
+      assertThat(anonymous.get(salesPath(first)).statusCode()).isEqualTo(401);
+      assertThat(buyer.get(salesPath(first)).statusCode()).isEqualTo(403);
+      assertThat(other.put(salesPath(first), valid, true).statusCode()).isEqualTo(403);
+      assertThat(seller.put(salesPath(first), valid, false).statusCode()).isEqualTo(403);
+      assertThat(
+              seller
+                  .put(
+                      salesPath(first),
+                      batchJson(
+                          saleJson(a, true, 1000, 1)
+                              + ","
+                              + saleJson(foreign, true, 1000, 1)
+                              + ","
+                              + saleJson(deleted, false, 0, 0)),
+                      true)
+                  .statusCode())
+          .isEqualTo(400);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM pickup_windows WHERE store_id = ?",
+                  Long.class,
+                  first.storeId()))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM daily_offers WHERE store_id = ?",
+                  Long.class,
+                  first.storeId()))
+          .isZero();
+      assertThat(seller.put(salesPath(first), valid, true).statusCode()).isEqualTo(204);
+      clock.set(Instant.parse("2026-10-13T05:00:00Z"));
+      assertThat(
+              seller.put(salesPath(first), batchJson(saleJson(a, false, 0, 0)), true).statusCode())
+          .isEqualTo(400);
+      assertThat(seller.get(salesPath(first)).statusCode()).isEqualTo(200);
+      clock.set(Instant.parse("2026-10-14T01:00:00Z"));
+      assertThat(seller.put(salesPath(first), valid, true).statusCode()).isEqualTo(400);
+    }
+  }
+
+  @Test
+  void databaseFailureDuringBatchRollsBackWindowAndEarlierRows() throws Exception {
+    try (HttpSessionClient seller = new HttpSessionClient(port)) {
+      login(seller, first.loginId());
+      long a = create(seller, first, "원본", "COUNT", 1);
+      long b = create(seller, first, "실패", "COUNT", 1);
+      publish(seller, first, a, 1000, 10);
+      String name = "reject_batch_" + b;
+      jdbc.execute(
+          "CREATE FUNCTION "
+              + name
+              + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.product_id = "
+              + b
+              + " THEN RAISE EXCEPTION '의도한 저장 실패'; END IF; RETURN NEW; END $$");
+      jdbc.execute(
+          "CREATE TRIGGER "
+              + name
+              + " BEFORE INSERT OR UPDATE ON daily_offers FOR EACH ROW EXECUTE FUNCTION "
+              + name
+              + "()");
+      try {
+        assertThat(
+                seller
+                    .put(
+                        salesPath(first),
+                        batchJson(saleJson(a, true, 2000, 20) + "," + saleJson(b, true, 3000, 30)),
+                        true)
+                    .statusCode())
+            .isEqualTo(500);
+        assertThat(
+                jdbc.queryForObject(
+                    "SELECT price_won FROM daily_offers WHERE product_id = ?", Integer.class, a))
+            .isEqualTo(1000);
+        assertThat(
+                jdbc.queryForObject(
+                    "SELECT count(*) FROM daily_offers WHERE product_id = ?", Long.class, b))
+            .isZero();
+        assertThat(seller.json(seller.get(windowPath(first, DATE))).get("orderDeadline").asString())
+            .isEqualTo("13:00:00");
+      } finally {
+        jdbc.execute("DROP TRIGGER " + name + " ON daily_offers");
+        jdbc.execute("DROP FUNCTION " + name + "()");
+      }
+    }
+  }
+
+  @Test
+  void concurrentBatchesNeverMixWindowsAndProductValues() throws Exception {
+    try (HttpSessionClient one = new HttpSessionClient(port);
+        HttpSessionClient two = new HttpSessionClient(port)) {
+      login(one, first.loginId());
+      login(two, first.loginId());
+      long a = create(one, first, "첫째", "COUNT", 1);
+      long b = create(one, first, "둘째", "COUNT", 1);
+      var firstUpdate =
+          one.putAsync(
+              salesPath(first),
+              batchJson(saleJson(a, true, 2000, 20) + "," + saleJson(b, true, 2000, 20)));
+      var secondUpdate =
+          two.putAsync(
+              salesPath(first),
+              batchJson(saleJson(a, true, 3000, 30) + "," + saleJson(b, true, 3000, 30))
+                  .replace("15:00", "16:00")
+                  .replace("19:00", "20:00"));
+      assertThat(firstUpdate.get(30, java.util.concurrent.TimeUnit.SECONDS).statusCode())
+          .isEqualTo(204);
+      assertThat(secondUpdate.get(30, java.util.concurrent.TimeUnit.SECONDS).statusCode())
+          .isEqualTo(204);
+      JsonNode items = one.json(one.get(salesPath(first))).get("items");
+      int price = items.get(0).get("priceWon").asInt();
+      assertThat(price).isIn(2000, 3000);
+      assertThat(items.get(1).get("priceWon").asInt()).isEqualTo(price);
+      assertThat(items.get(0).get("onlineQuantity").asInt()).isEqualTo(price / 100);
+      assertThat(items.get(1).get("onlineQuantity").asInt()).isEqualTo(price / 100);
+      assertThat(one.json(one.get(windowPath(first, DATE))).get("startTime").asString())
+          .isEqualTo(price == 2000 ? "15:00:00" : "16:00:00");
+    }
+  }
+
   private record Seller(String loginId, long storeId, long marketId) {}
 
   @TestConfiguration(proxyBeanMethods = false)

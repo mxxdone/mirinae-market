@@ -5,6 +5,8 @@ import com.mirinae.market.modules.product.business.PickupWindowView;
 import com.mirinae.market.modules.product.business.ProductPage;
 import com.mirinae.market.modules.product.business.ProductService;
 import com.mirinae.market.modules.product.business.ProductView;
+import com.mirinae.market.modules.product.business.SaleChange;
+import com.mirinae.market.modules.product.business.SaleProductPage;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -52,6 +54,17 @@ public class SellerProductController {
         request.description(),
         request.unitType(),
         request.unitAmount());
+  }
+
+  @Operation(
+      summary = "본인 상품 상세",
+      description = "등록·수정 화면을 복원하는 본인 미삭제 상품 조회입니다. 매장 소유권은 서버 세션으로 검사합니다.")
+  @ApiResponse(responseCode = "200", description = "본인 상품 기본 정보와 판매 이력 유무")
+  @ApiResponse(responseCode = "404", description = "없는 상품 또는 삭제된 상품: NOT_FOUND")
+  @GetMapping("/products/{productId}")
+  public ProductView product(
+      Principal principal, @PathVariable long storeId, @PathVariable long productId) {
+    return products.product(principal.getName(), storeId, productId);
   }
 
   @Operation(summary = "본인 상품 수정", description = "판매 조건 생성 이후 상품명·판매 구성은 고정됩니다. 설명은 수정할 수 있습니다.")
@@ -151,5 +164,58 @@ public class SellerProductController {
         pickupDate,
         request.priceWon(),
         request.onlineQuantity());
+  }
+
+  @Operation(
+      summary = "본인 상품의 오늘 판매 상태 표",
+      description = "미판매·중단·품절·마감 상품도 포함하며 삭제한 상품은 제외합니다. 기본 20건·최대 100건 ID순 페이지와 전체 건수를 반환합니다.")
+  @ApiResponse(responseCode = "200", description = "상품 기본 정보와 오늘 판매 여부·가격·온라인 수량")
+  @GetMapping("/sales/{pickupDate}")
+  public SaleProductPage sales(
+      Principal principal,
+      @PathVariable long storeId,
+      @PathVariable LocalDate pickupDate,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return products.sales(principal.getName(), storeId, pickupDate, page, size);
+  }
+
+  @Operation(
+      summary = "오늘 판매 조건과 공통 시간 일괄 적용",
+      description =
+          "공통 시간과 수정한 최대 100행을 모두 저장하거나 전부 미적용합니다. 미포함 상품은 유지합니다. 판매 체크 해제는 오늘 판매만 중단하며 이력을 보존합니다. 마감 이후 변경은 거절하고 기존 단건 API와 같은 매장 잠금을 사용합니다.")
+  @SecurityRequirement(name = "csrfToken")
+  @ApiResponse(responseCode = "204", description = "모든 변경 적용 완료")
+  @ApiResponse(
+      responseCode = "400",
+      description =
+          "행 오류: SALE_BATCH_INVALID, issues(productId,message). 공통 시간·날짜 오류: INVALID_INPUT. 전체 미적용")
+  @PutMapping("/sales/{pickupDate}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void applySales(
+      Principal principal,
+      @PathVariable long storeId,
+      @PathVariable LocalDate pickupDate,
+      @RequestBody SaleBatchRequest request) {
+    products.applySales(
+        principal.getName(),
+        storeId,
+        pickupDate,
+        request.startTime(),
+        request.endTime(),
+        request.orderDeadline(),
+        request.products() == null
+            ? null
+            : request.products().stream()
+                .map(
+                    row ->
+                        row == null
+                            ? null
+                            : new SaleChange(
+                                row.productId(),
+                                row.selling(),
+                                row.priceWon(),
+                                row.onlineQuantity()))
+                .toList());
   }
 }

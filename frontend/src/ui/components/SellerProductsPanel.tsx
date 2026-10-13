@@ -17,6 +17,7 @@ import { StatusAlert } from "./StatusAlert";
 function draftOf(row: SaleProductView): SaleDraft {
   return {
     productId: row.product.id,
+    inventoryVersion: row.inventoryVersion,
     selling: row.selling,
     price: row.priceWon === null ? "" : String(row.priceWon),
     quantity: row.onlineQuantity === null ? "" : String(row.onlineQuantity),
@@ -231,7 +232,10 @@ export function SellerProductsPanel({
     }
     setBusy(true);
     try {
-      await applySales(store.id, date, { ...windowInput, products: parsed.products });
+      await applySales(store.id, date, {
+        ...windowInput,
+        products: parsed.products,
+      });
       if (!mounted.current) return;
       const apply = (row: SaleProductView): SaleProductView => {
         const change = parsed.products.find((item) => item.productId === row.product.id);
@@ -241,6 +245,11 @@ export function SellerProductsPanel({
               selling: change.selling,
               priceWon: change.selling ? change.priceWon : row.priceWon,
               onlineQuantity: change.selling ? change.onlineQuantity : row.onlineQuantity,
+              inventoryVersion: change.selling
+                ? row.inventoryVersion === null
+                  ? 0
+                  : row.inventoryVersion + 1
+                : row.inventoryVersion,
               product: { ...row.product, hasSales: row.product.hasSales || change.selling },
             }
           : row;
@@ -270,7 +279,13 @@ export function SellerProductsPanel({
         ...previous,
         [product.id]: row
           ? { ...row, product }
-          : { product, selling: false, priceWon: null, onlineQuantity: null },
+          : {
+              product,
+              selling: false,
+              priceWon: null,
+              onlineQuantity: null,
+              inventoryVersion: null,
+            },
       };
     });
   }

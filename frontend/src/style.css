@@ -1612,3 +1612,30 @@ body {
     display: block;
   }
 }
+
+.checkout-item,
+.checkout-order {
+  padding: 1rem 0;
+  border-bottom: 1px solid #e0d9cc;
+  overflow-wrap: anywhere;
+}
+.checkout-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.checkout-actions .input-box {
+  width: 8rem;
+}
+.checkout-payment {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 0;
+}
+.checkout-workspace .summary-card-body {
+  padding: 1.25rem;
+}
+.checkout-order ul {
+  padding-left: 1.25rem;
+}

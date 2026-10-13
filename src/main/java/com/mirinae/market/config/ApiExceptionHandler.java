@@ -14,6 +14,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(com.mirinae.market.modules.checkout.business.CheckoutConflictException.class)
+  public ResponseEntity<Map<String, String>> checkoutConflict(
+      com.mirinae.market.modules.checkout.business.CheckoutConflictException exception) {
+    return ResponseEntity.status(409)
+        .body(Map.of("code", exception.code(), "message", exception.getMessage()));
+  }
+
   @ExceptionHandler(SaleBatchException.class)
   public ResponseEntity<Map<String, Object>> invalidSales(SaleBatchException exception) {
     return ResponseEntity.badRequest()

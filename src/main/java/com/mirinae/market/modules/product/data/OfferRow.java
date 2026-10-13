@@ -16,6 +16,7 @@ public record OfferRow(
     LocalDate pickupDate,
     int priceWon,
     int onlineQuantity,
+    long inventoryVersion,
     LocalTime startTime,
     LocalTime endTime,
     LocalTime orderDeadline) {}

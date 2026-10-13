@@ -146,7 +146,7 @@ public class SellerProductController {
   @Operation(
       summary = "오늘 판매 조건 등록·수정",
       description =
-          "한 상품·수령일에 하나. 저장 즉시 공개하며 재등록은 같은 제안 ID의 가격·온라인 수량을 수정합니다. 매장이 정한 주문 마감 정각부터 공개 조회와 판매 조건 변경을 거절합니다. 주문 연동은 Phase 4 범위입니다.")
+          "한 상품·수령일에 하나. 저장 즉시 공개하며 재등록은 같은 제안 ID의 가격·온라인 수량을 수정합니다. 매장이 정한 주문 마감 정각부터 공개 조회와 판매 조건 변경을 거절합니다. 기존 수량 수정은 inventoryVersion이 필수입니다. 오래된 버전은 INVENTORY_CONFLICT(409)입니다.")
   @SecurityRequirement(name = "csrfToken")
   @ApiResponse(responseCode = "200", description = "공개된 판매 조건과 단위당 보조 가격")
   @ApiResponse(responseCode = "409", description = "매장 수령 시간 미등록: PICKUP_WINDOW_REQUIRED")
@@ -163,7 +163,8 @@ public class SellerProductController {
         productId,
         pickupDate,
         request.priceWon(),
-        request.onlineQuantity());
+        request.onlineQuantity(),
+        request.inventoryVersion());
   }
 
   @Operation(
@@ -183,7 +184,7 @@ public class SellerProductController {
   @Operation(
       summary = "오늘 판매 조건과 공통 시간 일괄 적용",
       description =
-          "공통 시간과 수정한 최대 100행을 모두 저장하거나 전부 미적용합니다. 미포함 상품은 유지합니다. 판매 체크 해제는 오늘 판매만 중단하며 이력을 보존합니다. 마감 이후 변경은 거절하고 기존 단건 API와 같은 매장 잠금을 사용합니다.")
+          "공통 시간과 수정한 최대 100행을 모두 저장하거나 전부 미적용합니다. 미포함 상품은 유지합니다. 판매 체크 해제는 오늘 판매만 중단하며 이력을 보존합니다. 마감 이후 변경은 거절하고 기존 단건 API와 같은 매장 잠금을 사용합니다. 기존 수량 변경은 inventoryVersion이 필수이며 충돌은 INVENTORY_CONFLICT(409)로 전체 미적용합니다. 확정 주문 이후 시간 변경은 PICKUP_WINDOW_LOCKED(409)입니다.")
   @SecurityRequirement(name = "csrfToken")
   @ApiResponse(responseCode = "204", description = "모든 변경 적용 완료")
   @ApiResponse(
@@ -215,7 +216,8 @@ public class SellerProductController {
                                 row.productId(),
                                 row.selling(),
                                 row.priceWon(),
-                                row.onlineQuantity()))
+                                row.onlineQuantity(),
+                                row.inventoryVersion()))
                 .toList());
   }
 }

@@ -120,6 +120,7 @@ public class ProductService {
     data.findWindow(storeId, date)
         .ifPresent(previous -> OfferRules.open(previous.orderDeadline(), current));
     OfferRules.open(deadline, current);
+    checkWindowChange(storeId, date, start, end, deadline);
     data.window(storeId, date, start, end, deadline);
     return new PickupWindowView(storeId, date, start, end, deadline);
   }
@@ -131,7 +132,8 @@ public class ProductService {
       long productId,
       LocalDate date,
       Integer price,
-      Integer quantity) {
+      Integer quantity,
+      Long inventoryVersion) {
     authorizeAndLock(loginId, storeId);
     Clock current = Clock.fixed(clock.instant(), clock.getZone());
     OfferRules.date(date, current);
@@ -144,6 +146,7 @@ public class ProductService {
                     new ProductConflictException(
                         "PICKUP_WINDOW_REQUIRED", "해당 수령일의 매장 수령 시간을 먼저 등록해 주세요."));
     OfferRules.open(window.orderDeadline(), current);
+    checkInventoryVersion(storeId, productId, date, inventoryVersion);
     long id = data.offer(storeId, productId, date, price, quantity);
     long marketId = stores.ownedStore(loginId, storeId).marketId();
     return offerView(data.detail(marketId, date, id).orElseThrow(ProductNotFoundException::new));
@@ -172,7 +175,8 @@ public class ProductService {
                         productView(row.product()),
                         row.selling(),
                         row.priceWon(),
-                        row.onlineQuantity()))
+                        row.onlineQuantity(),
+                        row.inventoryVersion()))
             .toList(),
         page,
         size,
@@ -203,6 +207,10 @@ public class ProductService {
         issues.add(new SaleIssue(change.productId(), "상품이 없거나 삭제되었습니다. 본인 상품 목록을 확인해 주세요."));
     }
     if (!issues.isEmpty()) throw new SaleBatchException(issues);
+    for (SaleChange change : changes)
+      if (change.selling())
+        checkInventoryVersion(storeId, change.productId(), date, change.inventoryVersion());
+    checkWindowChange(storeId, date, start, end, deadline);
     data.window(storeId, date, start, end, deadline);
     for (SaleChange change : changes) {
       if (change.selling())
@@ -242,6 +250,22 @@ public class ProductService {
     return offerView(row);
   }
 
+  private void checkInventoryVersion(long storeId, long productId, LocalDate date, Long expected) {
+    InventoryRules.version(data.inventoryVersion(storeId, productId, date).orElse(null), expected);
+  }
+
+  private void checkWindowChange(
+      long storeId, LocalDate date, LocalTime start, LocalTime end, LocalTime deadline) {
+    if (data.windowLocked(storeId, date)) {
+      var previous = data.findWindow(storeId, date).orElseThrow();
+      if (!previous.startTime().equals(start)
+          || !previous.endTime().equals(end)
+          || !previous.orderDeadline().equals(deadline))
+        throw new ProductConflictException(
+            "PICKUP_WINDOW_LOCKED", "확정 주문이 있어 오늘 주문 마감·수령 시간을 변경할 수 없습니다.");
+    }
+  }
+
   private void authorizeAndLock(String loginId, long storeId) {
     stores.ownedStore(loginId, storeId);
     // 같은 매장 변경을 직렬화하고 날짜 검사는 잠금을 얻은 뒤 수행한다.
@@ -259,7 +283,7 @@ public class ProductService {
         row.hasSales());
   }
 
-  private static OfferView offerView(OfferRow row) {
+  static OfferView offerView(OfferRow row) {
     SaleUnit unit = ProductRules.unit(row.unitType(), row.unitAmount());
     return new OfferView(
         row.id(),
@@ -274,6 +298,7 @@ public class ProductService {
         row.pickupDate(),
         row.priceWon(),
         row.onlineQuantity(),
+        row.inventoryVersion(),
         row.startTime(),
         row.endTime(),
         row.orderDeadline(),

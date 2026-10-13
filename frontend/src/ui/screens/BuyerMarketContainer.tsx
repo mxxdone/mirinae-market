@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getMarkets, searchOffers, getOffer } from "../../api/products";
 import { ApiError, type MarketView, type OfferView } from "../../api/types";
 import { todayPickupDate } from "../../validation/productValidation";
+import { BuyerCheckoutPanel } from "../components/BuyerCheckoutPanel";
+import { putCartItem } from "../../api/checkout";
 import { BuyerMarketScreen } from "./BuyerMarketScreen";
 import {
   hasMarketDetailHistory,
@@ -17,6 +19,8 @@ export function BuyerMarketContainer({
   onAccount: () => void;
   onSessionExpired: () => void;
 }) {
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [markets, setMarkets] = useState<MarketView[]>([]);
   const [marketId, setMarketId] = useState<number | null>(null);
   const [offers, setOffers] = useState<OfferView[]>([]);
@@ -149,8 +153,29 @@ export function BuyerMarketContainer({
     }, 30000);
     return () => clearInterval(timer);
   }, [date, marketId, query, load]);
+  if (checkoutOpen)
+    return (
+      <BuyerCheckoutPanel
+        onBack={() => setCheckoutOpen(false)}
+        onSessionExpired={onSessionExpired}
+      />
+    );
   return (
     <BuyerMarketScreen
+      onCheckout={() => setCheckoutOpen(true)}
+      adding={adding}
+      onAdd={(offer) => {
+        if (adding) return;
+        setAdding(true);
+        void putCartItem(offer, 1)
+          .then(() => {
+            if (mounted.current) setCheckoutOpen(true);
+          })
+          .catch(handleError)
+          .finally(() => {
+            if (mounted.current) setAdding(false);
+          });
+      }}
       markets={markets}
       offers={offers}
       selected={selected}

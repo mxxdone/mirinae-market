@@ -71,6 +71,56 @@ public final class HttpSessionClient implements AutoCloseable {
         HttpResponse.BodyHandlers.ofString());
   }
 
+  public java.util.concurrent.CompletableFuture<HttpResponse<String>> postAsync(
+      String path, String body) {
+    return client.sendAsync(
+        mutationRequest("POST", path, body, "application/json", true),
+        HttpResponse.BodyHandlers.ofString());
+  }
+
+  public HttpResponse<String> putWithInventoryVersion(String path, String body, boolean includeCsrf)
+      throws Exception {
+    return put(path, withCurrentVersions(path, body), includeCsrf);
+  }
+
+  public java.util.concurrent.CompletableFuture<HttpResponse<String>> putWithInventoryVersionAsync(
+      String path, String body) throws Exception {
+    return putAsync(path, withCurrentVersions(path, body));
+  }
+
+  private String withCurrentVersions(String path, String body) throws Exception {
+    var match =
+        java.util.regex.Pattern.compile(
+                "/api/seller/stores/(\\d+)/(?:sales/(\\d{4}-\\d{2}-\\d{2})|products/(\\d+)/offers/(\\d{4}-\\d{2}-\\d{2}))")
+            .matcher(path);
+    if (!match.matches()) return body;
+    String date = match.group(2) != null ? match.group(2) : match.group(4);
+    var response = get("/api/seller/stores/" + match.group(1) + "/sales/" + date + "?size=100");
+    if (response.statusCode() != 200) return body;
+    var items = json(response).get("items");
+    var root = mapper.readTree(body);
+    if (!root.isObject()) return body;
+    var changes = match.group(2) != null ? root.get("products") : null;
+    if (match.group(2) != null && (changes == null || !changes.isArray())) return body;
+    var nodes = new java.util.ArrayList<tools.jackson.databind.JsonNode>();
+    if (changes == null) nodes.add(root);
+    else for (var change : changes) nodes.add(change);
+    for (var node : nodes) {
+      if (!node.isObject() || node.has("inventoryVersion")) continue;
+      var id = node.get("productId");
+      long productId =
+          match.group(3) != null ? Long.parseLong(match.group(3)) : (id == null ? -1 : id.asLong());
+      for (var row : items)
+        if (row.get("product").get("id").asLong() == productId) {
+          var version = row.get("inventoryVersion");
+          if (version != null && !version.isNull())
+            ((tools.jackson.databind.node.ObjectNode) node)
+                .put("inventoryVersion", version.asLong());
+        }
+    }
+    return mapper.writeValueAsString(root);
+  }
+
   private HttpResponse<String> mutation(
       String method, String path, String body, String contentType, boolean includeCsrf)
       throws Exception {

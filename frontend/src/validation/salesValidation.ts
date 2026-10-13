@@ -6,6 +6,7 @@ export interface SaleDraft {
   selling: boolean;
   price: string;
   quantity: string;
+  inventoryVersion?: number | null;
 }
 export function parseSaleDrafts(drafts: SaleDraft[]): {
   products: SaleChange[];
@@ -26,6 +27,9 @@ export function parseSaleDrafts(drafts: SaleDraft[]): {
               productId: draft.productId,
               selling: true,
               ...parseOfferInput(draft.price, draft.quantity),
+              ...(draft.inventoryVersion === undefined
+                ? {}
+                : { inventoryVersion: draft.inventoryVersion }),
             }
           : { productId: draft.productId, selling: false, priceWon: null, onlineQuantity: null },
       );

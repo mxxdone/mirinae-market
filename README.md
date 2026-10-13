@@ -4,7 +4,7 @@ Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트�
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
 - 요구사항·계정 입력 규칙·API 계약: [SPEC.md](SPEC.md)
-- 진행 상태: [PLAN.md](PLAN.md)
+- 진행 상태: `PLAN.md`(프로젝트 루트의 로컬 계획)
 - 서비스 맥락·용어: [docs/CONTEXT.md](docs/CONTEXT.md)
 - 설계 결정과 이유: [docs/ADR.md](docs/ADR.md)
 

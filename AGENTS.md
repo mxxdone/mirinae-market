@@ -31,6 +31,7 @@
 ## Git Workflow
 
 - 기능 개발은 짧은 기능 브랜치에서 진행한다. PR의 필수 CI 통과와 리뷰 후 main에 병합한다. 사용자가 main 직접 작업을 명시한 경우 해당 지시를 따른다.
+- 커밋 메시지는 Conventional Commits 형식 `<type>[optional scope][!]: <설명>`을 따른다. `feat`, `fix`, `docs`, `refactor`, `test`, `chore` 등의 타입은 변경 성격에 맞게 영어로 쓰고, 제목의 설명과 본문은 한국어로 작성한다. 코드 식별자·기술명은 원문을 유지할 수 있다. 예: `feat: 판매 관리 일괄 저장 구현`, `docs: 커밋 메시지 작성 규칙 추가`.
 
 ## Review
 - 대상: diff·영향 범위. 고위험 변경: 실패 시나리오·누락 테스트 집중 검증.

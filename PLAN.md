@@ -202,6 +202,13 @@
 - 최종 증거는 .local/verification/pagination-backend-final.log, pagination-front-final-3.log, pagination-build-final-3.log, pagination-e2e-final-2.log다. 최초 E2E의 테스트 서버 연결 실패와 이후 잘못된 판매자 로그아웃 선택자를 수정한 실패 기록은 별도로 보존했다. 검사 기준·제한 시간은 완화하지 않았다.
 - 실제 시간의 기존 시연 서버를 갱신하고 구매자·판매자·모바일 탭 smoke와 PC·모바일 화면을 확인했다. diff·계층 의존성·공개 검색 필터·입력 보존·시간 저장 전 공개 차단 검토 완료. 사람의 수용 확인과 원격 CI·PR 리뷰는 남아 있다.
 
+### 매장 정보 화면 분리 · 2026-10-13
+
+- 판매자 기본 화면은 판매 관리이며, 큰 매장 배너·상세 표·매장 재조회를 별도 매장 정보 화면으로 옮겼다. 상단에는 매장명·메뉴·로그아웃만 둔다. 화면별 주소와 브라우저 방문 기록을 연결하며 단순 화면 이동 시 판매 입력·탭·페이지를 유지한다.
+- 기존 본인 매장 조회·세션·실패 처리 계약을 유지하고 매장 정보 URL 새로고침과 로그아웃 후 과거 기록 접근을 검증했다. 최종 frontend check의 정적 gate·Unit 33개와 build, 실제 PostgreSQL·자체 백엔드·Edge E2E 16개가 통과했다. 실패·오류·retry·skip 0이다.
+- 증거는 .local/verification/store-page-check-final.log, store-page-build-final.log, store-page-e2e.log, store-page-demo-smoke.log다. 로그인 알림 문구 변경 전 E2E 결과는 검증한 흐름에 영향이 없어 재사용했다. 서버·API·DB 소스는 변경하지 않아 기존 유효한 backend 104개 gate를 재사용했다.
+- 시연 주소 http://127.0.0.1:5175에서 PC·모바일 판매 관리와 별도 매장 정보 화면을 smoke·시각 확인했다. diff·UI/API 의존성·입력 보존·인가 상태 폐기·방문 기록 검토 완료. 사람의 수용 확인·원격 CI·PR 리뷰는 남아 있다.
+
 ## Phase 4 — 장바구니·재고 확보·통합 결제
 
 목표: 여러 매장 상품을 한 번에 모의 결제하고 재고·가격을 보장한다.

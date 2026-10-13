@@ -423,3 +423,50 @@ test("모바일 판매 탭에서 입력을 보존하고 공통 시간 확인 후
   await expect(page.locator(".offer-card")).toHaveCount(1);
   await expect(page.locator(".offer-card")).toContainText("3,500");
 });
+
+test("매장 정보 별도 화면의 방문 기록·새로고침·판매 입력 보존과 로그아웃 보호", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page, required("E2E_SELLER_A_LOGIN_ID"));
+  await expect(page.locator("#heading-products")).toBeVisible();
+  await expect(page.locator("#storeInfoId")).toHaveCount(0);
+  const menu = page.getByRole("navigation", { name: "매장 메뉴" });
+  await expect(menu.getByRole("link", { name: "판매 관리" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await page.getByRole("button", { name: "새 상품 등록", exact: true }).click();
+  await page.locator("#productName").fill("화면 이동 중 작성 상품");
+  await page.locator("#productUnitAmount").fill("500");
+  await menu.getByRole("link", { name: "매장 정보" }).click();
+  await expect(page).toHaveURL(/#seller\/store$/);
+  await expect(page.locator("#storeInfoId")).toBeVisible();
+  await expect(page.locator("#heading-products")).toBeHidden();
+  await expect(page.locator("#productName")).toBeHidden();
+  await page.goBack();
+  await expect(page.locator("#productName")).toBeVisible();
+  await expect(page.locator("#productName")).toHaveValue("화면 이동 중 작성 상품");
+  await expect(page.locator("#productUnitAmount")).toHaveValue("500");
+  await page.goForward();
+  await expect(page.locator("#storeInfoId")).toBeVisible();
+  await page.reload();
+  await expect(page.locator("#storeInfoId")).toBeVisible();
+  await expect(page.locator("#heading-products")).toBeHidden();
+  await menu.getByRole("link", { name: "판매 관리" }).click();
+  await expect(page.locator("#heading-products")).toBeVisible();
+  await expect(page.locator("#storeInfoId")).toHaveCount(0);
+  await noOverflow(page);
+  await page.screenshot({
+    path: "../output/playwright/seller-sales-compact-mobile.png",
+    fullPage: true,
+  });
+  await page.locator("#btnLogoutSeller").click();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await page.goBack();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await expect(page.locator("#storeInfoId")).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await expect(page.locator("#heading-products")).toHaveCount(0);
+});

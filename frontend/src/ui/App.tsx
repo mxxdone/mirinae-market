@@ -10,6 +10,7 @@ import { SellerStoreScreen } from "./screens/SellerStoreScreen";
 import { SignupCompleteScreen } from "./screens/SignupCompleteScreen";
 import { SignupScreen } from "./screens/SignupScreen";
 import { isMarketLocation, leaveMarketLocation, writeMarketLocation } from "./marketLocation";
+import { isSellerLocation } from "./sellerLocation";
 
 export type ScreenId =
   "login" | "signup" | "signup-complete" | "buyer-summary" | "seller-store" | "buyer-market";
@@ -56,7 +57,7 @@ export function App(): ReactElement {
       setSessionExpiredMessage(null);
       setSyncErrorMessage(null);
       setLogoutError(null);
-      showToast("로그인 성공! 계정 정보로 이동합니다.");
+      showToast("로그인되었습니다.");
 
       // 사용자 역할에 따른 화면 이동
       if (me.role === "SELLER") {
@@ -126,7 +127,12 @@ export function App(): ReactElement {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!isRestoringSession && !currentUser && currentScreen === "login" && isMarketLocation()) {
+    if (
+      !isRestoringSession &&
+      !currentUser &&
+      currentScreen === "login" &&
+      (isMarketLocation() || isSellerLocation())
+    ) {
       leaveMarketLocation();
     }
   }, [isRestoringSession, currentUser, currentScreen]);

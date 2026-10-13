@@ -1335,6 +1335,42 @@ body {
 .seller-workspace {
   max-width: 1040px;
 }
+.seller-workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.seller-workspace-header h1 {
+  font-family: var(--font-serif);
+  font-size: 24px;
+}
+.seller-workspace-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.seller-workspace-navigation a {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-main);
+  text-decoration: none;
+}
+.seller-workspace-navigation a[aria-current="page"] {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+@media (max-width: 540px) {
+  .seller-workspace-header {
+    padding: 18px 20px;
+    gap: 12px;
+  }
+}
 .seller-products {
   display: flex;
   flex-direction: column;

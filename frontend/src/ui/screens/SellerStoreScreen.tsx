@@ -3,6 +3,12 @@ import { getCurrentSellerStore } from "../../api/store";
 import { ApiError, type StoreView, type UserMe } from "../../api/types";
 import { SellerProductsPanel } from "../components/SellerProductsPanel";
 import { StatusAlert } from "../components/StatusAlert";
+import {
+  isSellerLocation,
+  readSellerPage,
+  writeSellerPage,
+  type SellerPage,
+} from "../sellerLocation";
 
 interface SellerStoreScreenProps {
   user: UserMe;
@@ -27,6 +33,25 @@ export function SellerStoreScreen({
   const [store, setStore] = useState<StoreView | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorAlert, setErrorAlert] = useState<string | null>(null);
+  const [page, setPage] = useState(readSellerPage);
+
+  useEffect(() => {
+    if (!isSellerLocation()) writeSellerPage("sales", false);
+    function restorePage() {
+      setPage(readSellerPage());
+    }
+    window.addEventListener("popstate", restorePage);
+    window.addEventListener("hashchange", restorePage);
+    return () => {
+      window.removeEventListener("popstate", restorePage);
+      window.removeEventListener("hashchange", restorePage);
+    };
+  }, []);
+
+  function navigate(next: SellerPage) {
+    writeSellerPage(next);
+    setPage(next);
+  }
 
   useEffect(() => {
     let active = true;
@@ -69,51 +94,53 @@ export function SellerStoreScreen({
       aria-labelledby="heading-seller-store"
     >
       <div className="hybrid-card summary-container-card seller-workspace">
-        {/* 상단 헤더 배너 */}
-        <div className="seller-header-banner">
-          <div className="summary-tag-row">
-            <span className="seller-location-pill">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-              <span>{store ? `시장 ID: ${store.marketId}` : "담당 매장"}</span>
-            </span>
-            <span
-              className="pill-badge"
-              style={{
-                background: "rgba(255,255,255,0.15)",
-                color: "#ffffff",
-                border: "1px solid rgba(255,255,255,0.25)",
+        <header className="seller-workspace-header">
+          <h1 id="heading-seller-store">{store ? store.name : "내 매장"}</h1>
+          <nav className="seller-workspace-navigation" aria-label="매장 메뉴">
+            <a
+              href="#seller"
+              aria-current={page === "sales" ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("sales");
               }}
             >
-              입점 상인
-            </span>
-          </div>
-          <h1 id="heading-seller-store" className="seller-store-name">
-            {store ? store.name : "내 매장"}
-          </h1>
-          <p className="seller-store-intro">{user.displayName} 님의 담당 매장입니다.</p>
-        </div>
+              판매 관리
+            </a>
+            <a
+              href="#seller/store"
+              aria-current={page === "store" ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("store");
+              }}
+            >
+              매장 정보
+            </a>
+            <button
+              type="button"
+              id="btnLogoutSeller"
+              className="btn-logout"
+              disabled={isLoggingOut}
+              onClick={() => void onLogout()}
+            >
+              {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
+            </button>
+          </nav>
+        </header>
 
         <div className="summary-card-body">
-          <button
-            type="button"
-            id="btnRefreshStore"
-            className="btn-query-store"
-            disabled={isLoading}
-            onClick={() => setRefreshVersion((version) => version + 1)}
-          >
-            {isLoading ? "매장 정보를 불러오는 중..." : "매장 정보 새로고침"}
-          </button>
+          {page === "store" && (
+            <button
+              type="button"
+              id="btnRefreshStore"
+              className="btn-query-store"
+              disabled={isLoading}
+              onClick={() => setRefreshVersion((version) => version + 1)}
+            >
+              {isLoading ? "매장 정보를 불러오는 중..." : "매장 정보 새로고침"}
+            </button>
+          )}
           {isLoading && <p role="status">담당 매장 정보를 불러오고 있습니다.</p>}
           <StatusAlert
             id="storeAlertBox"
@@ -122,7 +149,7 @@ export function SellerStoreScreen({
           />
 
           {/* 실제 매장 정보 테이블 (조회 성공 시 노출) */}
-          {store && (
+          {page === "store" && store && (
             <div>
               <table className="info-data-table">
                 <caption
@@ -167,7 +194,13 @@ export function SellerStoreScreen({
           )}
 
           {store && (
-            <SellerProductsPanel key={store.id} store={store} onSessionExpired={onSessionExpired} />
+            <div hidden={page !== "sales"}>
+              <SellerProductsPanel
+                key={store.id}
+                store={store}
+                onSessionExpired={onSessionExpired}
+              />
+            </div>
           )}
 
           {/* 로그아웃 실패 시 인라인 오류 배너 (role="alert", 재시도 가능) */}
@@ -176,25 +209,6 @@ export function SellerStoreScreen({
             message={logoutError}
             onRetry={() => void onLogout()}
           />
-
-          {/* 계정 보안 및 로그아웃 */}
-          <div className="logout-action-box">
-            <div>
-              <div className="logout-info-title">상인 계정 관리</div>
-              <div className="logout-info-desc">
-                매장 업무를 마친 후 안전하게 로그아웃할 수 있습니다.
-              </div>
-            </div>
-            <button
-              type="button"
-              id="btnLogoutSeller"
-              className="btn-logout"
-              disabled={isLoggingOut}
-              onClick={() => void onLogout()}
-            >
-              {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
-            </button>
-          </div>
         </div>
       </div>
     </section>

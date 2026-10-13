@@ -174,6 +174,10 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
       await page.locator("#loginUserId").fill(sellerId);
       await page.locator("#loginPassword").fill(demoPassword);
       await page.locator("#btnLoginSubmit").click();
+      await page
+        .getByRole("navigation", { name: "매장 메뉴" })
+        .getByRole("link", { name: "매장 정보" })
+        .click();
       await expect(page.locator("#storeInfoId")).toHaveText(ownStoreId);
       await expect(page.locator("#storeInfoRole")).toContainText("입점 상인");
       await expect(page.locator("#storeIdInput")).toHaveCount(0);
@@ -205,11 +209,16 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.locator("#btnLoginSubmit").click();
 
     await expect(page.locator("#heading-seller-store")).toBeVisible();
-    await expect(page.locator("#storeInfoId")).toBeVisible();
+    await expect(page.locator("#storeInfoId")).toHaveCount(0);
 
     // 초기 상품·수령 시간 조회가 완료된 뒤 세션을 만료시켜 재조회 자체의 401을 검증한다.
     await expect(page.getByRole("button", { name: "수령 시간 저장", exact: true })).toBeEnabled();
     await expect(page.getByText("상품 목록을 불러오는 중입니다.", { exact: true })).toHaveCount(0);
+    await page
+      .getByRole("navigation", { name: "매장 메뉴" })
+      .getByRole("link", { name: "매장 정보" })
+      .click();
+    await expect(page.locator("#storeInfoId")).toBeVisible();
 
     // 별도 HTTP 요청으로 세션 로그아웃 호출하여 서버 세션 무효화
     const csrfResponse = await context.request.get("/api/auth/csrf");
@@ -239,6 +248,10 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.locator("#loginPassword").fill(requireEnv("E2E_DEMO_PASSWORD"));
     await page.locator("#btnLoginSubmit").click();
     const storeId = requireEnv("E2E_STORE_A_ID");
+    await page
+      .getByRole("navigation", { name: "매장 메뉴" })
+      .getByRole("link", { name: "매장 정보" })
+      .click();
     await expect(page.locator("#storeInfoId")).toHaveText(storeId);
 
     await context.setOffline(true);

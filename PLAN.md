@@ -345,3 +345,11 @@ Phase 4 기능의 사람 수용 확인 후 원격 CI·PR 리뷰를 거쳐 main�
 - 환경 실패 구분: 재실행 중 전용 DB 연결 종료·health 지연으로 기존 테스트가 timeout이었다. 복구 재실행에서는 누적된 테스트 상품 때문에 자정 검사 전 행 조회도 실패했다. 생성 ID로 소유권을 확인한 작업 전용 DB만 새로 준비하고 새 서버 연결·브라우저 포트에서 전체 21개를 통과했다. 실패 실행을 통과로 취급하지 않았다. HTTP·DB·세션은 실제 연동이며 E2E의 날짜/시간·모의 결제 유형과 기존 통신 실패 주입만 모의한다.
 - diff·영향 리뷰: checkout Business→product/account 공개 Business 진입점, Data 격리·역참조/순환 금지, 같은 매장 잠금과 오름차순 다중 매장 잠금, 영속 요청 키·전체 롤백·시간/가격 스냅샷을 확인했다. 작성 버전·초기 응답 경합 결함을 수정하고 영향 검사를 통과했다. 원격 CI는 이번 작업에서 실행하지 않았다.
 - 남은 항목: 사람의 기능 수용 확인·원격 CI·PR 리뷰·main 병합·시연 DB 적용. Phase 5·실결제·Redis·부하 성능 측정은 구현하지 않았다. 이번 작업용 테스트 서버·DB는 정리하고 기존 Phase 3 시연 환경은 보존한다.
+
+## Phase 4 장바구니·주문 내역 화면 분리 · 2026-10-13
+
+- 사용자 요청으로 장바구니/결제와 주문 내역을 별도 화면·메뉴로 분리했다. 제품 수용 기준은 Spec의 Phase 4에 반영했다. 서브에이전트가 UI를 구현하고 주 에이전트가 회귀 E2E·최종 diff를 검토했다.
+- `#cart`와 `#orders`에서 새로고침·방문 기록을 복원한다. 시장·계정에서 각각 접근하고, 장바구니에서 시장으로 돌아갈 때 마지막 검색 조건을 유지한다. 확정 결제와 응답 유실 후 성공 조회는 주문 내역으로 이동하며 실패·미확정은 장바구니에 남는다. 세션 만료·로그아웃 때 완료 안내와 개인 주문 상태를 폐기한다.
+- 자체 백엔드·독립 PostgreSQL·Vite·Edge의 `npm run test:e2e`: 전체 22개 통과, retry·skip 0. 기존 인증·판매·재고 버전 회귀와 함께 화면 분리·메뉴 진입·뒤로가기·새로고침·응답 유실·결제 실패를 확인했다. PC·390px 모바일 캡처에서 별도 주문 내역과 줄바꿈을 검토했다. 증거: `.local/verification/phase4-split-e2e.log`, `frontend/test-results/results.xml`, `output/playwright/phase4-checkout-*.png`.
+- 최종 `npm run check`와 `npm run build` 종료 코드 0. TypeScript·ESLint·Prettier·dependency-cruiser·단위 45개와 빌드를 통과했다. 기존 SellerProductsPanel 경고 2개 외 오류는 없다. 새 주문 화면의 비동기 조회·세션 처리와 App의 방문 기록·완료 상태 폐기, 결제 결과 확인 동작을 리뷰했고 차단 결함은 없다. 증거: `.local/verification/phase4-split-frontend-check.log`, `phase4-split-frontend-build.log`.
+- 백엔드·API·DB 계약은 변경하지 않아 기존 132개 백엔드 검사 결과를 재사용한다. 이번 전용 테스트 서버·DB는 정리했으며 기존 시연 환경은 보존했다. 참고 이미지에 따른 시각 디자인 개선은 이미지 수신 후 별도 진행한다. 사람의 수용 확인·원격 CI·PR 리뷰·main 병합은 남아 있다.

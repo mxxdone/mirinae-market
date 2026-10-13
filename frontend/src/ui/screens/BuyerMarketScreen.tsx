@@ -6,6 +6,7 @@ import { Pagination } from "../components/Pagination";
 
 interface Props {
   onCheckout: () => void;
+  onOrders: () => void;
   onAdd: (offer: OfferView) => void;
   adding: boolean;
   markets: MarketView[];
@@ -44,7 +45,10 @@ export function BuyerMarketScreen(props: Props) {
         <div className="summary-tag-row">
           <span className="pill-badge primary">오늘의 장보기</span>
           <button className="text-action-link" type="button" onClick={props.onCheckout}>
-            장바구니·주문 내역
+            장바구니
+          </button>
+          <button className="text-action-link" type="button" onClick={props.onOrders}>
+            주문 내역
           </button>
           <button className="text-action-link" type="button" onClick={props.onAccount}>
             내 계정

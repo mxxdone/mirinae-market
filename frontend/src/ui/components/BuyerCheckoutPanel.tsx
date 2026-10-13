@@ -17,13 +17,16 @@ import { purchaseQuantity } from "../../validation/checkoutValidation";
 import { StatusAlert } from "./StatusAlert";
 export function BuyerCheckoutPanel({
   onBack,
+  onOrders,
+  onConfirmed,
   onSessionExpired,
 }: {
   onBack: () => void;
+  onOrders: () => void;
+  onConfirmed: (order: Checkout) => void;
   onSessionExpired: () => void;
 }) {
   const [cart, setCart] = useState<Cart>({ version: 0, items: [] });
-  const [orders, setOrders] = useState<Checkout[]>([]);
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [mode, setMode] = useState<PaymentMode>("SUCCESS");
   const [result, setResult] = useState<Checkout | null>(null);
@@ -56,7 +59,6 @@ export function BuyerCheckoutPanel({
       const [next, history] = await Promise.all([getCart(), getOrders()]);
       if (!mounted.current || version !== loadVersion.current) return;
       applyCart(next);
-      setOrders(history);
       setReady(true);
       const pending = history.find((item) => item.status === "PENDING");
       if (pending) {
@@ -98,6 +100,10 @@ export function BuyerCheckoutPanel({
         setUnknown(false);
         setNotReceived(false);
         setError(null);
+        if (next.status === "CONFIRMED") {
+          onConfirmed(next);
+          return;
+        }
         if (next.status !== "PENDING") {
           await load();
         }
@@ -108,7 +114,7 @@ export function BuyerCheckoutPanel({
         } else failure(value);
       }
     },
-    [load, failure],
+    [load, failure, onConfirmed],
   );
   useEffect(() => {
     if (result?.status !== "PENDING") return;
@@ -125,6 +131,10 @@ export function BuyerCheckoutPanel({
       const next = await startCheckout(input);
       if (!mounted.current) return;
       setResult(next);
+      if (next.status === "CONFIRMED") {
+        onConfirmed(next);
+        return;
+      }
       await load();
     } catch (value) {
       if (!mounted.current) return;
@@ -145,7 +155,10 @@ export function BuyerCheckoutPanel({
         <button className="text-action-link" disabled={busy || pending} onClick={onBack}>
           ← 시장 상품으로
         </button>
-        <h1 id="checkout-heading">장바구니와 주문 내역</h1>
+        <button className="text-action-link" disabled={busy || pending} onClick={onOrders}>
+          주문 내역
+        </button>
+        <h1 id="checkout-heading">장바구니</h1>
         <p>결제 확정 시 재고를 확인합니다. 먼저 결제에 성공한 구매자가 상품을 구매합니다.</p>
       </header>
       <div className="summary-card-body">
@@ -321,42 +334,6 @@ export function BuyerCheckoutPanel({
             {BigInt(result.totalWon).toLocaleString()}원
           </p>
         )}
-        <h2>매장별 주문 내역</h2>
-        <button className="text-action-link" disabled={busy} onClick={() => void act(load)}>
-          주문 내역 새로고침
-        </button>
-        {orders.filter((order) => order.status === "CONFIRMED").length === 0 && (
-          <p>아직 확정된 주문이 없습니다.</p>
-        )}
-        {orders
-          .filter((order) => order.status === "CONFIRMED")
-          .map((order) => (
-            <article className="checkout-order" key={order.id}>
-              <h3>
-                통합 주문 {order.id} · {BigInt(order.totalWon).toLocaleString()}원
-              </h3>
-              {order.storeOrders.map((store) => (
-                <section key={store.id}>
-                  <h4>
-                    {store.storeName} · 매장 주문 {store.id}
-                  </h4>
-                  <p>
-                    {store.pickupDate} 수령 {store.startTime.slice(0, 5)}~
-                    {store.endTime.slice(0, 5)}
-                  </p>
-                  <ul>
-                    {store.items.map((item, index) => (
-                      <li key={index}>
-                        {item.productName} · {item.unitAmount}
-                        {item.unitType === "WEIGHT" ? "g" : "개"} 포장 × {item.quantity} ·{" "}
-                        {item.priceWon.toLocaleString()}원 / 포장
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </article>
-          ))}
       </div>
     </section>
   );

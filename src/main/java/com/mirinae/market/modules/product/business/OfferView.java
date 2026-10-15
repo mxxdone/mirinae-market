@@ -17,6 +17,7 @@ public record OfferView(
     LocalDate pickupDate,
     int priceWon,
     int onlineQuantity,
+    long inventoryVersion,
     LocalTime startTime,
     LocalTime endTime,
     LocalTime orderDeadline,

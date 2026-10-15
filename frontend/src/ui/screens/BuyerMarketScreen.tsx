@@ -5,6 +5,10 @@ import { StatusAlert } from "../components/StatusAlert";
 import { Pagination } from "../components/Pagination";
 
 interface Props {
+  onCheckout: () => void;
+  onOrders: () => void;
+  onAdd: (offer: OfferView) => void;
+  adding: boolean;
   markets: MarketView[];
   offers: OfferView[];
   selected: OfferView | null;
@@ -40,6 +44,12 @@ export function BuyerMarketScreen(props: Props) {
       <header className="summary-card-header market-header">
         <div className="summary-tag-row">
           <span className="pill-badge primary">오늘의 장보기</span>
+          <button className="text-action-link" type="button" onClick={props.onCheckout}>
+            장바구니
+          </button>
+          <button className="text-action-link" type="button" onClick={props.onOrders}>
+            주문 내역
+          </button>
           <button className="text-action-link" type="button" onClick={props.onAccount}>
             내 계정
           </button>
@@ -154,6 +164,15 @@ export function BuyerMarketScreen(props: Props) {
                 </dd>
               </div>
             </dl>
+            <button
+              className="btn-query-store"
+              disabled={props.adding || props.selected.onlineQuantity === 0}
+              onClick={() => {
+                if (props.selected) props.onAdd(props.selected);
+              }}
+            >
+              장바구니 담기
+            </button>
             <p className="offer-description">
               {props.selected.description || "등록된 추가 설명이 없습니다."}
             </p>

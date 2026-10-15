@@ -39,3 +39,8 @@ describe("일괄 판매 입력", () => {
     ).toHaveLength(1);
   });
 });
+
+it("작성 당시 재고 버전은 변환 뒤에도 유지한다", () => {
+  const draft = { productId: 1, selling: true, price: "1000", quantity: "10", inventoryVersion: 0 };
+  expect(parseSaleDrafts([draft]).products[0]?.inventoryVersion).toBe(0);
+});

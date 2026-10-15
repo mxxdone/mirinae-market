@@ -82,6 +82,7 @@ export interface ProductView extends ProductInput {
   hasSales: boolean;
 }
 export interface OfferInput {
+  inventoryVersion?: number | null;
   priceWon: number;
   onlineQuantity: number;
 }
@@ -124,12 +125,14 @@ export interface SaleIssue {
   message: string;
 }
 export interface SaleChange {
+  inventoryVersion?: number | null;
   productId: number;
   selling: boolean;
   priceWon: number | null;
   onlineQuantity: number | null;
 }
 export interface SaleProductView {
+  inventoryVersion: number | null;
   product: ProductView;
   selling: boolean;
   priceWon: number | null;

@@ -10,7 +10,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class ProductMigrationIntegrationTest {
   @Test
-  void upgradesExistingV1DatabaseWithoutChangingAccountsMarketsOrStores() {
+  void upgradesExistingV1DatabaseWithoutChangingAccountsMarketsOrStores() throws Exception {
     try (var postgres = new PostgreSQLContainer("postgres:17.10")) {
       postgres.start();
       var dataSource =
@@ -47,6 +47,56 @@ class ProductMigrationIntegrationTest {
           "INSERT INTO daily_offers (store_id, product_id, pickup_date, price_won, online_quantity) VALUES (?, ?, '2026-10-13', 5000, 10)",
           storeId,
           productId);
+      Flyway.configure().dataSource(dataSource).target("5").load().migrate();
+      assertThat(
+              postgres
+                  .execInContainer(
+                      "pg_dump",
+                      "-U",
+                      postgres.getUsername(),
+                      "-d",
+                      postgres.getDatabaseName(),
+                      "-Fc",
+                      "-f",
+                      "/tmp/pre-phase4.dump")
+                  .getExitCode())
+          .isZero();
+      assertThat(
+              postgres
+                  .execInContainer(
+                      "psql",
+                      "-U",
+                      postgres.getUsername(),
+                      "-d",
+                      postgres.getDatabaseName(),
+                      "-c",
+                      "CREATE DATABASE phase4_restore")
+                  .getExitCode())
+          .isZero();
+      assertThat(
+              postgres
+                  .execInContainer(
+                      "pg_restore",
+                      "-U",
+                      postgres.getUsername(),
+                      "-d",
+                      "phase4_restore",
+                      "/tmp/pre-phase4.dump")
+                  .getExitCode())
+          .isZero();
+      var restoredSource =
+          new DriverManagerDataSource(
+              postgres.getJdbcUrl().replace("/" + postgres.getDatabaseName(), "/phase4_restore"),
+              postgres.getUsername(),
+              postgres.getPassword());
+      var restored = new JdbcTemplate(restoredSource);
+      assertThat(restored.queryForObject("SELECT count(*) FROM products", Long.class)).isEqualTo(1);
+      assertThat(restored.queryForObject("SELECT online_quantity FROM daily_offers", Integer.class))
+          .isEqualTo(10);
+      assertThat(
+              restored.queryForObject(
+                  "SELECT max(version::integer) FROM flyway_schema_history", Integer.class))
+          .isEqualTo(5);
       Flyway.configure().dataSource(dataSource).load().migrate();
       assertThat(
               jdbc.queryForObject(
@@ -82,6 +132,19 @@ class ProductMigrationIntegrationTest {
                   "SELECT count(*) FROM flyway_schema_history WHERE success AND version IN ('1','2','3','4')",
                   Long.class))
           .isEqualTo(4L);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT inventory_version FROM daily_offers WHERE product_id=?",
+                  Long.class,
+                  productId))
+          .isZero();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT orders_locked FROM pickup_windows WHERE store_id=?",
+                  Boolean.class,
+                  storeId))
+          .isFalse();
+      assertThat(jdbc.queryForObject("SELECT count(*) FROM checkouts", Long.class)).isZero();
       assertThat(
               Flyway.configure()
                   .dataSource(dataSource)

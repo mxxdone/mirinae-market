@@ -15,7 +15,7 @@ public class ProductData {
       """
       SELECT o.id, p.id AS product_id, s.market_id, s.id AS store_id, s.name AS store_name,
              p.name AS product_name, p.description, p.unit_type, p.unit_amount, o.pickup_date,
-             o.price_won, o.online_quantity, w.start_time, w.end_time, w.order_deadline
+             o.price_won, o.online_quantity, o.inventory_version, w.start_time, w.end_time, w.order_deadline
       FROM daily_offers o JOIN products p ON p.id = o.product_id
       JOIN stores s ON s.id = p.store_id
       JOIN pickup_windows w ON w.store_id = o.store_id AND w.pickup_date = o.pickup_date
@@ -144,7 +144,7 @@ public class ProductData {
         """
         INSERT INTO daily_offers (store_id, product_id, pickup_date, price_won, online_quantity)
         VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT (product_id, pickup_date) DO UPDATE SET price_won = EXCLUDED.price_won, online_quantity = EXCLUDED.online_quantity, active = true
+        ON CONFLICT (product_id, pickup_date) DO UPDATE SET price_won = EXCLUDED.price_won, online_quantity = EXCLUDED.online_quantity, active = true, inventory_version = daily_offers.inventory_version + 1
         RETURNING id
         """,
         Long.class,
@@ -203,7 +203,7 @@ public class ProductData {
     return jdbc.query(
         """
       SELECT p.*, EXISTS (SELECT 1 FROM daily_offers h WHERE h.product_id = p.id) AS has_sales,
-             o.active AS selling, o.price_won, o.online_quantity
+             o.active AS selling, o.price_won, o.online_quantity, o.inventory_version
       FROM products p LEFT JOIN daily_offers o ON o.product_id = p.id AND o.pickup_date = ?
       WHERE p.store_id = ? AND p.archived_at IS NULL ORDER BY p.id LIMIT ? OFFSET ?
       """,
@@ -212,11 +212,62 @@ public class ProductData {
                 productRow(rs),
                 rs.getBoolean("selling"),
                 rs.getObject("price_won", Integer.class),
-                rs.getObject("online_quantity", Integer.class)),
+                rs.getObject("online_quantity", Integer.class),
+                rs.getObject("inventory_version", Long.class)),
         date,
         storeId,
         limit,
         offset);
+  }
+
+  public Optional<CheckoutOfferRow> checkoutOffer(long offerId) {
+    return jdbc
+        .query(
+            OFFER_SELECT.replace("SELECT o.id", "SELECT o.active, p.archived_at, o.id")
+                + " WHERE o.id = ?",
+            (rs, n) ->
+                new CheckoutOfferRow(
+                    offerRow(rs), rs.getBoolean("active"), rs.getTimestamp("archived_at") != null),
+            offerId)
+        .stream()
+        .findFirst();
+  }
+
+  public void consume(long offerId, int quantity) {
+    if (jdbc.update(
+            "UPDATE daily_offers SET online_quantity=online_quantity-?,inventory_version=inventory_version+1 WHERE id=? AND online_quantity>=?",
+            quantity,
+            offerId,
+            quantity)
+        != 1) throw new IllegalStateException("재고 차감 조건이 변경되었습니다.");
+  }
+
+  public void lockWindow(long storeId, LocalDate date) {
+    jdbc.update(
+        "UPDATE pickup_windows SET orders_locked=true WHERE store_id=? AND pickup_date=?",
+        storeId,
+        date);
+  }
+
+  public boolean windowLocked(long storeId, LocalDate date) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM pickup_windows WHERE store_id=? AND pickup_date=? AND orders_locked)",
+            Boolean.class,
+            storeId,
+            date));
+  }
+
+  public Optional<Long> inventoryVersion(long storeId, long productId, LocalDate date) {
+    return jdbc
+        .query(
+            "SELECT inventory_version FROM daily_offers WHERE store_id=? AND product_id=? AND pickup_date=?",
+            (rs, n) -> rs.getLong(1),
+            storeId,
+            productId,
+            date)
+        .stream()
+        .findFirst();
   }
 
   private static ProductRow productRow(ResultSet rs) throws SQLException {
@@ -244,6 +295,7 @@ public class ProductData {
         rs.getObject("pickup_date", LocalDate.class),
         rs.getInt("price_won"),
         rs.getInt("online_quantity"),
+        rs.getLong("inventory_version"),
         rs.getObject("start_time", LocalTime.class),
         rs.getObject("end_time", LocalTime.class),
         rs.getObject("order_deadline", LocalTime.class));

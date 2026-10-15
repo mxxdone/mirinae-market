@@ -18,7 +18,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -53,7 +53,7 @@ jobs:
       DB_USERNAME: mirinae_test
       DB_PASSWORD: ${{ secrets.FRONTEND_TEST_DB_PASSWORD }}
       BACKEND_URL: http://127.0.0.1:8081
-      E2E_FIXED_INSTANT: '2026-10-13T03:00:00Z'
+      E2E_FIXED_INSTANT: "2026-10-13T03:00:00Z"
       E2E_BUYER_LOGIN_ID: ${{ secrets.E2E_BUYER_LOGIN_ID }}
       E2E_SELLER_A_LOGIN_ID: ${{ secrets.E2E_SELLER_A_LOGIN_ID }}
       E2E_SELLER_B_LOGIN_ID: ${{ secrets.E2E_SELLER_B_LOGIN_ID }}
@@ -65,7 +65,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -73,7 +73,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -121,6 +121,12 @@ jobs:
             [[ "$store_id" =~ ^[1-9][0-9]*$ ]]
             echo "E2E_STORE_${suffix}_ID=$store_id" >> "$GITHUB_ENV"
           done
+
+      - name: Seed checkout integration stores
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_seller_a=$E2E_SELLER_A_LOGIN_ID" --set "source_seller_b=$E2E_SELLER_B_LOGIN_ID" < frontend/e2e/fixtures/checkout.sql
 
       - name: Install Chromium
         working-directory: frontend

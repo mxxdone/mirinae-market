@@ -10,4 +10,6 @@ public record SaleChangeRequest(
             requiredMode = Schema.RequiredMode.REQUIRED)
         Boolean selling,
     @Schema(description = "판매할 때 필수인 양의 정수 포장 가격(원). 중단 시 기존 값을 보존") Integer priceWon,
-    @Schema(description = "판매할 때 필수인 0 이상 포장 수량. 0은 공개된 품절 상태") Integer onlineQuantity) {}
+    @Schema(description = "판매할 때 필수인 0 이상 포장 수량. 0은 공개된 품절 상태") Integer onlineQuantity,
+    @Schema(description = "조회한 재고 버전. 기존 판매 수량 변경에 필수이며 오래된 버전은 409로 전체 미적용합니다. 최초 판매 등록은 null")
+        Long inventoryVersion) {}

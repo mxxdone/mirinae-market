@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { getMe, logout } from "../api/auth";
 import { ApiError, type UserMe } from "../api/types";
+import type { Checkout } from "../api/checkout";
+import { BuyerCheckoutPanel } from "./components/BuyerCheckoutPanel";
+import { BuyerOrdersPanel } from "./components/BuyerOrdersPanel";
 import { HealthBadge } from "./components/HealthBadge";
 import { Toast } from "./components/Toast";
 import { BuyerSummaryScreen } from "./screens/BuyerSummaryScreen";
@@ -9,17 +12,37 @@ import { LoginScreen } from "./screens/LoginScreen";
 import { SellerStoreScreen } from "./screens/SellerStoreScreen";
 import { SignupCompleteScreen } from "./screens/SignupCompleteScreen";
 import { SignupScreen } from "./screens/SignupScreen";
-import { isMarketLocation, leaveMarketLocation, writeMarketLocation } from "./marketLocation";
+import {
+  isMarketLocation,
+  leaveMarketLocation,
+  readMarketLocation,
+  writeMarketLocation,
+  type MarketLocation,
+} from "./marketLocation";
 import { isSellerLocation } from "./sellerLocation";
 
 export type ScreenId =
-  "login" | "signup" | "signup-complete" | "buyer-summary" | "seller-store" | "buyer-market";
+  | "login"
+  | "signup"
+  | "signup-complete"
+  | "buyer-summary"
+  | "seller-store"
+  | "buyer-market"
+  | "buyer-cart"
+  | "buyer-orders";
+
+function buyerScreenFromLocation(): ScreenId {
+  if (window.location.hash === "#cart") return "buyer-cart";
+  if (window.location.hash === "#orders") return "buyer-orders";
+  return isMarketLocation() ? "buyer-market" : "buyer-summary";
+}
 
 /**
  * 미리내 마켓 프런트엔드 애플리케이션 최상위 UI 컴포넌트
  * 세션 상태 관리, 라우팅, 비동기 응답 순서 보장, 개인정보 수명주기 관리
  */
 export function App(): ReactElement {
+  const [completedOrder, setCompletedOrder] = useState<Checkout | null>(null);
   const [currentUser, setCurrentUser] = useState<UserMe | null>(null);
   const [currentScreen, setCurrentScreen] = useState<ScreenId>("login");
   const [isRestoringSession, setIsRestoringSession] = useState<boolean>(true);
@@ -32,6 +55,12 @@ export function App(): ReactElement {
 
   // 비동기 요청 경합 방지용 카운터 (오래된 응답 덮어쓰기 방지)
   const requestIdRef = useRef<number>(0);
+  const lastMarketLocation = useRef<MarketLocation>({
+    marketId: null,
+    query: "",
+    page: 0,
+    offerId: null,
+  });
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string): void => {
@@ -63,7 +92,7 @@ export function App(): ReactElement {
       if (me.role === "SELLER") {
         setCurrentScreen("seller-store");
       } else {
-        setCurrentScreen(isMarketLocation() ? "buyer-market" : "buyer-summary");
+        setCurrentScreen(buyerScreenFromLocation());
       }
     } catch (err: unknown) {
       if (currentReqId !== requestIdRef.current) return;
@@ -94,11 +123,12 @@ export function App(): ReactElement {
         if (me.role === "SELLER") {
           setCurrentScreen("seller-store");
         } else {
-          setCurrentScreen(isMarketLocation() ? "buyer-market" : "buyer-summary");
+          setCurrentScreen(buyerScreenFromLocation());
         }
       } catch {
         if (!isMounted || currentReqId !== requestIdRef.current) return;
         setCurrentUser(null);
+        setCompletedOrder(null);
         setCurrentScreen("login");
       } finally {
         if (isMounted && currentReqId === requestIdRef.current) {
@@ -120,7 +150,8 @@ export function App(): ReactElement {
   useEffect(() => {
     if (currentUser?.role !== "BUYER") return;
     function restoreScreen() {
-      setCurrentScreen(isMarketLocation() ? "buyer-market" : "buyer-summary");
+      setCompletedOrder(null);
+      setCurrentScreen(buyerScreenFromLocation());
     }
     window.addEventListener("popstate", restoreScreen);
     return () => window.removeEventListener("popstate", restoreScreen);
@@ -131,7 +162,9 @@ export function App(): ReactElement {
       !isRestoringSession &&
       !currentUser &&
       currentScreen === "login" &&
-      (isMarketLocation() || isSellerLocation())
+      (isMarketLocation() ||
+        isSellerLocation() ||
+        ["#cart", "#orders"].includes(window.location.hash))
     ) {
       leaveMarketLocation();
     }
@@ -152,6 +185,7 @@ export function App(): ReactElement {
       setCurrentUser(null);
       setLogoutError(null);
       showToast("안전하게 로그아웃되었습니다.");
+      setCompletedOrder(null);
       setCurrentScreen("login");
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 401) {
@@ -160,6 +194,7 @@ export function App(): ReactElement {
         setCurrentUser(null);
         setLogoutError(null);
         setSessionExpiredMessage("로그인 세션이 이미 만료되어 로그아웃 처리되었습니다.");
+        setCompletedOrder(null);
         setCurrentScreen("login");
         showToast("세션이 만료되었습니다.");
       } else {
@@ -192,6 +227,7 @@ export function App(): ReactElement {
     ++requestIdRef.current;
     setCurrentUser(null);
     setSessionExpiredMessage("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+    setCompletedOrder(null);
     setCurrentScreen("login");
     showToast("세션이 만료되어 로그인 화면으로 이동합니다.");
   }, [showToast]);
@@ -203,6 +239,19 @@ export function App(): ReactElement {
     setRegisteredLoginId(newLoginId);
     setCurrentScreen("signup-complete");
     showToast("단골손님 등록이 완료되었습니다.");
+  }
+
+  function navigatePurchase(screen: "buyer-cart" | "buyer-orders"): void {
+    if (isMarketLocation()) lastMarketLocation.current = readMarketLocation();
+    setCompletedOrder(null);
+    window.history.pushState(null, "", screen === "buyer-cart" ? "#cart" : "#orders");
+    setCurrentScreen(screen);
+  }
+
+  function browseMarket(): void {
+    setCompletedOrder(null);
+    writeMarketLocation(lastMarketLocation.current, true);
+    setCurrentScreen("buyer-market");
   }
 
   if (isRestoringSession) {
@@ -260,6 +309,7 @@ export function App(): ReactElement {
               onNavigateLogin={() => {
                 setSessionExpiredMessage(null);
                 setSyncErrorMessage(null);
+                setCompletedOrder(null);
                 setCurrentScreen("login");
               }}
             />
@@ -269,6 +319,7 @@ export function App(): ReactElement {
             <SignupCompleteScreen
               loginId={registeredLoginId}
               onNavigateLogin={() => {
+                setCompletedOrder(null);
                 setCurrentScreen("login");
               }}
             />
@@ -276,10 +327,9 @@ export function App(): ReactElement {
 
           {currentScreen === "buyer-summary" && currentUser && (
             <BuyerSummaryScreen
-              onBrowse={() => {
-                writeMarketLocation({ marketId: null, query: "", page: 0, offerId: null }, true);
-                setCurrentScreen("buyer-market");
-              }}
+              onBrowse={browseMarket}
+              onCart={() => navigatePurchase("buyer-cart")}
+              onOrders={() => navigatePurchase("buyer-orders")}
               user={currentUser}
               isLoggingOut={isLoggingOut}
               logoutError={logoutError}
@@ -290,10 +340,35 @@ export function App(): ReactElement {
           {currentScreen === "buyer-market" && currentUser && (
             <BuyerMarketContainer
               key={currentUser.id}
+              onCart={() => navigatePurchase("buyer-cart")}
+              onOrders={() => navigatePurchase("buyer-orders")}
               onAccount={() => {
                 leaveMarketLocation(true);
                 setCurrentScreen("buyer-summary");
               }}
+              onSessionExpired={handleSessionExpired}
+            />
+          )}
+
+          {currentScreen === "buyer-cart" && currentUser?.role === "BUYER" && (
+            <BuyerCheckoutPanel
+              key={currentUser.id}
+              onBack={browseMarket}
+              onOrders={() => navigatePurchase("buyer-orders")}
+              onConfirmed={(order) => {
+                navigatePurchase("buyer-orders");
+                setCompletedOrder(order);
+              }}
+              onSessionExpired={handleSessionExpired}
+            />
+          )}
+
+          {currentScreen === "buyer-orders" && currentUser?.role === "BUYER" && (
+            <BuyerOrdersPanel
+              key={currentUser.id}
+              completedOrder={completedOrder}
+              onBack={browseMarket}
+              onCart={() => navigatePurchase("buyer-cart")}
               onSessionExpired={handleSessionExpired}
             />
           )}

@@ -35,6 +35,8 @@ public class SecurityConfig {
                         "/api/accounts",
                         "/api/auth/login")
                     .permitAll()
+                    .requestMatchers("/api/buyer/**")
+                    .hasRole("BUYER")
                     .requestMatchers("/api/seller/**")
                     .hasRole("SELLER")
                     .anyRequest()

@@ -37,3 +37,6 @@ test-results/
 
 # Browser visual verification artifacts
 output/playwright/
+
+# Local execution plan; durable requirements and decisions remain tracked
+/PLAN.md

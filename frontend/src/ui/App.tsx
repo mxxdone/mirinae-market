@@ -19,9 +19,12 @@ import {
   writeMarketLocation,
   type MarketLocation,
 } from "./marketLocation";
+import { AdminScreen } from "./screens/AdminScreen";
+import { PasswordChangeScreen } from "./screens/PasswordChangeScreen";
 import { isSellerLocation } from "./sellerLocation";
 
 export type ScreenId =
+  | "admin"
   | "login"
   | "signup"
   | "signup-complete"
@@ -89,7 +92,9 @@ export function App(): ReactElement {
       showToast("로그인되었습니다.");
 
       // 사용자 역할에 따른 화면 이동
-      if (me.role === "SELLER") {
+      if (me.role === "ADMIN") {
+        setCurrentScreen("admin");
+      } else if (me.role === "SELLER") {
         setCurrentScreen("seller-store");
       } else {
         setCurrentScreen(buyerScreenFromLocation());
@@ -120,7 +125,9 @@ export function App(): ReactElement {
         const me = await getMe();
         if (!isMounted || currentReqId !== requestIdRef.current) return;
         setCurrentUser(me);
-        if (me.role === "SELLER") {
+        if (me.role === "ADMIN") {
+          setCurrentScreen("admin");
+        } else if (me.role === "SELLER") {
           setCurrentScreen("seller-store");
         } else {
           setCurrentScreen(buyerScreenFromLocation());
@@ -164,6 +171,7 @@ export function App(): ReactElement {
       currentScreen === "login" &&
       (isMarketLocation() ||
         isSellerLocation() ||
+        window.location.hash.startsWith("#admin") ||
         ["#cart", "#orders"].includes(window.location.hash))
     ) {
       leaveMarketLocation();
@@ -239,6 +247,18 @@ export function App(): ReactElement {
     setRegisteredLoginId(newLoginId);
     setCurrentScreen("signup-complete");
     showToast("단골손님 등록이 완료되었습니다.");
+  }
+
+  /**
+   * 판매자 첫 비밀번호 변경 성공 처리
+   * 서버 PUT /api/seller/password 응답이 성공했으므로 추가 GET 없이 requiresPasswordChange를 false로 전환합니다.
+   */
+  function handleSellerPasswordChanged(sellerId: number): Promise<void> {
+    setCurrentUser((prev) => {
+      if (!prev || prev.id !== sellerId) return prev;
+      return { ...prev, requiresPasswordChange: false };
+    });
+    return Promise.resolve();
   }
 
   function navigatePurchase(screen: "buyer-cart" | "buyer-orders"): void {
@@ -373,15 +393,38 @@ export function App(): ReactElement {
             />
           )}
 
-          {currentScreen === "seller-store" && currentUser && (
-            <SellerStoreScreen
-              user={currentUser}
-              isLoggingOut={isLoggingOut}
-              logoutError={logoutError}
+          {currentScreen === "admin" && currentUser?.role === "ADMIN" && (
+            <AdminScreen
+              key={currentUser.id}
               onLogout={() => void handleLogout()}
               onSessionExpired={handleSessionExpired}
+              logoutError={logoutError}
+              isLoggingOut={isLoggingOut}
             />
           )}
+          {currentScreen === "seller-store" && currentUser?.requiresPasswordChange && (
+            <>
+              <PasswordChangeScreen
+                key={currentUser.id}
+                required
+                onChanged={() => handleSellerPasswordChanged(currentUser.id)}
+                onSessionExpired={handleSessionExpired}
+                onLogout={() => void handleLogout()}
+              />
+              {logoutError && <p role="alert">{logoutError}</p>}
+            </>
+          )}
+          {currentScreen === "seller-store" &&
+            currentUser &&
+            !currentUser.requiresPasswordChange && (
+              <SellerStoreScreen
+                user={currentUser}
+                isLoggingOut={isLoggingOut}
+                logoutError={logoutError}
+                onLogout={() => void handleLogout()}
+                onSessionExpired={handleSessionExpired}
+              />
+            )}
         </div>
       </main>
 

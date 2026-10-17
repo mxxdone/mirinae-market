@@ -25,6 +25,10 @@ public class ProductService {
     this.clock = clock;
   }
 
+  public List<java.util.Map<String, Object>> managedSales(LocalDate date, String query, int page) {
+    return data.managedSales(date, query, page);
+  }
+
   @Transactional
   public ProductView create(
       String loginId, long storeId, String name, String description, String type, Integer amount) {

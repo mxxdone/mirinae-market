@@ -174,7 +174,7 @@ test("판매자 kg 입력→일괄 공개→구매자 시장 검색·상세·타
     const buyerPage = await buyer.newPage();
     await login(buyerPage, required("E2E_BUYER_LOGIN_ID"));
     await buyerPage.getByRole("button", { name: "시장 상품 둘러보기" }).click();
-    await buyerPage.locator("#marketSelect").selectOption({ label: "미리내시장" });
+    await buyerPage.locator("#marketSelect").selectOption({ label: "미리내시장 (위치 미등록)" });
     await buyerPage.locator("#productSearch").fill(name);
     await buyerPage.getByRole("button", { name: "상품 검색", exact: true }).click();
     const card = buyerPage.locator(".offer-card").filter({ hasText: name });
@@ -184,7 +184,7 @@ test("판매자 kg 입력→일괄 공개→구매자 시장 검색·상세·타
     await expect(buyerPage.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(buyerPage.getByText("15:00~19:00", { exact: false })).toBeVisible();
     await buyerPage.getByRole("button", { name: "← 상품 목록으로", exact: true }).click();
-    await buyerPage.locator("#marketSelect").selectOption({ label: "은하시장" });
+    await buyerPage.locator("#marketSelect").selectOption({ label: "은하시장 (위치 미등록)" });
     await buyerPage.getByRole("button", { name: "상품 검색", exact: true }).click();
     await expect(buyerPage.locator(".offer-card")).toHaveCount(0);
     await buyerPage.setViewportSize({ width: 390, height: 844 });

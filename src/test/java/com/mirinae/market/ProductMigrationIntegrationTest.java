@@ -108,6 +108,13 @@ class ProductMigrationIntegrationTest {
               jdbc.queryForObject("SELECT name FROM markets WHERE id = ?", String.class, marketId))
           .isEqualTo("기존시장");
       assertThat(
+              jdbc.queryForMap(
+                  "SELECT region_code,address,latitude,longitude FROM markets WHERE id=?",
+                  marketId))
+          .allSatisfy((key, value) -> assertThat(value).isNull());
+      assertThat(jdbc.queryForObject("SELECT count(*) FROM market_candidates", Long.class))
+          .isEqualTo(1393L);
+      assertThat(
               jdbc.queryForObject(
                   "SELECT owner_account_id FROM stores WHERE id = ?", Long.class, storeId))
           .isEqualTo(accountId);
@@ -145,6 +152,18 @@ class ProductMigrationIntegrationTest {
                   storeId))
           .isFalse();
       assertThat(jdbc.queryForObject("SELECT count(*) FROM checkouts", Long.class)).isZero();
+      assertThat(
+              jdbc.queryForMap(
+                  "SELECT contact_name,contact_phone,password_change_required FROM accounts WHERE id=?",
+                  accountId))
+          .containsEntry("contact_name", null)
+          .containsEntry("contact_phone", null)
+          .containsEntry("password_change_required", false);
+      assertThat(
+              jdbc.queryForObject("SELECT count(*) FROM accounts WHERE role='ADMIN'", Long.class))
+          .isZero();
+      assertThat(jdbc.queryForObject("SELECT count(*) FROM administrator_changes", Long.class))
+          .isZero();
       assertThat(
               Flyway.configure()
                   .dataSource(dataSource)

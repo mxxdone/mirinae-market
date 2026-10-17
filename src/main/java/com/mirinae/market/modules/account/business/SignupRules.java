@@ -25,6 +25,11 @@ final class SignupRules {
     require(
         displayName != null && DISPLAY_NAME.matcher(displayName).matches(),
         "표시 이름은 2~10자의 한글·영문·숫자여야 합니다.");
+    password(password);
+    return email(email);
+  }
+
+  static void password(String password) {
     require(
         password != null
             && PASSWORD.matcher(password).matches()
@@ -32,6 +37,9 @@ final class SignupRules {
             && DIGIT.matcher(password).find()
             && SPECIAL.matcher(password).find(),
         "비밀번호는 8~32자의 영문·숫자·특수문자를 모두 포함해야 합니다.");
+  }
+
+  static String email(String email) {
     require(email != null, "이메일은 필수입니다.");
     String normalized = email.strip().toLowerCase(Locale.ROOT);
     String[] parts = normalized.split("@", -1);

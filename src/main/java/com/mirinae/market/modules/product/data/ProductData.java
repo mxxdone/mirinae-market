@@ -30,6 +30,15 @@ public class ProductData {
     this.jdbc = jdbc;
   }
 
+  public List<java.util.Map<String, Object>> managedSales(LocalDate date, String query, int page) {
+    return jdbc.queryForList(
+        "SELECT o.id,s.id AS \"storeId\",s.name AS \"storeName\",p.name AS \"productName\",p.unit_type AS \"unitType\",p.unit_amount AS \"unitAmount\",o.price_won AS \"priceWon\",o.online_quantity AS \"onlineQuantity\",o.active,p.archived_at IS NOT NULL AS archived,CAST(o.pickup_date AS text) AS \"pickupDate\" FROM daily_offers o JOIN products p ON p.id=o.product_id JOIN stores s ON s.id=o.store_id WHERE o.pickup_date=? AND (position(lower(?) in lower(s.name))>0 OR position(lower(?) in lower(p.name))>0) ORDER BY s.id,o.id LIMIT 51 OFFSET ?",
+        date,
+        query,
+        query,
+        page * 50);
+  }
+
   public void lockStore(long storeId) {
     jdbc.queryForObject("SELECT id FROM stores WHERE id = ? FOR UPDATE", Long.class, storeId);
   }

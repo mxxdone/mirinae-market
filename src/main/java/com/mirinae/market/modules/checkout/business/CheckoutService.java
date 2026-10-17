@@ -12,6 +12,14 @@ public class CheckoutService {
     this.transactions = transactions;
   }
 
+  public List<java.util.Map<String, Object>> managedOrders(String query, int page) {
+    return transactions.managedOrders(query, page);
+  }
+
+  public List<java.util.Map<String, Object>> managedOrderItems(long id) {
+    return transactions.managedOrderItems(id);
+  }
+
   public CartView cart(String loginId) {
     return transactions.cart(loginId);
   }

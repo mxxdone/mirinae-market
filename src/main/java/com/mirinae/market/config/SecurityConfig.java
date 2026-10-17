@@ -19,7 +19,9 @@ public class SecurityConfig {
   }
 
   @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain securityFilterChain(
+      HttpSecurity http, com.mirinae.market.modules.account.business.AccountService accounts)
+      throws Exception {
     http.authorizeHttpRequests(
             authorize ->
                 authorize
@@ -35,10 +37,23 @@ public class SecurityConfig {
                         "/api/accounts",
                         "/api/auth/login")
                     .permitAll()
+                    .requestMatchers("/api/admin/**")
+                    .hasRole("ADMIN")
+                    .requestMatchers("/api/seller/profile", "/api/seller/password")
+                    .hasRole("SELLER")
                     .requestMatchers("/api/buyer/**")
                     .hasRole("BUYER")
                     .requestMatchers("/api/seller/**")
-                    .hasRole("SELLER")
+                    .access(
+                        (authentication, context) -> {
+                          var auth = authentication.get();
+                          boolean seller =
+                              auth.getAuthorities().stream()
+                                  .anyMatch(a -> a.getAuthority().equals("ROLE_SELLER"));
+                          return new org.springframework.security.authorization
+                              .AuthorizationDecision(
+                              seller && !accounts.current(auth.getName()).requiresPasswordChange());
+                        })
                     .anyRequest()
                     .authenticated())
         .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))

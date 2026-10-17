@@ -58,6 +58,18 @@ public class ApiExceptionHandler {
         .body(Map.of("code", "DUPLICATE_ACCOUNT", "message", exception.getMessage()));
   }
 
+  @ExceptionHandler(com.mirinae.market.modules.account.business.AccountForbiddenException.class)
+  public ResponseEntity<Map<String, String>> accountForbidden() {
+    return ResponseEntity.status(403)
+        .body(Map.of("code", "FORBIDDEN", "message", "관리자 권한이 필요합니다."));
+  }
+
+  @ExceptionHandler(org.springframework.dao.DuplicateKeyException.class)
+  public ResponseEntity<Map<String, String>> duplicateKey() {
+    return ResponseEntity.status(409)
+        .body(Map.of("code", "DUPLICATE_RESOURCE", "message", "이미 등록된 이름 또는 계정 정보입니다."));
+  }
+
   @ExceptionHandler(StoreForbiddenException.class)
   public ResponseEntity<Map<String, String>> forbidden(StoreForbiddenException exception) {
     return ResponseEntity.status(403)

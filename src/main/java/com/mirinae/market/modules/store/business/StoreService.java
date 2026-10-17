@@ -17,6 +17,39 @@ public class StoreService {
     this.accounts = accounts;
   }
 
+  public MarketView createMarket(String name) {
+    var row = data.createMarket(name);
+    return new MarketView(row.id(), row.name());
+  }
+
+  public MarketView lockMarket(long id) {
+    var row = data.lockMarket(id);
+    return new MarketView(row.id(), row.name());
+  }
+
+  public MarketView renameMarket(long id, String name) {
+    var row = data.renameMarket(id, name);
+    return new MarketView(row.id(), row.name());
+  }
+
+  public StoreView createStore(long marketId, long ownerId, String name) {
+    data.lockMarket(marketId);
+    return view(data.createStore(marketId, ownerId, name));
+  }
+
+  public StoreView lockStore(long id) {
+    return view(data.lockStore(id));
+  }
+
+  public StoreView renameStore(long id, String name) {
+    data.renameStore(id, name);
+    return view(data.find(id).orElseThrow());
+  }
+
+  public java.util.List<java.util.Map<String, Object>> managedStores(String query, int page) {
+    return data.managedStores(query, page);
+  }
+
   public List<MarketView> markets() {
     return data.markets().stream().map(row -> new MarketView(row.id(), row.name())).toList();
   }

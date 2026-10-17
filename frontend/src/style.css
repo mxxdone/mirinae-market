@@ -1639,3 +1639,413 @@ body {
 .checkout-order ul {
   padding-left: 1.25rem;
 }
+
+/* 관리자 목록·상세 작업 공간은 좁은 화면에서 세로로 배치한다. */
+.admin-workspace {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  width: min(1200px, 96vw);
+  margin: 24px auto;
+  overflow: hidden;
+}
+.admin-sidebar {
+  padding: 24px 16px;
+  background: var(--color-bg-soft, #f5f3ec);
+  border-right: 1px solid #dedbd2;
+}
+.admin-sidebar h1 {
+  font-size: 20px;
+  margin: 0 0 24px;
+}
+.admin-sidebar nav {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 32px;
+}
+.admin-sidebar a {
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.admin-sidebar a[aria-current="page"] {
+  background: var(--color-primary, #24654d);
+  color: white;
+}
+.admin-content {
+  padding: 24px;
+  min-width: 0;
+}
+.admin-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-heading h2,
+.admin-heading h3 {
+  margin: 0;
+}
+.admin-filters {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.admin-workspace label,
+.admin-detail label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+.admin-workspace input,
+.admin-workspace select,
+.admin-detail input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #c8c7be;
+  border-radius: 6px;
+  background: white;
+  color: #20251f;
+  font: inherit;
+}
+.admin-workspace button,
+.admin-detail button {
+  padding: 9px 14px;
+  border: 1px solid #b8c8ba;
+  border-radius: 6px;
+  background: #f4f8f3;
+  color: #1c5137;
+  cursor: pointer;
+  font: inherit;
+}
+.admin-workspace button:disabled,
+.admin-detail button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.admin-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.admin-table-wrap table {
+  width: 100%;
+  text-align: left;
+}
+.admin-table-wrap th,
+.admin-table-wrap td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #e6e5de;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.admin-pages {
+  display: flex;
+  justify-content: end;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.admin-detail {
+  padding: 24px;
+  border: 1px solid #d7dfd5;
+  border-radius: 10px;
+  margin-top: 20px;
+  background: #fcfdf9;
+  min-width: 0;
+}
+.admin-detail .market-form {
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+}
+.admin-values {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 24px;
+}
+.admin-values div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+}
+.admin-values dt {
+  color: var(--color-text-muted, #62695f);
+}
+.admin-values dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .admin-workspace {
+    grid-template-columns: 1fr;
+    width: 100%;
+    margin: 0;
+  }
+  .admin-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #dedbd2;
+  }
+  .admin-sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .admin-content,
+  .admin-detail {
+    padding: 16px;
+  }
+  .admin-values div {
+    grid-template-columns: 100px minmax(0, 1fr);
+  }
+}
+
+/* 시장 위치 및 지역 선택 스타일 */
+.admin-market-location-fields {
+  display: grid;
+  gap: 14px;
+}
+
+.location-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.location-edit-toggle {
+  padding: 10px;
+  background: #f7f5ef;
+  border-radius: 6px;
+  border: 1px solid #e2ddd4;
+}
+
+.input-with-button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-with-button input {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-candidate-section {
+  border: 1px solid #d7dfd5;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fdfcf9;
+}
+
+.candidate-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.candidate-section-header h4 {
+  font-size: 14px;
+  color: var(--color-text-main);
+}
+
+.candidate-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.candidate-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.candidate-results-table-wrap {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #e6e5de;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.candidate-table {
+  font-size: 13px;
+  width: 100%;
+}
+
+.candidate-table th,
+.candidate-table td {
+  padding: 8px;
+}
+
+.btn-select-candidate {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.candidate-pages {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.admin-map-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.map-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-map-canvas,
+.buyer-map-canvas {
+  border: 1px solid #c8c7be;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.reference-address-box {
+  padding: 8px 12px;
+  background: #f7f5ef;
+  border: 1px solid #e6e2d8;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ref-loading {
+  color: var(--color-text-muted);
+}
+
+.ref-success {
+  color: #1c5137;
+}
+
+.ref-error {
+  color: #ad281e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-fallback-notice,
+.map-error-notice {
+  padding: 10px 12px;
+  background: #fdf2f1;
+  border: 1px solid #e8b6b2;
+  border-radius: 6px;
+  color: #ad281e;
+  font-size: 13px;
+}
+
+.market-policy-banner {
+  padding: 8px 12px;
+  background: #f4eee3;
+  border: 1px solid #ded5c7;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #574e47;
+  margin-bottom: 12px;
+}
+
+.market-filter-panel {
+  background: #fdfbf7;
+  border: 1px solid #e6decb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.filter-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.filter-controls-row .field-group {
+  min-width: 140px;
+  flex: 1 1 auto;
+}
+
+.filter-controls-row .location-action-group {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.market-name-search-form {
+  min-width: 200px;
+  flex: 2 1 auto;
+}
+
+.btn-nearby-location {
+  padding: 9px 14px;
+  border: 1px solid #b94b23;
+  background: #faeee8;
+  color: #b94b23;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-nearby-location.active {
+  background: #b94b23;
+  color: #ffffff;
+}
+
+.btn-secondary-sm {
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #c8c7be;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--color-text-main);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-retry-sm {
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid #ad281e;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #ad281e;
+  cursor: pointer;
+}
+
+.map-caption {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.notice-text {
+  padding: 8px 12px;
+  background: #edf7f1;
+  border: 1px solid #b8dfca;
+  border-radius: 6px;
+  color: #286b43;
+  font-size: 13px;
+}
+
+.error-text {
+  color: #ad281e;
+  font-size: 13px;
+}

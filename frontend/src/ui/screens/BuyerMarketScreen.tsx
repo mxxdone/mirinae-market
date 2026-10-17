@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { MarketView, OfferView } from "../../api/types";
+import type { Coordinates } from "../../api/mapSdk";
+import type { LocatedMarketView, OfferView, RegionView } from "../../api/types";
+import { BuyerMarketMap } from "../components/BuyerMarketMap";
 import { OfferCard } from "../components/OfferCard";
-import { StatusAlert } from "../components/StatusAlert";
 import { Pagination } from "../components/Pagination";
+import { StatusAlert } from "../components/StatusAlert";
 
 interface Props {
   onCheckout: () => void;
   onOrders: () => void;
   onAdd: (offer: OfferView) => void;
   adding: boolean;
-  markets: MarketView[];
+  markets: LocatedMarketView[];
   offers: OfferView[];
   selected: OfferView | null;
   marketId: number | null;
@@ -25,20 +27,57 @@ interface Props {
   onBack: () => void;
   onAccount: () => void;
   onRetry: () => void;
+
+  // 지역·위치 선택 입력
+  regions: RegionView[];
+  selectedProvince: string;
+  selectedDistrict: string;
+  onProvinceChange: (code: string) => void;
+  onDistrictChange: (code: string) => void;
+  marketNameQuery: string;
+  onMarketNameQueryChange: (query: string) => void;
+  onSearchMarketName: () => void;
+  onNearbyClick: () => void;
+  nearbyActive: boolean;
+  userCoords: Coordinates | null;
+  locationNotice: string | null;
+  locationError: string | null;
+  onSelectMarket: (marketId: number) => void;
 }
+
 export function BuyerMarketScreen(props: Props) {
-  const [query, setQuery] = useState("");
+  const [productQuery, setProductQuery] = useState("");
+  const [showMap, setShowMap] = useState(true);
   const heading = useRef<HTMLHeadingElement>(null);
+
   useEffect(() => {
-    setQuery(props.searchQuery);
+    setProductQuery(props.searchQuery);
   }, [props.searchQuery]);
+
   useEffect(() => {
     if (props.selected) heading.current?.focus();
   }, [props.selected]);
-  function submit(event: FormEvent) {
+
+  function submitProductSearch(event: FormEvent) {
     event.preventDefault();
-    if (props.marketId !== null) props.onSearch(props.marketId, query);
+    if (props.marketId !== null) props.onSearch(props.marketId, productQuery);
   }
+
+  function submitMarketNameSearch(event: FormEvent) {
+    event.preventDefault();
+    props.onSearchMarketName();
+  }
+
+  // 시도 목록은 중복 없이 표시합니다.
+  const provinces = Array.from(
+    new Map(
+      props.regions.map((r) => [r.provinceCode, { code: r.provinceCode, name: r.provinceName }]),
+    ).values(),
+  ).sort((a, b) => a.code.localeCompare(b.code));
+
+  // 선택한 시도에 속하는 시군구만 표시합니다.
+  const districts = props.regions.filter((r) => r.provinceCode === props.selectedProvince);
+
   return (
     <section className="hybrid-card market-workspace" aria-labelledby="heading-market">
       <header className="summary-card-header market-header">
@@ -61,8 +100,127 @@ export function BuyerMarketScreen(props: Props) {
           {props.date} 방문 수령 · 포장 구성과 매장별 가격을 살펴보세요.
         </p>
       </header>
+
       <div className="summary-card-body market-body">
-        <form className="market-search-bar" onSubmit={submit}>
+        {/* 서비스 정책 안내 */}
+        <p className="market-policy-banner">판매점(점포)이 등록된 시장만 제공됩니다.</p>
+
+        {/* 1. 지역별 선택 및 내 주변 필터 영역 */}
+        <div className="market-filter-panel" aria-label="지역 및 위치 필터">
+          <div className="filter-controls-row">
+            {/* 시도 선택 */}
+            <div className="field-group">
+              <label className="field-label" htmlFor="buyerSelectProvince">
+                시도 선택
+              </label>
+              <select
+                className="input-box"
+                id="buyerSelectProvince"
+                value={props.selectedProvince}
+                onChange={(e) => props.onProvinceChange(e.target.value)}
+              >
+                <option value="">전체 시도</option>
+                {provinces.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 시군구 선택 */}
+            <div className="field-group">
+              <label className="field-label" htmlFor="buyerSelectDistrict">
+                시군구 선택
+              </label>
+              <select
+                className="input-box"
+                id="buyerSelectDistrict"
+                value={props.selectedDistrict}
+                onChange={(e) => props.onDistrictChange(e.target.value)}
+                disabled={!props.selectedProvince || districts.length === 0}
+              >
+                <option value="">전체 시군구</option>
+                {districts.map((d) => (
+                  <option key={d.code} value={d.code}>
+                    {d.districtName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 시장명 검색 */}
+            <form className="field-group market-name-search-form" onSubmit={submitMarketNameSearch}>
+              <label className="field-label" htmlFor="buyerInputMarketName">
+                시장명 검색
+              </label>
+              <div className="input-with-button">
+                <input
+                  className="input-box"
+                  id="buyerInputMarketName"
+                  value={props.marketNameQuery}
+                  onChange={(e) => props.onMarketNameQueryChange(e.target.value)}
+                  placeholder="예: 광장시장, 자갈치"
+                  maxLength={100}
+                />
+                <button type="submit" id="btnSearchMarketName" className="btn-secondary-sm">
+                  검색
+                </button>
+              </div>
+            </form>
+
+            {/* 내 주변 버튼 */}
+            <div className="field-group location-action-group">
+              <span className="field-label">&nbsp;</span>
+              <button
+                type="button"
+                id="btnNearbyMarkets"
+                className={`btn-nearby-location ${props.nearbyActive ? "active" : ""}`}
+                onClick={props.onNearbyClick}
+              >
+                내 주변 (10km)
+              </button>
+            </div>
+
+            {/* 지도 토글 버튼 */}
+            <div className="field-group location-action-group">
+              <span className="field-label">&nbsp;</span>
+              <button
+                type="button"
+                id="btnToggleBuyerMap"
+                className="btn-secondary-sm"
+                onClick={() => setShowMap(!showMap)}
+              >
+                {showMap ? "지도 접기" : "지도 보기"}
+              </button>
+            </div>
+          </div>
+
+          {/* 위치 관련 안내 또는 오류 메시지 */}
+          {props.locationError && (
+            <p role="alert" className="error-text" id="buyerLocationError">
+              {props.locationError}
+            </p>
+          )}
+          {props.locationNotice && (
+            <p role="status" className="notice-text" id="buyerLocationNotice">
+              {props.locationNotice}
+            </p>
+          )}
+
+          {/* 지도 영역 */}
+          {showMap && (
+            <BuyerMarketMap
+              markets={props.markets}
+              selectedMarketId={props.marketId}
+              userCoords={props.userCoords}
+              onSelectMarket={props.onSelectMarket}
+            />
+          )}
+        </div>
+
+        {/* 2. 시장 선택 및 상품 검색 폼 */}
+        <form className="market-search-bar" onSubmit={submitProductSearch}>
           <div className="field-group">
             <label className="field-label" htmlFor="marketSelect">
               시장 선택
@@ -72,8 +230,8 @@ export function BuyerMarketScreen(props: Props) {
               id="marketSelect"
               value={props.marketId ?? ""}
               onChange={(event) => {
-                setQuery("");
-                props.onSearch(Number(event.target.value), "");
+                setProductQuery("");
+                props.onSelectMarket(Number(event.target.value));
               }}
               disabled={props.markets.length === 0}
             >
@@ -82,7 +240,8 @@ export function BuyerMarketScreen(props: Props) {
               </option>
               {props.markets.map((market) => (
                 <option key={market.id} value={market.id}>
-                  {market.name}
+                  {market.name} ({market.regionLabel || "위치 미등록"})
+                  {market.distanceKm != null ? ` · ${market.distanceKm.toFixed(1)}km` : ""}
                 </option>
               ))}
             </select>
@@ -94,8 +253,8 @@ export function BuyerMarketScreen(props: Props) {
             <input
               className="input-box"
               id="productSearch"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              value={productQuery}
+              onChange={(event) => setProductQuery(event.target.value)}
               maxLength={100}
               placeholder="양파, 사과, 새우…"
             />
@@ -108,7 +267,9 @@ export function BuyerMarketScreen(props: Props) {
             상품 검색
           </button>
         </form>
+
         <StatusAlert message={props.error} onRetry={props.onRetry} />
+
         {props.loading ? (
           <p role="status" className="market-empty">
             시장 상품을 불러오고 있습니다.
@@ -199,12 +360,17 @@ export function BuyerMarketScreen(props: Props) {
         ) : (
           !props.error && (
             <div className="market-empty">
-              <h2>
-                {props.markets.length === 0
-                  ? "아직 등록된 시장이 없습니다"
-                  : "오늘 판매할 상품을 기다리고 있어요"}
-              </h2>
-              <p>다른 시장이나 검색어를 선택해 보세요.</p>
+              {props.markets.length === 0 ? (
+                <>
+                  <h2 id="buyerMarketEmpty">조건에 맞는 시장이 없습니다</h2>
+                  <p>시도·시군구를 변경하거나 다른 시장명을 검색해 보세요.</p>
+                </>
+              ) : (
+                <>
+                  <h2 id="buyerOfferEmpty">오늘 판매할 상품을 기다리고 있어요</h2>
+                  <p>다른 시장이나 검색어를 선택해 보세요.</p>
+                </>
+              )}
             </div>
           )
         )}

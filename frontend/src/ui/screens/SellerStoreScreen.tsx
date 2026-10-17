@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { getCurrentSellerStore } from "../../api/store";
 import { ApiError, type StoreView, type UserMe } from "../../api/types";
+import { SellerProfilePanel } from "../components/SellerProfilePanel";
 import { SellerProductsPanel } from "../components/SellerProductsPanel";
 import { StatusAlert } from "../components/StatusAlert";
 import {
@@ -208,6 +209,8 @@ export function SellerStoreScreen({
               </table>
             </div>
           )}
+
+          {page === "store" && store && <SellerProfilePanel onSessionExpired={onSessionExpired} />}
 
           {store && (
             <div hidden={page !== "sales"}>

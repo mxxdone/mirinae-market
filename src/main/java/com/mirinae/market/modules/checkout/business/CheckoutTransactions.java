@@ -225,6 +225,16 @@ public class CheckoutTransactions {
   }
 
   @Transactional(readOnly = true)
+  public List<java.util.Map<String, Object>> managedOrders(String query, int page) {
+    return data.managedOrders(query, page);
+  }
+
+  @Transactional(readOnly = true)
+  public List<java.util.Map<String, Object>> managedOrderItems(long id) {
+    return data.managedOrderItems(id);
+  }
+
+  @Transactional(readOnly = true)
   public List<CheckoutView> history(String loginId) {
     return data.history(buyer(loginId)).stream().map(this::view).toList();
   }

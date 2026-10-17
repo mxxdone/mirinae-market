@@ -17,6 +17,22 @@ public class CheckoutData {
     this.jdbc = jdbc;
   }
 
+  public List<java.util.Map<String, Object>> managedOrders(String query, int page) {
+    return jdbc.queryForList(
+        "SELECT c.id,a.login_id AS \"buyerLoginId\",a.display_name AS \"buyerName\",CAST(c.total_won AS text) AS \"totalWon\",CAST(c.confirmed_at AS text) AS \"confirmedAt\" FROM checkouts c JOIN accounts a ON a.id=c.buyer_id WHERE c.status='CONFIRMED' AND (position(lower(?) in lower(a.login_id))>0 OR position(lower(?) in lower(a.display_name))>0 OR CAST(c.id AS text)=? OR EXISTS(SELECT 1 FROM store_orders s WHERE s.checkout_id=c.id AND position(lower(?) in lower(s.store_name))>0)) ORDER BY c.id DESC LIMIT 51 OFFSET ?",
+        query,
+        query,
+        query,
+        query,
+        page * 50);
+  }
+
+  public List<java.util.Map<String, Object>> managedOrderItems(long id) {
+    return jdbc.queryForList(
+        "SELECT s.id AS \"storeOrderId\",s.store_id AS \"storeId\",s.store_name AS \"storeName\",CAST(s.pickup_date AS text) AS \"pickupDate\",CAST(s.start_time AS text) AS \"startTime\",CAST(s.end_time AS text) AS \"endTime\",i.product_name AS \"productName\",i.unit_type AS \"unitType\",i.unit_amount AS \"unitAmount\",i.price_won AS \"priceWon\",i.quantity FROM store_orders s JOIN order_items i ON i.store_order_id=s.id JOIN checkouts c ON c.id=s.checkout_id WHERE c.id=? AND c.status='CONFIRMED' ORDER BY s.id,i.id",
+        id);
+  }
+
   public void lockBuyer(long buyerId) {
     jdbc.update("INSERT INTO carts(buyer_id) VALUES (?) ON CONFLICT DO NOTHING", buyerId);
     jdbc.queryForObject(

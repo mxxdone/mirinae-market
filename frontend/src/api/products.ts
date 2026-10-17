@@ -1,7 +1,9 @@
-import { apiGet, apiPostJson, apiPutJson, apiDeleteEmpty } from "./client";
+import { apiDeleteEmpty, apiGet, apiPostJson, apiPutJson } from "./client";
+import { getLocatedMarkets, getMarketRegions } from "./location";
 import {
   ApiError,
-  type MarketView,
+  type LocatedMarketView,
+  type MarketFilterParams,
   type OfferInput,
   type OfferView,
   type PickupWindowInput,
@@ -13,9 +15,13 @@ import {
   type SaleProductPage,
 } from "./types";
 
-export function getMarkets(): Promise<MarketView[]> {
-  return apiGet("/api/markets");
+export function getMarkets(
+  params?: MarketFilterParams,
+  signal?: AbortSignal,
+): Promise<LocatedMarketView[]> {
+  return getLocatedMarkets(params, signal);
 }
+export { getMarketRegions };
 export function searchOffers(
   marketId: number,
   query: string,

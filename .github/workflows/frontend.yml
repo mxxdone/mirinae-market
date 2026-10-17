@@ -58,6 +58,12 @@ jobs:
       E2E_SELLER_A_LOGIN_ID: ${{ secrets.E2E_SELLER_A_LOGIN_ID }}
       E2E_SELLER_B_LOGIN_ID: ${{ secrets.E2E_SELLER_B_LOGIN_ID }}
       E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+      ADMIN_BOOTSTRAP_ENABLED: "true"
+      ADMIN_BOOTSTRAP_LOGIN_ID: e2e_admin
+      ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+      ADMIN_BOOTSTRAP_EMAIL: e2e-admin@example.com
+      E2E_ADMIN_LOGIN_ID: e2e_admin
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

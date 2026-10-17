@@ -84,9 +84,13 @@ public class MarketLocationData {
         id);
   }
 
-  public List<MarketCandidateRow> candidates(String query, int page) {
+  public List<MarketCandidateRow> candidates(
+      String query, int page, String province, String region) {
     return jdbc.query(
-        "SELECT * FROM market_candidates WHERE position(lower(?) in lower(name))>0 OR position(lower(?) in lower(coalesce(address,'')))>0 ORDER BY name,id LIMIT 51 OFFSET ?",
+        "SELECT c.* FROM market_candidates c LEFT JOIN market_regions r ON r.code=c.region_code "
+            + "WHERE (position(lower(?) in lower(c.name))>0 OR position(lower(?) in lower(coalesce(c.address,'')))>0) "
+            + "AND (CAST(? AS text) IS NULL OR r.province_code=?) "
+            + "AND (CAST(? AS text) IS NULL OR c.region_code=?) ORDER BY c.name,c.id LIMIT 51 OFFSET ?",
         (rs, n) ->
             new MarketCandidateRow(
                 rs.getString("id"),
@@ -98,6 +102,10 @@ public class MarketLocationData {
                 rs.getObject("source_date", java.time.LocalDate.class)),
         query,
         query,
+        province,
+        province,
+        region,
+        region,
         page * 50);
   }
 

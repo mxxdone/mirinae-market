@@ -50,9 +50,12 @@ public class AdministratorService {
     return locations.managedMarkets().stream().map(AdminMarketView::from).toList();
   }
 
-  public List<AdminMarketCandidateView> candidates(String actor, String query, int page) {
+  public List<AdminMarketCandidateView> candidates(
+      String actor, String query, int page, String province, String region) {
     accounts.requireAdministrator(actor);
-    return locations.candidates(query, page).stream().map(AdminMarketCandidateView::from).toList();
+    return locations.candidates(query, page, province, region).stream()
+        .map(AdminMarketCandidateView::from)
+        .toList();
   }
 
   public List<Map<String, Object>> stores(String actor, String query, int page) {

@@ -101,6 +101,15 @@ describe("location API", () => {
     });
   });
 
+  it("주소나 검색어 없이 지역 필터를 후보 조회에 전달한다", async () => {
+    const spy = vi.spyOn(client, "apiGet").mockResolvedValue([]);
+    await getAdminMarketCandidates("", 1, undefined, { provinceCode: "44", regionCode: "44133" });
+    expect(spy).toHaveBeenCalledWith(
+      "/api/admin/market-candidates?query=&page=1&provinceCode=44&regionCode=44133",
+      undefined,
+    );
+  });
+
   describe("createAdminMarket and updateAdminMarket", () => {
     it("새 시장 등록 시 필수 위치 5개 필드를 POST로 전송한다", async () => {
       const mockCreated: LocatedMarketView = {

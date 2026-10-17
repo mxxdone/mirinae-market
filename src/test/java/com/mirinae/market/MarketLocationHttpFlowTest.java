@@ -114,6 +114,48 @@ class MarketLocationHttpFlowTest {
   }
 
   @Test
+  void candidateRegionsFilterBeforePaginationWithoutAddressInput() throws Exception {
+    String prefix = name();
+    try (var admin = admin()) {
+      for (int i = 0; i < 57; i++) {
+        jdbc.update(
+            "INSERT INTO market_candidates(id,name,region_code,address,latitude,longitude,source_date) VALUES (?,?,?,?,37.5,127.0,'2025-11-10')",
+            prefix + i,
+            prefix + String.format("%02d", i),
+            i < 55 ? "11110" : "11140",
+            "공공자료 주소");
+      }
+      var first =
+          admin.get(
+              "/api/admin/market-candidates?query=" + prefix + "&provinceCode=11&regionCode=11110");
+      assertThat(first.statusCode()).isEqualTo(200);
+      assertThat(admin.json(first).size()).isEqualTo(51);
+      for (var item : admin.json(first))
+        assertThat(item.get("regionCode").asString()).isEqualTo("11110");
+      var second =
+          admin.get("/api/admin/market-candidates?query=" + prefix + "&regionCode=11110&page=1");
+      assertThat(admin.json(second).size()).isEqualTo(5);
+      assertThat(admin.json(second).get(0).get("id").asString())
+          .isNotEqualTo(admin.json(first).get(0).get("id").asString());
+      var regional = admin.get("/api/admin/market-candidates?provinceCode=11&regionCode=11110");
+      assertThat(admin.json(regional).size()).isGreaterThan(0);
+      for (var item : admin.json(regional))
+        assertThat(item.get("regionCode").asString()).isEqualTo("11110");
+      assertThat(admin.get("/api/admin/market-candidates?provinceCode=00").statusCode())
+          .isEqualTo(400);
+      assertThat(admin.get("/api/admin/market-candidates?regionCode=00000").statusCode())
+          .isEqualTo(400);
+      assertThat(
+              admin
+                  .get("/api/admin/market-candidates?provinceCode=26&regionCode=11110")
+                  .statusCode())
+          .isEqualTo(400);
+    } finally {
+      jdbc.update("DELETE FROM market_candidates WHERE position(? in id)=1", prefix);
+    }
+  }
+
+  @Test
   void onlyConnectedSellerMarketsAreListedAndNearbyFiltersWithoutExternalMaps() throws Exception {
     String buyer = name().substring(0, 16);
     accounts.signup(buyer, "Buyer1234!", "구매자", buyer + "@example.com");

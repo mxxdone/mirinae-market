@@ -72,11 +72,19 @@ public class MarketLocationService {
     return result.toList();
   }
 
-  public List<MarketCandidateView> candidates(String query, int page) {
+  public List<MarketCandidateView> candidates(
+      String query, int page, String province, String region) {
     if (query == null || query.length() > 100 || page < 0 || page > 100000) {
       throw new IllegalArgumentException("후보 검색어·페이지 범위를 확인해 주세요.");
     }
-    return data.candidates(query.strip(), page).stream()
+    if (region != null) requireRegion(region);
+    if (province != null && regions().stream().noneMatch(r -> r.provinceCode().equals(province))) {
+      throw new IllegalArgumentException("시도를 선택해 주세요.");
+    }
+    if (province != null && region != null && !region.startsWith(province)) {
+      throw new IllegalArgumentException("선택한 시도에 속하는 시군구를 선택해 주세요.");
+    }
+    return data.candidates(query.strip(), page, province, region).stream()
         .map(
             r ->
                 new MarketCandidateView(

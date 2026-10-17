@@ -52,14 +52,14 @@ export function validateAddress(value: unknown): string | null {
 
 export function validateLatitude(value: unknown): string | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value < -90 || value > 90) {
-    return "유효한 대표 위치의 위도(-90~90)가 필요합니다.";
+    return "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.";
   }
   return null;
 }
 
 export function validateLongitude(value: unknown): string | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value < -180 || value > 180) {
-    return "유효한 대표 위치의 경도(-180~180)가 필요합니다.";
+    return "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.";
   }
   return null;
 }

@@ -37,13 +37,15 @@ public class AdministratorController {
   @Operation(
       summary = "시장 등록 후보 검색",
       description =
-          "공공자료 최초 스냅샷의 이름·주소 검색입니다. 50건과 다음 페이지 확인용 1건을 반환합니다. 후보는 구매자에게 노출하지 않으며 필수 정보 누락·지역 미확인 항목은 관리자 보완이 필요합니다.")
+          "공공자료 최초 스냅샷의 지역·이름 검색입니다. provinceCode(시도)·regionCode(시군구)는 선택 조건이며 지역만으로 조회할 수 있습니다. 필터를 적용한 뒤 50건과 다음 페이지 확인용 1건을 반환합니다. 지역 미확인 후보는 지역 조건 없이 시장명으로 검색해 보완합니다.")
   @GetMapping("/market-candidates")
   public List<AdminMarketCandidateView> candidates(
       Principal actor,
       @RequestParam(defaultValue = "") String query,
-      @RequestParam(defaultValue = "0") int page) {
-    return service.candidates(actor.getName(), query, page);
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(required = false) String provinceCode,
+      @RequestParam(required = false) String regionCode) {
+    return service.candidates(actor.getName(), query, page, provinceCode, regionCode);
   }
 
   @Operation(

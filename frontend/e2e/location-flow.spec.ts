@@ -31,12 +31,14 @@ test("지도 장애 중 후보 등록이 가능하고 미확인 후보는 이전
   await page.locator("#adminCandidateSearch").fill("성정시장");
   await page.locator("#btnSearchCandidates").click();
   await page.locator(".candidate-row .btn-select-candidate").first().click();
-  await expect(page.locator("#adminSelectRegion")).toHaveValue("44133");
+  await expect(page.locator("#adminSelectedRegion")).toContainText("서북구");
+  await expect(page.locator("#adminInputLatitude")).toHaveCount(0);
   await page.locator("#adminCandidateSearch").fill("궁평항해오름수산시장");
   await page.locator("#btnSearchCandidates").click();
   await expect(page.locator(".candidate-row")).toContainText("궁평항해오름수산시장");
   await page.locator(".candidate-row .btn-select-candidate").first().click();
   await expect(page.locator("#adminSelectRegion")).toHaveValue("");
+  await page.locator("#btnToggleManualMarket").click();
   await page.locator("#adminCandidateSearch").fill("성정시장");
   await page.locator("#btnSearchCandidates").click();
   await expect(page.locator(".candidate-row")).toContainText("성정시장");
@@ -141,4 +143,116 @@ test("지도 SDK가 늦게 준비돼도 최신 시장을 표시하고 지역 전
   );
   await expect(page.locator("#buyerSelectProvince")).toHaveValue("26");
   await expect(page.locator("#marketSelect")).not.toContainText(`지도시장_${suffix}`);
+});
+
+test("주소 없이 지역만 고르면 시장이 나오고 좌표 입력 없이 등록한다", async ({ page }) => {
+  await page.route("https://oapi.map.naver.com/**", (route) => route.abort());
+  await login(page, required("E2E_ADMIN_LOGIN_ID"), required("E2E_ADMIN_PASSWORD"));
+  await page.locator("#btnAdminCreate").click();
+  await expect(page.locator("#adminInputAddress")).toHaveCount(0);
+  await expect(page.locator("#adminInputLatitude, #adminInputLongitude")).toHaveCount(0);
+  await page.locator("#adminCandidateProvince").selectOption("44");
+  await page.locator("#adminCandidateRegion").selectOption("44133");
+  const row = page.locator(".candidate-row").filter({ hasText: "성정시장" });
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: "선택", exact: true }).click();
+  await expect(page.locator("#adminInputAddress")).toHaveAttribute("readonly", "");
+  await expect(page.locator("#adminInputAddress")).not.toHaveValue("");
+  await expect(page.locator("#btnGeocodeAddress")).toHaveCount(0);
+  await page.locator("#adminCandidateProvince").selectOption("26");
+  await expect(page.locator("#adminInputAddress")).toHaveCount(0);
+  await page.locator("#adminCandidateProvince").selectOption("44");
+  await page.locator("#adminCandidateRegion").selectOption("44133");
+  await row.getByRole("button", { name: "선택", exact: true }).click();
+  const name = `지역선택_${Date.now()}`;
+  await page.locator("#adminInputName").fill(name);
+  const saving = page.waitForRequest(
+    (request) => request.method() === "POST" && request.url().endsWith("/api/admin/markets"),
+  );
+  await page.locator("#btnAdminSubmit").click();
+  const payload = (await saving).postDataJSON() as {
+    regionCode: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  expect(payload.regionCode).toBe("44133");
+  expect(payload.address.length).toBeGreaterThan(0);
+  expect(Number.isFinite(payload.latitude) && Number.isFinite(payload.longitude)).toBe(true);
+  await expect(page.locator("#adminNoticeBox")).toContainText("저장했습니다.");
+  await page
+    .locator(".info-data-table tbody tr")
+    .filter({ hasText: name })
+    .getByRole("button", { name: /상세/ })
+    .click();
+  await expect(
+    page.locator(".admin-values dt").filter({ hasText: /위도|경도|지역 코드|시도 코드/ }),
+  ).toHaveCount(0);
+});
+
+test("지역 시장 목록 조회 실패 후 재시도하면 주소 없이 복구한다", async ({ page }) => {
+  let failOnce = true;
+  await page.route("**/api/admin/market-candidates?**", async (route) => {
+    if (new URL(route.request().url()).searchParams.get("regionCode") === "44133" && failOnce) {
+      failOnce = false;
+      await route.abort();
+    } else await route.continue();
+  });
+  await login(page, required("E2E_ADMIN_LOGIN_ID"), required("E2E_ADMIN_PASSWORD"));
+  await page.locator("#btnAdminCreate").click();
+  await page.locator("#adminCandidateProvince").selectOption("44");
+  await page.locator("#adminCandidateRegion").selectOption("44133");
+  await page.getByRole("button", { name: "목록 다시 불러오기" }).click();
+  await expect(page.locator(".candidate-row").filter({ hasText: "성정시장" })).toBeVisible();
+  await expect(page.locator("#adminInputAddress")).toHaveCount(0);
+});
+
+test("목록에 없는 시장은 별도 주소 검색과 지도 지정으로 등록한다", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const modulePath = "/src/api/mapSdk.ts";
+    const sdk = (await import(modulePath)) as typeof import("../src/api/mapSdk");
+    sdk.setMapSdkProvider({
+      loadSdk: () => Promise.resolve(),
+      geocode: (query) => Promise.resolve({ address: query, latitude: 37.57, longitude: 127.0 }),
+      reverseGeocode: () => Promise.reject(new Error("참고 주소 조회 실패")),
+      mountAdminPicker: (element, options) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "테스트 지도에서 위치 지정";
+        button.onclick = () => options.onCoordsChange({ latitude: 37.58, longitude: 127.01 });
+        element.appendChild(button);
+        return { setPosition: () => {}, destroy: () => element.replaceChildren() };
+      },
+      mountBuyerOverview: () => {
+        throw new Error("관리자 직접 등록 테스트입니다.");
+      },
+    });
+  });
+  await page.locator("#loginUserId").fill(required("E2E_ADMIN_LOGIN_ID"));
+  await page.locator("#loginPassword").fill(required("E2E_ADMIN_PASSWORD"));
+  await page.locator("#btnLoginSubmit").click();
+  await page.locator("#btnAdminCreate").click();
+  await page.locator("#btnToggleManualMarket").click();
+  await page.locator("#adminSelectProvince").selectOption("11");
+  await page.locator("#adminSelectRegion").selectOption("11110");
+  await page.locator("#adminInputName").fill(`직접등록_${Date.now()}`);
+  const address = "서울특별시 종로구 창경궁로 88";
+  await page.locator("#adminInputAddress").fill(address);
+  await page.locator("#btnGeocodeAddress").click();
+  await expect(page.locator("#adminPositionStatus")).toContainText("지정되었습니다");
+  await page.getByRole("button", { name: "테스트 지도에서 위치 지정" }).click();
+  await expect(page.locator("#adminRefAddressError")).toContainText("참고 주소 조회 실패");
+  await expect(page.locator("#adminInputAddress")).toHaveValue(address);
+  await expect(page.locator("input[type=number]")).toHaveCount(0);
+  const saving = page.waitForRequest(
+    (request) => request.method() === "POST" && request.url().endsWith("/api/admin/markets"),
+  );
+  await page.locator("#btnAdminSubmit").click();
+  expect((await saving).postDataJSON()).toMatchObject({
+    address,
+    latitude: 37.58,
+    longitude: 127.01,
+  });
+  await expect(page.locator("#adminNoticeBox")).toContainText("저장했습니다.");
 });

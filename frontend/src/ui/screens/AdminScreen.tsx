@@ -624,7 +624,16 @@ function AdminDetail({
       {row && (
         <dl className="admin-values">
           {Object.entries(row)
-            .filter(([key]) => !(section === "sellers" && key === "displayName"))
+            .filter(
+              ([key]) =>
+                !(section === "sellers" && key === "displayName") &&
+                !(
+                  section === "markets" &&
+                  ["latitude", "longitude", "regionCode", "provinceCode", "distanceKm"].includes(
+                    key,
+                  )
+                ),
+            )
             .map(([key]) => (
               <div key={key}>
                 <dt>{labels[key] ?? key}</dt>

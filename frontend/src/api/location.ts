@@ -52,11 +52,14 @@ export function getAdminMarketCandidates(
   query = "",
   page = 0,
   signal?: AbortSignal,
+  filters?: Pick<MarketFilterParams, "provinceCode" | "regionCode">,
 ): Promise<MarketCandidateView[]> {
   const searchParams = new URLSearchParams({
     query: query.trim(),
     page: String(page),
   });
+  if (filters?.provinceCode) searchParams.set("provinceCode", filters.provinceCode);
+  if (filters?.regionCode) searchParams.set("regionCode", filters.regionCode);
   return apiGet<MarketCandidateView[]>(`/api/admin/market-candidates?${searchParams}`, signal);
 }
 

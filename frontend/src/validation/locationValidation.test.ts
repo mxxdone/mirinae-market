@@ -78,21 +78,39 @@ describe("locationValidation", () => {
       expect(validateLatitude(37.5665)).toBeNull();
       expect(validateLatitude(-90)).toBeNull();
       expect(validateLatitude(90)).toBeNull();
-      expect(validateLatitude(90.1)).toBe("유효한 대표 위치의 위도(-90~90)가 필요합니다.");
-      expect(validateLatitude(-90.1)).toBe("유효한 대표 위치의 위도(-90~90)가 필요합니다.");
-      expect(validateLatitude(NaN)).toBe("유효한 대표 위치의 위도(-90~90)가 필요합니다.");
-      expect(validateLatitude(Infinity)).toBe("유효한 대표 위치의 위도(-90~90)가 필요합니다.");
-      expect(validateLatitude(null)).toBe("유효한 대표 위치의 위도(-90~90)가 필요합니다.");
+      expect(validateLatitude(90.1)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLatitude(-90.1)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLatitude(NaN)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLatitude(Infinity)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLatitude(null)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
     });
 
     it("경도 유효 범위(-180 ~ 180)를 검증한다", () => {
       expect(validateLongitude(126.978)).toBeNull();
       expect(validateLongitude(-180)).toBeNull();
       expect(validateLongitude(180)).toBeNull();
-      expect(validateLongitude(180.1)).toBe("유효한 대표 위치의 경도(-180~180)가 필요합니다.");
-      expect(validateLongitude(-180.1)).toBe("유효한 대표 위치의 경도(-180~180)가 필요합니다.");
-      expect(validateLongitude(NaN)).toBe("유효한 대표 위치의 경도(-180~180)가 필요합니다.");
-      expect(validateLongitude(null)).toBe("유효한 대표 위치의 경도(-180~180)가 필요합니다.");
+      expect(validateLongitude(180.1)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLongitude(-180.1)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLongitude(NaN)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
+      expect(validateLongitude(null)).toBe(
+        "시장 위치를 확인해 주세요. 목록에서 선택하거나 주소 검색·지도에서 위치를 지정해 주세요.",
+      );
     });
   });
 

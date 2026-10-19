@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Coordinates } from "../../api/mapSdk";
 import type { LocatedMarketView, OfferView, RegionView } from "../../api/types";
 import { BuyerMarketMap } from "../components/BuyerMarketMap";
+import { BuyerStoreReportModal } from "../components/BuyerStoreReportModal";
 import { OfferCard } from "../components/OfferCard";
 import { Pagination } from "../components/Pagination";
 import { StatusAlert } from "../components/StatusAlert";
@@ -30,6 +31,7 @@ interface Props {
   onBack: () => void;
   onAccount: () => void;
   onRetry: () => void;
+  onSessionExpired: () => void;
 
   // 지역·위치 선택 입력
   regions: RegionView[];
@@ -51,6 +53,7 @@ interface Props {
 export function BuyerMarketScreen(props: Props) {
   const [productQuery, setProductQuery] = useState("");
   const [showMap, setShowMap] = useState(false);
+  const [reportingStore, setReportingStore] = useState<{ id: number; name: string } | null>(null);
   const layout = props.choosingMarket
     ? "selection"
     : props.selected
@@ -343,7 +346,22 @@ export function BuyerMarketScreen(props: Props) {
               <button className="text-action-link" type="button" onClick={props.onBack}>
                 ← 상품 목록으로
               </button>
-              <p className="offer-store-name">{props.selected.storeName}</p>
+              <div className="offer-store-row">
+                <p className="offer-store-name">{props.selected.storeName}</p>
+                <button
+                  type="button"
+                  id="btnReportStore"
+                  className="text-action-link btn-report-store"
+                  onClick={() =>
+                    setReportingStore({
+                      id: props.selected!.storeId,
+                      name: props.selected!.storeName,
+                    })
+                  }
+                >
+                  매장 제보
+                </button>
+              </div>
               <h2 ref={heading} tabIndex={-1}>
                 {props.selected.productName}
               </h2>
@@ -440,6 +458,14 @@ export function BuyerMarketScreen(props: Props) {
           )}
         </div>
       </div>
+      {reportingStore && (
+        <BuyerStoreReportModal
+          storeId={reportingStore.id}
+          storeName={reportingStore.name}
+          onClose={() => setReportingStore(null)}
+          onSessionExpired={props.onSessionExpired}
+        />
+      )}
     </section>
   );
 }

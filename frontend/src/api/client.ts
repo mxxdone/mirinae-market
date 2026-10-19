@@ -192,6 +192,7 @@ export async function apiPostJson<T>(path: string, body: unknown): Promise<T> {
     throw await parseApiError(response, "요청 처리 중 오류가 발생했습니다.");
   }
 
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -274,6 +275,32 @@ export async function apiPutJson<T>(path: string, body: unknown): Promise<T> {
     throw await parseApiError(
       response,
       "저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+/**
+ * PATCH 요청 (JSON)
+ */
+export async function apiPatchJson<T = void>(path: string, body: unknown): Promise<T> {
+  const csrf = await getCsrfToken();
+  const response = await fetchWithTimeout(path, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    if (response.status === 403) void refreshCsrfSilently();
+    throw await parseApiError(
+      response,
+      "변경하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
     );
   }
   if (response.status === 204) return undefined as T;

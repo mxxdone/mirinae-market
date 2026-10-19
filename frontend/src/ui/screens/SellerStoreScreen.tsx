@@ -3,6 +3,7 @@ import { getCurrentSellerStore } from "../../api/store";
 import { ApiError, type StoreView, type UserMe } from "../../api/types";
 import { SellerProfilePanel } from "../components/SellerProfilePanel";
 import { SellerProductsPanel } from "../components/SellerProductsPanel";
+import { SellerOrdersPanel } from "../components/SellerOrdersPanel";
 import { StatusAlert } from "../components/StatusAlert";
 import {
   isSellerLocation,
@@ -38,7 +39,9 @@ export function SellerStoreScreen({
   const [errorAlert, setErrorAlert] = useState<string | null>(null);
   const [location, setLocation] = useState(() => window.location.hash);
   const [salesLocation, setSalesLocation] = useState(() =>
-    readSellerPage() === "store" ? "#seller" : window.location.hash,
+    readSellerPage() === "store" || readSellerPage() === "orders"
+      ? "#seller"
+      : window.location.hash,
   );
   const page = readSellerPage(location);
 
@@ -58,7 +61,8 @@ export function SellerStoreScreen({
   }, []);
 
   function navigate(next: SellerPage) {
-    if (next === "sales" && page === "store") writeProductPage(readProductPage(salesLocation));
+    if (next === "sales" && (page === "store" || page === "orders"))
+      writeProductPage(readProductPage(salesLocation));
     else writeSellerPage(next);
     setLocation(window.location.hash);
     if (next === "sales") setSalesLocation(window.location.hash);
@@ -123,6 +127,17 @@ export function SellerStoreScreen({
               }}
             >
               판매 관리
+            </a>
+            <a
+              href="#seller/orders"
+              id="navSellerOrders"
+              aria-current={page === "orders" ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("orders");
+              }}
+            >
+              주문 관리
             </a>
             <a
               href="#seller/store"
@@ -220,6 +235,16 @@ export function SellerStoreScreen({
                 onSessionExpired={onSessionExpired}
                 editorId={readProductPage(salesLocation)}
                 onProductPage={navigateProduct}
+              />
+            </div>
+          )}
+
+          {store && (
+            <div hidden={page !== "orders"}>
+              <SellerOrdersPanel
+                key={`orders-${store.id}`}
+                store={store}
+                onSessionExpired={onSessionExpired}
               />
             </div>
           )}

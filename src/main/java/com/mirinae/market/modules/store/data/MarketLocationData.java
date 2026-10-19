@@ -42,7 +42,7 @@ public class MarketLocationData {
   public List<LocatedMarketRow> markets(boolean publicOnly) {
     String restriction =
         publicOnly
-            ? "WHERE EXISTS(SELECT 1 FROM stores s JOIN accounts a ON a.id=s.owner_account_id WHERE s.market_id=m.id AND a.role='SELLER') "
+            ? "WHERE EXISTS(SELECT 1 FROM stores s JOIN accounts a ON a.id=s.owner_account_id WHERE s.market_id=m.id AND a.role='SELLER' AND NOT s.suspended) "
             : "";
     return jdbc.query(MARKETS + restriction + "ORDER BY m.id", (rs, n) -> market(rs));
   }

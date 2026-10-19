@@ -23,7 +23,7 @@ public class ProductData {
   private static final String PRODUCT_SELECT =
       "SELECT p.*, EXISTS (SELECT 1 FROM daily_offers o WHERE o.product_id = p.id) AS has_sales FROM products p ";
   private static final String OFFER_FILTER =
-      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND o.active AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
+      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND o.active AND NOT s.suspended AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
   private final JdbcTemplate jdbc;
 
   public ProductData(JdbcTemplate jdbc) {
@@ -191,7 +191,7 @@ public class ProductData {
     return jdbc
         .query(
             OFFER_SELECT
-                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND o.active AND p.archived_at IS NULL",
+                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND o.active AND NOT s.suspended AND p.archived_at IS NULL",
             (rs, row) -> offerRow(rs),
             marketId,
             date,
@@ -232,11 +232,14 @@ public class ProductData {
   public Optional<CheckoutOfferRow> checkoutOffer(long offerId) {
     return jdbc
         .query(
-            OFFER_SELECT.replace("SELECT o.id", "SELECT o.active, p.archived_at, o.id")
+            OFFER_SELECT.replace("SELECT o.id", "SELECT o.active, s.suspended, p.archived_at, o.id")
                 + " WHERE o.id = ?",
             (rs, n) ->
                 new CheckoutOfferRow(
-                    offerRow(rs), rs.getBoolean("active"), rs.getTimestamp("archived_at") != null),
+                    offerRow(rs),
+                    rs.getBoolean("active"),
+                    rs.getTimestamp("archived_at") != null,
+                    rs.getBoolean("suspended")),
             offerId)
         .stream()
         .findFirst();
@@ -249,6 +252,13 @@ public class ProductData {
             offerId,
             quantity)
         != 1) throw new IllegalStateException("재고 차감 조건이 변경되었습니다.");
+  }
+
+  public void restore(long offerId, int quantity) {
+    jdbc.update(
+        "UPDATE daily_offers o SET online_quantity=(online_quantity::bigint+?)::integer,inventory_version=inventory_version+1 FROM products p WHERE o.id=? AND p.id=o.product_id AND o.active AND p.archived_at IS NULL",
+        quantity,
+        offerId);
   }
 
   public void lockWindow(long storeId, LocalDate date) {

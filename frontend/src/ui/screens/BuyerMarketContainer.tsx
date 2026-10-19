@@ -401,6 +401,7 @@ export function BuyerMarketContainer({
       locationNotice={locationNotice}
       locationError={locationError}
       onSelectMarket={handleSelectMarket}
+      onSessionExpired={onSessionExpired}
     />
   );
 }

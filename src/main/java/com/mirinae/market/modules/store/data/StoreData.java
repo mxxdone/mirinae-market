@@ -75,7 +75,7 @@ public class StoreData {
 
   public java.util.List<java.util.Map<String, Object>> managedStores(String query, int page) {
     return jdbc.queryForList(
-        "SELECT s.id,s.name,s.market_id AS \"marketId\",m.name AS \"marketName\",a.id AS \"ownerId\",a.login_id AS \"loginId\" FROM stores s JOIN markets m ON m.id=s.market_id JOIN accounts a ON a.id=s.owner_account_id WHERE position(lower(?) in lower(s.name))>0 OR position(lower(?) in lower(m.name))>0 OR position(lower(?) in lower(a.login_id))>0 ORDER BY s.id DESC LIMIT 51 OFFSET ?",
+        "SELECT s.id,s.name,s.suspended,s.operation_reason AS \"operationReason\",s.market_id AS \"marketId\",m.name AS \"marketName\",a.id AS \"ownerId\",a.login_id AS \"loginId\" FROM stores s JOIN markets m ON m.id=s.market_id JOIN accounts a ON a.id=s.owner_account_id WHERE position(lower(?) in lower(s.name))>0 OR position(lower(?) in lower(m.name))>0 OR position(lower(?) in lower(a.login_id))>0 ORDER BY s.id DESC LIMIT 51 OFFSET ?",
         query,
         query,
         query,

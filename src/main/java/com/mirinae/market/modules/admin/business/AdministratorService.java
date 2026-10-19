@@ -27,6 +27,9 @@ public class AdministratorService {
   private final AdministratorData data;
   private final Clock clock;
   private final MarketLocationService locations;
+  private final com.mirinae.market.modules.checkout.business.FulfillmentService fulfillment;
+  private final com.mirinae.market.modules.checkout.business.RefundService refunds;
+  private final com.mirinae.market.modules.store.business.StoreOperationService operations;
 
   public AdministratorService(
       AccountService accounts,
@@ -35,7 +38,10 @@ public class AdministratorService {
       CheckoutService checkouts,
       AdministratorData data,
       Clock clock,
-      MarketLocationService locations) {
+      MarketLocationService locations,
+      com.mirinae.market.modules.checkout.business.FulfillmentService fulfillment,
+      com.mirinae.market.modules.checkout.business.RefundService refunds,
+      com.mirinae.market.modules.store.business.StoreOperationService operations) {
     this.accounts = accounts;
     this.stores = stores;
     this.products = products;
@@ -43,6 +49,66 @@ public class AdministratorService {
     this.data = data;
     this.clock = clock;
     this.locations = locations;
+    this.fulfillment = fulfillment;
+    this.refunds = refunds;
+    this.operations = operations;
+  }
+
+  public List<AdminManagedReportView> reports(String actor, String status, int page) {
+    return operations.managed(actor, status, page).stream()
+        .map(AdminManagedReportView::from)
+        .toList();
+  }
+
+  @Transactional
+  public void resolveReport(String actor, long id, String status, String resolution) {
+    accounts.requireAdministrator(actor);
+    var before = operations.resolve(actor, id, status, resolution);
+    if (before != null)
+      record(
+          actor,
+          "STORE_REPORT",
+          id,
+          before.status() + ": " + (before.resolution() == null ? "" : before.resolution()),
+          status + ": " + (resolution == null ? "" : resolution));
+  }
+
+  @Transactional
+  public void operation(String actor, long id, boolean suspended, String reason) {
+    accounts.requireAdministrator(actor);
+    if (operations.operation(actor, id, suspended, reason))
+      record(
+          actor,
+          "STORE",
+          id,
+          suspended ? "운영" : "운영 중지",
+          (suspended ? "운영 중지: " : "운영 재개: ") + reason.strip());
+  }
+
+  public List<AdminStoreOrderView> managedStoreOrders(String actor, long checkoutId) {
+    accounts.requireAdministrator(actor);
+    return fulfillment.managedOrders(actor, checkoutId).stream()
+        .map(AdminStoreOrderView::from)
+        .toList();
+  }
+
+  @Transactional
+  public AdminStoreOrderView cancelOrder(
+      String actor, long id, String key, String type, String reason) {
+    accounts.requireAdministrator(actor);
+    var result = fulfillment.adminCancel(actor, id, key, type, reason);
+    if (result.changed()) record(actor, "STORE_ORDER", id, "유효 주문", type + ": " + reason.strip());
+    return AdminStoreOrderView.from(result.order());
+  }
+
+  public List<AdminRefundView> refunds(String actor, int page) {
+    return refunds.list(actor, page).stream().map(AdminRefundView::from).toList();
+  }
+
+  @Transactional
+  public void retryRefund(String actor, long id) {
+    accounts.requireAdministrator(actor);
+    if (refunds.retry(actor, id)) record(actor, "REFUND", id, "관리자 확인 필요", "모의 장애 해소 후 재처리 요청");
   }
 
   public List<AdminMarketView> markets(String actor) {
@@ -91,8 +157,8 @@ public class AdministratorService {
   public List<Map<String, Object>> history(
       String actor, String type, Long targetId, LocalDate from, LocalDate until, int page) {
     accounts.requireAdministrator(actor);
-    if (!java.util.Set.of("", "MARKET", "STORE", "SELLER").contains(type))
-      throw new IllegalArgumentException("이력 대상을 확인해 주세요.");
+    if (!java.util.Set.of("", "MARKET", "STORE", "SELLER", "STORE_ORDER", "REFUND", "STORE_REPORT")
+        .contains(type)) throw new IllegalArgumentException("이력 대상을 확인해 주세요.");
     if (targetId != null && targetId < 1) throw new IllegalArgumentException("대상 번호는 양수여야 합니다.");
     LocalDate start = from == null ? LocalDate.of(2000, 1, 1) : from;
     LocalDate end = until == null ? LocalDate.now(clock.withZone(BUSINESS_ZONE)) : until;

@@ -12,6 +12,17 @@ import {
   type AdminSection,
   type AdminFilters,
 } from "../../api/admin";
+import {
+  cancelAdminStoreOrder,
+  formatRefundStatus,
+  formatStoreOrderStatus,
+  getAdminManagedStoreOrders,
+  resolveAdminStoreReport,
+  retryAdminRefund,
+  updateStoreOperation,
+  type AdminCancellationReasonType,
+  type StoreOrderView,
+} from "../../api/operations";
 import { ApiError, type LocatedMarketView } from "../../api/types";
 import { AdminMarketLocationForm } from "../components/AdminMarketLocationForm";
 import { validateMarketRegistration } from "../../validation/locationValidation";
@@ -24,6 +35,8 @@ const sections: [AdminSection, string][] = [
   ["orders", "주문"],
   ["sales", "판매 현황"],
   ["changes", "변경 이력"],
+  ["refunds", "환불"],
+  ["store-reports", "매장 제보"],
 ];
 
 const labels: Record<string, string> = {
@@ -69,6 +82,25 @@ const labels: Record<string, string> = {
   latitude: "위도",
   longitude: "경도",
   distanceKm: "거리(km)",
+  amountWon: "환불 금액(원)",
+  status: "상태",
+  attempts: "시도 횟수",
+  lastError: "최근 오류",
+  createdAt: "접수/생성 시각",
+  completedAt: "완료 시각",
+  description: "제보 내용",
+  resolution: "처리 결과",
+  type: "제보 유형",
+  unresolvedClosureCount: "미처리 폐업 의심 수",
+  needsContact: "연락 확인 필요",
+  suspended: "운영 중지 여부",
+  operationReason: "운영 상태 사유",
+  MARKET: "시장",
+  STORE: "매장",
+  SELLER: "판매자",
+  STORE_ORDER: "매장 주문",
+  REFUND: "환불",
+  STORE_REPORT: "매장 제보",
 };
 
 const columns: Record<AdminSection, string[]> = {
@@ -79,6 +111,27 @@ const columns: Record<AdminSection, string[]> = {
   orders: ["id", "buyerLoginId", "buyerName", "totalWon", "confirmedAt"],
   sales: ["storeName", "productName", "priceWon", "onlineQuantity", "active"],
   changes: ["occurredAt", "actorLoginId", "targetType", "targetId"],
+  refunds: [
+    "id",
+    "storeOrderId",
+    "amountWon",
+    "status",
+    "attempts",
+    "lastError",
+    "createdAt",
+    "completedAt",
+  ],
+  "store-reports": [
+    "id",
+    "storeName",
+    "type",
+    "status",
+    "buyerLoginId",
+    "contactName",
+    "contactPhone",
+    "unresolvedClosureCount",
+    "createdAt",
+  ],
 };
 
 function formatAdminTimestamp(value: unknown): string {
@@ -113,9 +166,45 @@ function text(row: AdminRow, key: string): string {
     if (key === "regionLabel") {
       return "위치 미등록";
     }
+    if (key === "operationReason") {
+      return "-";
+    }
     return "-";
   }
-  if (key === "occurredAt" || key === "confirmedAt") return formatAdminTimestamp(value);
+  if (key === "occurredAt" || key === "confirmedAt" || key === "createdAt" || key === "completedAt")
+    return formatAdminTimestamp(value);
+  if (key === "targetType") {
+    if (value === "MARKET") return "시장";
+    if (value === "STORE") return "매장";
+    if (value === "SELLER") return "판매자";
+    if (value === "STORE_ORDER") return "매장 주문";
+    if (value === "REFUND") return "환불";
+    if (value === "STORE_REPORT") return "매장 제보";
+  }
+  if (key === "type") {
+    if (value === "CLOSURE_SUSPECTED") return "폐업 의심";
+    if (value === "INACTIVE") return "장기 미운영";
+    if (value === "LOCATION_ERROR") return "위치 오류";
+  }
+  if (key === "status") {
+    if (value === "OPEN") return "접수";
+    if (value === "REVIEWING") return "확인 중";
+    if (value === "RESOLVED") return "처리 완료";
+    if (value === "WAITING") return "수령 대기";
+    if (value === "PICKED_UP") return "수령 완료";
+    if (value === "NO_SHOW") return "미수령";
+    if (value === "CANCELLED") return "취소 완료";
+    if (value === "PENDING") return "처리 대기";
+    if (value === "COMPLETED") return "환불 완료";
+    if (value === "NEEDS_ATTENTION") return "관리자 확인 필요";
+  }
+  if (key === "amountWon" || key === "totalWon" || key === "priceWon") {
+    try {
+      return BigInt(value as string | number).toLocaleString();
+    } catch {
+      return String(value);
+    }
+  }
   if (typeof value === "boolean") {
     return value ? "예" : "아니오";
   }
@@ -283,6 +372,13 @@ function AdminList({
   navigationPending: boolean;
   onSessionExpired: () => void;
 }) {
+  const listMounted = useRef(true);
+  useEffect(() => {
+    listMounted.current = true;
+    return () => {
+      listMounted.current = false;
+    };
+  }, []);
   const [initialFilters] = useState(() => initialData?.filters ?? initialAdminFilters());
   const [filters, setFilters] = useState<AdminFilters>(initialFilters);
   const [rows, setRows] = useState<AdminRow[]>(initialData?.rows ?? []);
@@ -386,7 +482,7 @@ function AdminList({
       </header>
 
       <div className="admin-filters">
-        {section !== "changes" && (
+        {!["changes", "refunds", "store-reports"].includes(section) && (
           <label>
             {section === "markets" ? "시장명 검색" : "검색"}
             <input
@@ -396,6 +492,21 @@ function AdminList({
               onChange={(e) => filter("query", e.target.value)}
               placeholder={section === "markets" ? "시장명 입력" : "이름 또는 ID 검색"}
             />
+          </label>
+        )}
+        {section === "store-reports" && (
+          <label>
+            제보 상태
+            <select
+              id="adminStoreReportsStatus"
+              value={filters.type}
+              onChange={(e) => filter("type", e.target.value)}
+            >
+              <option value="">전체 상태</option>
+              <option value="OPEN">접수</option>
+              <option value="REVIEWING">확인 중</option>
+              <option value="RESOLVED">처리 완료</option>
+            </select>
           </label>
         )}
         {section === "sales" && (
@@ -422,6 +533,9 @@ function AdminList({
                 <option value="MARKET">시장</option>
                 <option value="STORE">매장</option>
                 <option value="SELLER">판매자</option>
+                <option value="STORE_ORDER">매장 주문</option>
+                <option value="REFUND">환불</option>
+                <option value="STORE_REPORT">매장 제보</option>
               </select>
             </label>
             <label>
@@ -488,7 +602,7 @@ function AdminList({
       {!busy && !error && (
         <>
           <div className="admin-table-wrap">
-            <table className="info-data-table">
+            <table className="info-data-table" data-section={section}>
               <thead>
                 <tr>
                   {columns[section].map((key) => (
@@ -509,10 +623,44 @@ function AdminList({
                         data-empty={key === "address" && !String(row[key] ?? "").trim()}
                         data-label={labels[key] ?? key}
                       >
+                        {key === "storeName" &&
+                          section === "store-reports" &&
+                          Boolean(row.needsContact) && (
+                            <span className="badge-tag badge-alert" style={{ marginRight: 6 }}>
+                              연락 확인 필요
+                            </span>
+                          )}
                         {text(row, key)}
                       </td>
                     ))}
                     <td>
+                      {section === "refunds" && row.status === "NEEDS_ATTENTION" && (
+                        <button
+                          type="button"
+                          id={`btnRetryRefund-${row.id}`}
+                          className="btn-danger-outline"
+                          style={{ marginRight: 6 }}
+                          onClick={async () => {
+                            try {
+                              await retryAdminRefund(row.id);
+                              if (!listMounted.current) return;
+                              setNotice("환불 재처리를 요청했습니다.");
+                              setVersion((v) => v + 1);
+                            } catch (err: unknown) {
+                              if (!listMounted.current) return;
+                              if (err instanceof ApiError && err.status === 401) onSessionExpired();
+                              else
+                                setError(
+                                  err instanceof Error
+                                    ? err.message
+                                    : "환불 재처리에 실패했습니다.",
+                                );
+                            }
+                          }}
+                        >
+                          재처리
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label={`${text(row, primaryKey)} 상세`}
@@ -619,6 +767,17 @@ function AdminDetail({
   const [marketId, setMarketId] = useState("");
   const [markets, setMarkets] = useState<LocatedMarketView[]>([]);
   const [items, setItems] = useState<AdminRow[] | null>(null);
+  const [storeOrders, setStoreOrders] = useState<StoreOrderView[] | null>(null);
+  const [cancelReasons, setCancelReasons] = useState<Record<number, string>>({});
+  const cancellationIntents = useRef<Record<number, { signature: string; key: string }>>({});
+  const [cancelReasonTypes, setCancelReasonTypes] = useState<
+    Record<number, AdminCancellationReasonType>
+  >({});
+  const [operationReason, setOperationReason] = useState("");
+  const [reportNextStatus, setReportNextStatus] = useState<string>(() =>
+    row?.status === "OPEN" ? "REVIEWING" : "RESOLVED",
+  );
+  const [reportResolution, setReportResolution] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
@@ -653,6 +812,17 @@ function AdminDetail({
           if (!active || !mountedRef.current) return;
           if (err instanceof ApiError && err.status === 401) onSessionExpired();
           else setError(err instanceof Error ? err.message : "상세 정보를 불러오지 못했습니다.");
+        });
+      void getAdminManagedStoreOrders(row.id, controller.signal)
+        .then((value) => {
+          if (active && mountedRef.current) {
+            setStoreOrders(value);
+          }
+        })
+        .catch((err: unknown) => {
+          if (!active || !mountedRef.current) return;
+          if (err instanceof ApiError && err.status === 401) onSessionExpired();
+          else setError("주문 취소·환불 운영 정보를 불러오지 못했습니다. 다시 조회해 주세요.");
         });
     }
 
@@ -1018,6 +1188,358 @@ function AdminDetail({
         ) : (
           !error && <p role="status">주문 상품을 불러오는 중…</p>
         ))}
+
+      {/* 매장 운영 중지 / 재개 관리 (section === "stores" && row) */}
+      {section === "stores" && row && (
+        <div
+          className="admin-operation-box"
+          id="adminStoreOperationSection"
+          style={{ marginTop: 24 }}
+        >
+          <h4>매장 운영 상태 변경</h4>
+          <p>
+            현재 운영 상태: <strong>{row.suspended ? "운영 중지" : "정상 운영 중"}</strong>
+            {row.operationReason ? ` (사유: ${String(row.operationReason)})` : ""}
+          </p>
+          <div className="field-group" style={{ marginTop: 8 }}>
+            <label htmlFor="adminOperationReasonInput">
+              {row.suspended ? "운영 재개 사유" : "운영 중지 사유"} (1~500자 필수)
+            </label>
+            <textarea
+              id="adminOperationReasonInput"
+              className="input-box"
+              rows={3}
+              maxLength={500}
+              value={operationReason}
+              disabled={busy}
+              onChange={(e) => setOperationReason(e.target.value)}
+              placeholder={
+                row.suspended
+                  ? "운영 재개 사유를 구체적으로 입력해 주세요."
+                  : "운영 중지 사유를 구체적으로 입력해 주세요."
+              }
+            />
+          </div>
+          <button
+            type="button"
+            id="btnAdminToggleOperation"
+            className={row.suspended ? "btn-query-store" : "btn-danger-outline"}
+            disabled={busy || !operationReason.trim()}
+            onClick={async () => {
+              const trimmed = operationReason.trim();
+              if (!trimmed) {
+                setError("운영 변경 사유를 입력해 주세요.");
+                return;
+              }
+              setBusy(true);
+              setError("");
+              try {
+                await updateStoreOperation(row.id, {
+                  suspended: !row.suspended,
+                  reason: trimmed,
+                });
+                if (mountedRef.current) onSaved();
+              } catch (err: unknown) {
+                if (!mountedRef.current) return;
+                if (err instanceof ApiError && err.status === 401) onSessionExpired();
+                else
+                  setError(
+                    err instanceof Error ? err.message : "매장 운영 상태를 변경하지 못했습니다.",
+                  );
+              } finally {
+                if (mountedRef.current) setBusy(false);
+              }
+            }}
+          >
+            {row.suspended ? "매장 운영 재개" : "매장 운영 중지"}
+          </button>
+        </div>
+      )}
+
+      {/* 매장 제보 확인 / 처리 완료 관리 (section === "store-reports" && row) */}
+      {section === "store-reports" && row && (
+        <div
+          className="admin-report-resolve-box"
+          id="adminStoreReportResolveSection"
+          style={{ marginTop: 24 }}
+        >
+          <h4>매장 제보 처리</h4>
+          <p>
+            제보자: {String(row.buyerLoginId)} · 판매자 담당자:{" "}
+            {row.contactName
+              ? `${String(row.contactName)} (${String(row.contactPhone || "-")})`
+              : "담당자 연락처 누락"}
+          </p>
+          {row.status !== "RESOLVED" ? (
+            <>
+              <div className="field-group" style={{ marginTop: 8 }}>
+                <label htmlFor="adminReportNextStatus">변경할 상태</label>
+                <select
+                  id="adminReportNextStatus"
+                  className="input-box"
+                  value={reportNextStatus}
+                  disabled={busy}
+                  onChange={(e) => setReportNextStatus(e.target.value)}
+                >
+                  {row.status === "OPEN" && <option value="REVIEWING">확인 중</option>}
+                  <option value="RESOLVED">처리 완료</option>
+                </select>
+              </div>
+              {reportNextStatus === "RESOLVED" && (
+                <div className="field-group" style={{ marginTop: 8 }}>
+                  <label htmlFor="adminReportResolutionInput">완료 처리 내용 (1~500자 필수)</label>
+                  <textarea
+                    id="adminReportResolutionInput"
+                    className="input-box"
+                    rows={3}
+                    maxLength={500}
+                    required
+                    value={reportResolution}
+                    disabled={busy}
+                    onChange={(e) => setReportResolution(e.target.value)}
+                    placeholder="현장 확인 결과 및 처리 내용을 구체적으로 입력해 주세요."
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                id="btnAdminResolveReport"
+                className="btn-query-store"
+                disabled={busy || (reportNextStatus === "RESOLVED" && !reportResolution.trim())}
+                onClick={async () => {
+                  if (!row) return;
+                  if (reportNextStatus === "RESOLVED" && !reportResolution.trim()) {
+                    setError("완료 처리 내용을 입력해 주세요.");
+                    return;
+                  }
+                  const reportId = row.id;
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await resolveAdminStoreReport(reportId, {
+                      status: reportNextStatus,
+                      resolution: reportNextStatus === "RESOLVED" ? reportResolution.trim() : "",
+                    });
+                    if (mountedRef.current) onSaved();
+                  } catch (err: unknown) {
+                    if (!mountedRef.current) return;
+                    if (err instanceof ApiError && err.status === 401) onSessionExpired();
+                    else setError(err instanceof Error ? err.message : "제보 처리에 실패했습니다.");
+                  } finally {
+                    if (mountedRef.current) setBusy(false);
+                  }
+                }}
+              >
+                상태 변경 저장
+              </button>
+            </>
+          ) : (
+            <p className="notice-text">
+              <strong>완료 처리 내용:</strong> {String(row.resolution || "처리 완료")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* 주문 상세 운영 및 관리자 대신 취소 (section === "orders" && row) */}
+      {section === "orders" && storeOrders && (
+        <div
+          className="admin-store-orders-section"
+          id="adminStoreOrdersSection"
+          style={{ marginTop: 24 }}
+        >
+          <h4>매장별 주문 운영 상세</h4>
+          {storeOrders.map((storeOrder) => (
+            <section
+              key={storeOrder.id}
+              className="admin-store-order-card"
+              data-store-order-id={storeOrder.id}
+              style={{
+                border: "1px solid var(--color-border)",
+                padding: 16,
+                borderRadius: "var(--radius-sm)",
+                marginBottom: 16,
+              }}
+            >
+              <div
+                className="admin-store-order-header"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <strong>
+                  {storeOrder.storeName} (매장 주문 #{storeOrder.id})
+                </strong>
+                <span className={`badge-tag badge-${storeOrder.status.toLowerCase()}`}>
+                  {formatStoreOrderStatus(storeOrder.status)}
+                </span>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--color-text-muted)", marginBottom: 12 }}>
+                {storeOrder.pickupDate} 수령 {storeOrder.startTime.slice(0, 5)}~
+                {storeOrder.endTime.slice(0, 5)} · 주문 마감 {storeOrder.orderDeadline.slice(0, 5)}
+              </p>
+
+              <table className="info-data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">상품명</th>
+                    <th scope="col">수량</th>
+                    <th scope="col">가격</th>
+                    <th scope="col">상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {storeOrder.items.map((it) => (
+                    <tr key={it.id}>
+                      <td>{it.productName}</td>
+                      <td>{it.quantity}</td>
+                      <td>{it.priceWon.toLocaleString()}원</td>
+                      <td>
+                        {it.cancelled ? (
+                          <span className="badge-cancelled">
+                            취소됨 ({it.cancellationReason || it.cancellationType || "취소"})
+                          </span>
+                        ) : (
+                          "유효"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {(BigInt(storeOrder.cancelledWon || "0") > 0n ||
+                BigInt(storeOrder.refundedWon || "0") > 0n ||
+                storeOrder.refunds.length > 0) && (
+                <div className="store-refund-summary" style={{ marginTop: 12 }}>
+                  {BigInt(storeOrder.cancelledWon || "0") > 0n && (
+                    <p>취소 금액: {BigInt(storeOrder.cancelledWon).toLocaleString()}원</p>
+                  )}
+                  {BigInt(storeOrder.refundedWon || "0") > 0n && (
+                    <p>환불 완료 금액: {BigInt(storeOrder.refundedWon).toLocaleString()}원</p>
+                  )}
+                  {storeOrder.refunds.length > 0 && (
+                    <ul>
+                      {storeOrder.refunds.map((ref) => (
+                        <li key={ref.id}>
+                          환불 #{ref.id} · {BigInt(ref.amountWon).toLocaleString()}원 ·{" "}
+                          {formatRefundStatus(ref.status)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* 관리자 대신 취소 폼 */}
+              {storeOrder.status !== "PICKED_UP" && storeOrder.status !== "CANCELLED" && (
+                <div
+                  className="admin-cancel-inline-box"
+                  style={{
+                    marginTop: 16,
+                    paddingTop: 12,
+                    borderTop: "1px dashed var(--color-border)",
+                  }}
+                >
+                  <h5>관리자 대신 취소</h5>
+                  <div className="field-group" style={{ marginTop: 8 }}>
+                    <label htmlFor={`adminCancelReasonType-${storeOrder.id}`}>사유 분류</label>
+                    <select
+                      id={`adminCancelReasonType-${storeOrder.id}`}
+                      className="input-box"
+                      value={cancelReasonTypes[storeOrder.id] || "BUYER_REQUEST"}
+                      disabled={busy}
+                      onChange={(e) =>
+                        setCancelReasonTypes((prev) => ({
+                          ...prev,
+                          [storeOrder.id]: e.target.value as AdminCancellationReasonType,
+                        }))
+                      }
+                    >
+                      <option value="BUYER_REQUEST">구매자 요청 (마감 전)</option>
+                      <option value="STORE_FAULT">매장 귀책 (마감 후)</option>
+                      <option value="SERVICE_ERROR">서비스 오류 (마감 후)</option>
+                    </select>
+                  </div>
+                  <div className="field-group" style={{ marginTop: 8 }}>
+                    <label htmlFor={`adminCancelReason-${storeOrder.id}`}>
+                      구체적 확인 사유 (1~500자 필수)
+                    </label>
+                    <textarea
+                      id={`adminCancelReason-${storeOrder.id}`}
+                      className="input-box"
+                      rows={2}
+                      maxLength={500}
+                      value={cancelReasons[storeOrder.id] || ""}
+                      disabled={busy}
+                      onChange={(e) =>
+                        setCancelReasons((prev) => ({
+                          ...prev,
+                          [storeOrder.id]: e.target.value,
+                        }))
+                      }
+                      placeholder="관리자 확인 사유를 구체적으로 작성해 주세요."
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    id={`btnAdminCancelOrder-${storeOrder.id}`}
+                    className="btn-danger-outline"
+                    disabled={busy || !(cancelReasons[storeOrder.id] || "").trim()}
+                    onClick={async () => {
+                      if (!row) return;
+                      const reason = (cancelReasons[storeOrder.id] || "").trim();
+                      if (!reason) {
+                        setError("취소 사유를 입력해 주세요.");
+                        return;
+                      }
+                      const orderId = row.id;
+                      setBusy(true);
+                      setError("");
+                      try {
+                        const reasonType = cancelReasonTypes[storeOrder.id] || "BUYER_REQUEST";
+                        const signature = JSON.stringify([reasonType, reason]);
+                        let intent = cancellationIntents.current[storeOrder.id];
+                        if (intent?.signature !== signature) {
+                          intent = { signature, key: crypto.randomUUID() };
+                          cancellationIntents.current[storeOrder.id] = intent;
+                        }
+                        await cancelAdminStoreOrder(storeOrder.id, {
+                          requestKey: intent.key,
+                          reasonType,
+                          reason,
+                        });
+                        if (!mountedRef.current) return;
+                        const refreshed = await getAdminManagedStoreOrders(orderId);
+                        if (mountedRef.current) {
+                          setStoreOrders(refreshed);
+                          delete cancellationIntents.current[storeOrder.id];
+                          setCancelReasons((prev) => ({ ...prev, [storeOrder.id]: "" }));
+                        }
+                      } catch (err: unknown) {
+                        if (!mountedRef.current) return;
+                        if (err instanceof ApiError && err.status === 401) onSessionExpired();
+                        else
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : "관리자 대신 취소 처리에 실패했습니다.",
+                          );
+                      } finally {
+                        if (mountedRef.current) setBusy(false);
+                      }
+                    }}
+                  >
+                    관리자 대신 취소
+                  </button>
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
+      )}
 
       {error && (
         <p role="alert">

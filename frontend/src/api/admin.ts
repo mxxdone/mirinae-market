@@ -17,7 +17,15 @@ export type { MarketCandidateView };
 export type AdminRow = { id: number } & Record<string, string | number | boolean | null>;
 
 export type AdminSection =
-  "markets" | "stores" | "sellers" | "buyers" | "orders" | "sales" | "changes";
+  | "markets"
+  | "stores"
+  | "sellers"
+  | "buyers"
+  | "orders"
+  | "sales"
+  | "changes"
+  | "refunds"
+  | "store-reports";
 
 export interface AdminFilters {
   query: string;
@@ -39,6 +47,55 @@ export async function getAdminRows(
     return rows
       .filter((row) => String(row.name).toLowerCase().includes(filters.query.toLowerCase()))
       .slice(filters.page * 50, filters.page * 50 + 51);
+  }
+
+  if (section === "refunds") {
+    return apiGet<AdminRow[]>(`/api/admin/refunds?page=${filters.page}`, signal);
+  }
+
+  if (section === "store-reports") {
+    const params = new URLSearchParams({ page: String(filters.page) });
+    if (filters.type) {
+      params.set("status", filters.type);
+    }
+    const managedList = await apiGet<
+      Array<{
+        report: {
+          id: number;
+          storeId: number;
+          storeName: string;
+          type: string;
+          description: string;
+          status: string;
+          resolution: string | null;
+          createdAt: string;
+          updatedAt: string;
+        };
+        buyerLoginId: string;
+        contactName: string | null;
+        contactPhone: string | null;
+        email: string | null;
+        unresolvedClosureCount: number;
+        needsContact: boolean;
+      }>
+    >(`/api/admin/store-reports?${params}`, signal);
+
+    return managedList.map((m) => ({
+      id: m.report.id,
+      storeId: m.report.storeId,
+      storeName: m.report.storeName,
+      type: m.report.type,
+      status: m.report.status,
+      description: m.report.description,
+      resolution: m.report.resolution,
+      createdAt: m.report.createdAt,
+      buyerLoginId: m.buyerLoginId,
+      contactName: m.contactName,
+      contactPhone: m.contactPhone,
+      email: m.email,
+      unresolvedClosureCount: m.unresolvedClosureCount,
+      needsContact: m.needsContact,
+    }));
   }
 
   const params = new URLSearchParams({ page: String(filters.page) });

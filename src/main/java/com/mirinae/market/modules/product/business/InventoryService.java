@@ -22,9 +22,23 @@ public class InventoryService {
     return new InventoryOffer(
         offer,
         row.active()
+            && !row.suspended()
             && !row.archived()
             && offer.pickupDate().equals(OfferRules.today(clock))
             && OfferRules.now(clock).isBefore(offer.orderDeadline()));
+  }
+
+  @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+  public void restore(long id, int quantity) {
+    var offer = describe(id);
+    data.lockStore(offer.offer().storeId());
+    var current = describe(id);
+    if (current.available()) {
+      if ((long) current.offer().onlineQuantity() + quantity > Integer.MAX_VALUE)
+        throw new ProductConflictException(
+            "INVENTORY_RESTORE_OVERFLOW", "반환 후 온라인 수량이 저장 상한을 넘습니다. 판매자 수량 확인 후 취소를 다시 요청해 주세요.");
+      data.restore(id, quantity);
+    }
   }
 
   @Transactional(

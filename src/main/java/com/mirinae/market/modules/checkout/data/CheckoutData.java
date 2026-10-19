@@ -175,6 +175,25 @@ public class CheckoutData {
         id);
   }
 
+  public Optional<String> freePickupCode(long store, LocalDate date) {
+    var candidate =
+        jdbc
+            .queryForList(
+                "WITH seed AS MATERIALIZED(SELECT lpad(floor(random()*1000000)::text,6,'0') AS code) SELECT code FROM seed WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=seed.code)",
+                String.class,
+                store,
+                date)
+            .stream()
+            .findFirst();
+    if (candidate.isPresent()) return candidate;
+    return jdbc
+        .queryForList(
+            "WITH seed AS MATERIALIZED(SELECT floor(random()*1000000)::integer AS start) SELECT lpad(((n+seed.start)%1000000)::text,6,'0') FROM seed CROSS JOIN generate_series(0,999999) n WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=lpad(((n+seed.start)%1000000)::text,6,'0')) LIMIT 1",
+            String.class, store, date)
+        .stream()
+        .findFirst();
+  }
+
   public long storeOrder(
       long checkoutId,
       long storeId,
@@ -183,9 +202,10 @@ public class CheckoutData {
       LocalDate date,
       LocalTime start,
       LocalTime end,
-      LocalTime deadline) {
+      LocalTime deadline,
+      String pickupCode) {
     return jdbc.queryForObject(
-        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(checkout_id,store_id) DO UPDATE SET store_id=EXCLUDED.store_id RETURNING id",
+        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline,pickup_code) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(checkout_id,store_id) DO UPDATE SET store_id=EXCLUDED.store_id RETURNING id",
         Long.class,
         checkoutId,
         storeId,
@@ -194,7 +214,8 @@ public class CheckoutData {
         date,
         start,
         end,
-        deadline);
+        deadline,
+        pickupCode);
   }
 
   public void orderItem(

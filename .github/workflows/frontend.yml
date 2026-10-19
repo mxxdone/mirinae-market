@@ -134,7 +134,13 @@ jobs:
         run: |
           docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_seller_a=$E2E_SELLER_A_LOGIN_ID" --set "source_seller_b=$E2E_SELLER_B_LOGIN_ID" < frontend/e2e/fixtures/checkout.sql
 
-      - name: Install Chromium
+      - name: Seed fulfillment integration orders
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_buyer=$E2E_BUYER_LOGIN_ID" < frontend/e2e/fixtures/fulfillment.sql
+
+      - name: Install browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 

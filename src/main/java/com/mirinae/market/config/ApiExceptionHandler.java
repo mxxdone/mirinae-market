@@ -14,6 +14,20 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(com.mirinae.market.modules.store.business.StoreNotFoundException.class)
+  public ResponseEntity<Map<String, String>> storeNotFound(
+      com.mirinae.market.modules.store.business.StoreNotFoundException exception) {
+    return ResponseEntity.status(404)
+        .body(Map.of("code", "NOT_FOUND", "message", exception.getMessage()));
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.store.business.StoreOperationConflictException.class)
+  public ResponseEntity<Map<String, String>> storeOperationConflict(
+      com.mirinae.market.modules.store.business.StoreOperationConflictException exception) {
+    return ResponseEntity.status(409)
+        .body(Map.of("code", "REPORT_STATE_CONFLICT", "message", exception.getMessage()));
+  }
+
   @ExceptionHandler(com.mirinae.market.modules.checkout.business.CheckoutConflictException.class)
   public ResponseEntity<Map<String, String>> checkoutConflict(
       com.mirinae.market.modules.checkout.business.CheckoutConflictException exception) {

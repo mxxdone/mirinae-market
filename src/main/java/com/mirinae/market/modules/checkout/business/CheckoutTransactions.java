@@ -4,13 +4,11 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.checkout.data.CheckoutData;
 import com.mirinae.market.modules.checkout.data.CheckoutRow;
 import com.mirinae.market.modules.checkout.data.LineRow;
-import com.mirinae.market.modules.checkout.data.OrderRow;
 import com.mirinae.market.modules.product.business.InventoryService;
 import com.mirinae.market.modules.product.business.ProductConflictException;
 import com.mirinae.market.modules.product.business.ProductNotFoundException;
 import com.mirinae.market.modules.product.business.PurchaseLine;
 import java.time.Clock;
-import java.util.ArrayList;
 import java.util.List;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -22,13 +20,22 @@ public class CheckoutTransactions {
   private final InventoryService inventory;
   private final AccountService accounts;
   private final Clock clock;
+  private final FulfillmentService fulfillment;
+  private final com.mirinae.market.modules.store.business.StoreService stores;
 
   public CheckoutTransactions(
-      CheckoutData data, InventoryService inventory, AccountService accounts, Clock clock) {
+      CheckoutData data,
+      InventoryService inventory,
+      AccountService accounts,
+      Clock clock,
+      FulfillmentService fulfillment,
+      com.mirinae.market.modules.store.business.StoreService stores) {
     this.data = data;
     this.inventory = inventory;
     this.accounts = accounts;
     this.clock = clock;
+    this.fulfillment = fulfillment;
+    this.stores = stores;
   }
 
   private long buyer(String loginId) {
@@ -164,7 +171,21 @@ public class CheckoutTransactions {
     }
     var lines = data.items(row.id());
     List<com.mirinae.market.modules.product.business.OfferView> offers;
+    var codes = new java.util.HashMap<Long, String>();
     try {
+      var requested =
+          lines.stream().map(line -> inventory.describe(line.offerId()).offer()).toList();
+      requested.stream().map(o -> o.storeId()).distinct().sorted().forEach(stores::lockStore);
+      for (var offer : requested) {
+        if (!codes.containsKey(offer.storeId()))
+          codes.put(
+              offer.storeId(),
+              data.freePickupCode(offer.storeId(), offer.pickupDate())
+                  .orElseThrow(
+                      () ->
+                          new ProductConflictException(
+                              "PICKUP_CODE_EXHAUSTED", "해당 매장·수령일의 수령 코드를 더 발급할 수 없습니다.")));
+      }
       offers =
           inventory.purchase(
               lines.stream()
@@ -202,7 +223,8 @@ public class CheckoutTransactions {
               offer.pickupDate(),
               offer.startTime(),
               offer.endTime(),
-              offer.orderDeadline());
+              offer.orderDeadline(),
+              codes.get(offer.storeId()));
       data.orderItem(
           storeOrder,
           offer.id(),
@@ -255,31 +277,6 @@ public class CheckoutTransactions {
   }
 
   private CheckoutView view(CheckoutRow row) {
-    List<OrderRow> orders = data.orders(row.id());
-    var groups = new ArrayList<StoreOrderView>();
-    for (long id : orders.stream().map(OrderRow::storeOrderId).distinct().toList()) {
-      var group = orders.stream().filter(item -> item.storeOrderId() == id).toList();
-      var first = group.getFirst();
-      groups.add(
-          new StoreOrderView(
-              id,
-              first.storeId(),
-              first.storeName(),
-              first.pickupDate(),
-              first.startTime(),
-              first.endTime(),
-              first.orderDeadline(),
-              group.stream()
-                  .map(
-                      item ->
-                          new OrderItemView(
-                              item.productName(),
-                              item.unitType(),
-                              item.unitAmount(),
-                              item.priceWon(),
-                              item.quantity()))
-                  .toList()));
-    }
     return new CheckoutView(
         row.id(),
         row.requestKey(),
@@ -287,6 +284,6 @@ public class CheckoutTransactions {
         row.errorCode(),
         row.message(),
         Long.toString(row.totalWon()),
-        groups);
+        fulfillment.checkoutOrders(row.id()));
   }
 }

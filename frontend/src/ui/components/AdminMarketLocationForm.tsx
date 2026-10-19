@@ -23,6 +23,8 @@ interface Props {
   onLatitudeChange: (lat: number | null) => void;
   longitude: number | null;
   onLongitudeChange: (lng: number | null) => void;
+  onStageChange?: (ready: boolean) => void;
+  onMapPendingChange?: (pending: boolean) => void;
   isEdit?: boolean;
   editLocationEnabled?: boolean;
   onToggleEditLocation?: (enabled: boolean) => void;
@@ -47,6 +49,11 @@ export function AdminMarketLocationForm(props: Props) {
 
   const [manualMode, setManualMode] = useState(Boolean(props.isEdit));
   const [candidateSelected, setCandidateSelected] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [pendingPosition, setPendingPosition] = useState<Coordinates | null>(null);
+  const [mapVersion, setMapVersion] = useState(0);
+  const [editingLookup, setEditingLookup] = useState(false);
+  const stageHeading = useRef<HTMLHeadingElement>(null);
   const [incompleteCandidate, setIncompleteCandidate] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState("");
@@ -98,14 +105,7 @@ export function AdminMarketLocationForm(props: Props) {
 
   const districts = regions.filter((r) => r.provinceCode === selectedProvince);
 
-  const { onLatitudeChange, onLongitudeChange, latitude, longitude } = props;
-  const onLatitudeChangeRef = useRef(onLatitudeChange);
-  const onLongitudeChangeRef = useRef(onLongitudeChange);
-  useEffect(() => {
-    onLatitudeChangeRef.current = onLatitudeChange;
-    onLongitudeChangeRef.current = onLongitudeChange;
-  }, [onLatitudeChange, onLongitudeChange]);
-
+  const { latitude, longitude } = props;
   const latestCoordsRef = useRef<Coordinates | null>(
     latitude != null && longitude != null ? { latitude, longitude } : null,
   );
@@ -129,7 +129,20 @@ export function AdminMarketLocationForm(props: Props) {
   // 지도 선택기를 연결합니다.
   const showDetails = Boolean(props.isEdit || candidateSelected || manualMode);
   const locationEnabled = !props.isEdit || props.editLocationEnabled;
-  const shouldRenderMap = Boolean(showDetails && locationEnabled);
+  const showLocation = Boolean(showDetails && locationEnabled);
+  const confirmation = candidateSelected && !manualMode && !props.isEdit;
+  const shouldRenderMap = Boolean(showLocation && mapExpanded);
+  const onMapPendingChange = props.onMapPendingChange;
+  useEffect(() => {
+    onMapPendingChange?.(pendingPosition !== null);
+  }, [pendingPosition, onMapPendingChange]);
+  useEffect(() => {
+    if (!props.isEdit) stageHeading.current?.focus();
+  }, [showDetails, manualMode, props.isEdit]);
+  const onStageChange = props.onStageChange;
+  useEffect(() => {
+    onStageChange?.(showDetails);
+  }, [showDetails, onStageChange]);
   useEffect(() => {
     if (!shouldRenderMap) {
       mapControllerRef.current?.destroy();
@@ -152,8 +165,7 @@ export function AdminMarketLocationForm(props: Props) {
         onCoordsChange(coords) {
           if (!active) return;
           cancelGeocode();
-          onLatitudeChangeRef.current(coords.latitude);
-          onLongitudeChangeRef.current(coords.longitude);
+          setPendingPosition(coords);
           lastCoordsRef.current = coords;
 
           lookupRefAddress(coords);
@@ -185,7 +197,7 @@ export function AdminMarketLocationForm(props: Props) {
       mapControllerRef.current = null;
       refAbortController.current?.abort();
     };
-  }, [shouldRenderMap]);
+  }, [shouldRenderMap, mapVersion]);
 
   function lookupRefAddress(coords: Coordinates) {
     const currentReq = ++refReqId.current;
@@ -218,6 +230,8 @@ export function AdminMarketLocationForm(props: Props) {
     cancelGeocode();
     clearReference();
     setCandidateSelected(true);
+    setMapExpanded(false);
+    setPendingPosition(null);
     const incomplete =
       !candidate.regionCode ||
       !candidate.address ||
@@ -261,6 +275,7 @@ export function AdminMarketLocationForm(props: Props) {
 
   // 입력이 바뀌면 이전 주소 검색 결과를 폐기합니다.
   async function handleGeocode() {
+    setPendingPosition(null);
     if (!props.address || props.address.trim().length === 0) {
       setGeocodeError("검색할 대표 주소를 입력해 주세요.");
       return;
@@ -297,6 +312,8 @@ export function AdminMarketLocationForm(props: Props) {
     cancelGeocode();
     clearReference();
     setCandidateSelected(false);
+    setPendingPosition(null);
+    setMapExpanded(false);
     setIncompleteCandidate(false);
     if (!props.isEdit) props.onNameChange("");
     props.onAddressChange("");
@@ -339,45 +356,74 @@ export function AdminMarketLocationForm(props: Props) {
       )}
       {locationEnabled && (
         <>
-          {!manualMode && (
-            <MarketCandidatePicker
-              regions={regions}
-              onBrowseChange={resetCandidate}
-              onSelect={selectCandidate}
-              onSessionExpired={props.onSessionExpired}
-            />
+          {props.isEdit && (
+            <>
+              <button type="button" onClick={() => setEditingLookup((value) => !value)}>
+                {editingLookup ? "위치 입력으로 돌아가기" : "시장 목록에서 위치 정보 찾기"}
+              </button>
+              {editingLookup && (
+                <MarketCandidatePicker
+                  regions={regions}
+                  onBrowseChange={() => {}}
+                  onSelect={(candidate) => {
+                    selectCandidate(candidate);
+                    setManualMode(true);
+                    setEditingLookup(false);
+                  }}
+                  onSessionExpired={props.onSessionExpired}
+                />
+              )}
+            </>
           )}
-          <button
-            type="button"
-            id="btnToggleManualMarket"
-            onClick={() => {
-              cancelGeocode();
-              clearReference();
-              setManualMode(!manualMode);
-              if (!props.isEdit) {
-                setCandidateSelected(false);
-                setIncompleteCandidate(false);
-                props.onNameChange("");
-                props.onAddressChange("");
-                props.onRegionCodeChange("");
-                props.onLatitudeChange(null);
-                props.onLongitudeChange(null);
-                setSelectedProvince("");
-              }
-            }}
-          >
-            {manualMode ? "지역별 시장 목록에서 선택" : "목록에 없는 시장 직접 등록"}
-          </button>
-          {candidateSelected && !manualMode && (
-            <button type="button" id="btnEditMarketLocation" onClick={() => setManualMode(true)}>
-              주소·위치 정보 보완
-            </button>
-          )}
-          {manualMode && (
-            <p>
-              지역·시장 이름·대표 주소를 입력하고 주소로 위치를 찾거나 지도에서 위치를 지정해
-              주세요.
-            </p>
+          {!props.isEdit && (
+            <>
+              <div className="market-flow-heading">
+                {showDetails && (
+                  <button
+                    type="button"
+                    id="btnMarketBackToSearch"
+                    onClick={() => {
+                      if (!(manualMode && candidateSelected && !incompleteCandidate))
+                        resetCandidate();
+                      setManualMode(false);
+                      setMapExpanded(false);
+                      setPendingPosition(null);
+                    }}
+                  >
+                    {manualMode && candidateSelected && !incompleteCandidate
+                      ? "← 등록 확인"
+                      : "← 시장 찾기로"}
+                  </button>
+                )}
+                <h4 ref={stageHeading} tabIndex={-1}>
+                  {manualMode
+                    ? candidateSelected
+                      ? "시장 정보 수정"
+                      : "시장 직접 등록"
+                    : candidateSelected
+                      ? "등록할 시장 확인"
+                      : "시장 찾기"}
+                </h4>
+              </div>
+              <div hidden={showDetails}>
+                <MarketCandidatePicker
+                  regions={regions}
+                  onBrowseChange={resetCandidate}
+                  onSelect={selectCandidate}
+                  onSessionExpired={props.onSessionExpired}
+                />
+                <button
+                  type="button"
+                  id="btnToggleManualMarket"
+                  onClick={() => {
+                    resetCandidate();
+                    setManualMode(true);
+                  }}
+                >
+                  목록에 없는 시장 직접 등록
+                </button>
+              </div>
+            </>
           )}
           {incompleteCandidate && (
             <p role="status">
@@ -386,7 +432,35 @@ export function AdminMarketLocationForm(props: Props) {
           )}
         </>
       )}
-      {showDetails && (
+      {confirmation && (
+        <section className="market-confirmation" aria-label="등록할 시장 정보">
+          <div className="market-summary-heading">
+            <h4>{props.name}</h4>
+            <button
+              type="button"
+              id="btnEditMarketLocation"
+              className="admin-text-action"
+              onClick={() => setManualMode(true)}
+            >
+              정보 수정
+            </button>
+          </div>
+          <dl>
+            <div>
+              <dt>지역</dt>
+              <dd id="adminSelectedRegion">
+                {regions.find((r) => r.code === props.regionCode)?.provinceShortName}{" "}
+                {regions.find((r) => r.code === props.regionCode)?.districtName}
+              </dd>
+            </div>
+            <div>
+              <dt>대표 주소</dt>
+              <dd id="adminInputAddress">{props.address}</dd>
+            </div>
+          </dl>
+        </section>
+      )}
+      {showDetails && !confirmation && (
         <>
           {/* 시장 이름 입력 */}
           <label>
@@ -403,156 +477,205 @@ export function AdminMarketLocationForm(props: Props) {
         </>
       )}
       {/* 위치 정보 입력 영역 (신규 등록이거나 수정 모드에서 체크 시 노출) */}
-      {shouldRenderMap && (
+      {showLocation && (
         <>
-          {manualMode ? (
-            <>
-              {/* 지역 선택: 시도 & 시군구 */}
-              <div className="location-row">
-                <label>
-                  시도
-                  <select
-                    id="adminSelectProvince"
-                    value={selectedProvince}
-                    onChange={(e) => {
-                      setSelectedProvince(e.target.value);
-                      props.onRegionCodeChange("");
-                    }}
-                  >
-                    <option value="">시도를 선택하세요</option>
-                    {provinces.map((p) => (
-                      <option key={p.code} value={p.code}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+          {!confirmation &&
+            (manualMode ? (
+              <>
+                {/* 지역 선택: 시도 & 시군구 */}
+                <div className="location-row">
+                  <label>
+                    시도
+                    <select
+                      id="adminSelectProvince"
+                      value={selectedProvince}
+                      onChange={(e) => {
+                        setSelectedProvince(e.target.value);
+                        props.onRegionCodeChange("");
+                      }}
+                    >
+                      <option value="">시도 선택</option>
+                      {provinces.map((p) => (
+                        <option key={p.code} value={p.code}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-                <label>
-                  시군구
-                  <select
-                    id="adminSelectRegion"
-                    required
-                    value={props.regionCode}
-                    onChange={(e) => props.onRegionCodeChange(e.target.value)}
-                    disabled={!selectedProvince || districts.length === 0}
-                  >
-                    <option value="">시군구를 선택하세요</option>
-                    {districts.map((d) => (
-                      <option key={d.code} value={d.code}>
-                        {d.districtName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </>
-          ) : (
-            <p id="adminSelectedRegion">
-              지역: {regions.find((r) => r.code === props.regionCode)?.provinceShortName}{" "}
-              {regions.find((r) => r.code === props.regionCode)?.districtName}
-            </p>
-          )}
-          {/* 대표 주소 및 주소 검색 */}
-          <div className="address-input-group">
-            <label>
-              대표 주소
-              <div className="input-with-button">
-                <input
-                  id="adminInputAddress"
-                  required
-                  readOnly={!manualMode}
-                  maxLength={500}
-                  value={props.address}
-                  onChange={(e) => {
-                    cancelGeocode();
-                    clearReference();
-                    props.onAddressChange(e.target.value);
-                  }}
-                  placeholder="예: 서울특별시 종로구 창경궁로 88"
-                />
-                {manualMode && (
-                  <button
-                    type="button"
-                    id="btnGeocodeAddress"
-                    disabled={geocoding || !props.address.trim()}
-                    onClick={() => void handleGeocode()}
-                  >
-                    {geocoding ? "검색 중…" : "주소로 위치 찾기"}
-                  </button>
-                )}
-              </div>
-            </label>
-            {geocodeError && (
-              <p role="alert" className="error-text" id="adminGeocodeError">
-                {geocodeError}
+                  <label>
+                    시군구
+                    <select
+                      id="adminSelectRegion"
+                      required
+                      value={props.regionCode}
+                      onChange={(e) => props.onRegionCodeChange(e.target.value)}
+                      disabled={!selectedProvince || districts.length === 0}
+                    >
+                      <option value="">시군구 선택</option>
+                      {districts.map((d) => (
+                        <option key={d.code} value={d.code}>
+                          {d.districtName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </>
+            ) : (
+              <p id="adminSelectedRegion">
+                지역: {regions.find((r) => r.code === props.regionCode)?.provinceShortName}{" "}
+                {regions.find((r) => r.code === props.regionCode)?.districtName}
               </p>
-            )}
-            <p className="field-help-text">
-              대표 주소는 시장의 공식 주소입니다. 지도 표시 위치를 변경하더라도 대표 주소는 자동으로
-              바뀌지 않습니다.
-            </p>
-          </div>
+            ))}
+          {/* 대표 주소 및 주소 검색 */}
+          {!confirmation && (
+            <div className="address-input-group">
+              <label>
+                대표 주소
+                <div className="input-with-button">
+                  <input
+                    id="adminInputAddress"
+                    required
+                    readOnly={!manualMode}
+                    maxLength={500}
+                    value={props.address}
+                    onChange={(e) => {
+                      cancelGeocode();
+                      clearReference();
+                      props.onAddressChange(e.target.value);
+                    }}
+                    placeholder="도로명·지번 주소 입력"
+                  />
+                  {manualMode && (
+                    <button
+                      type="button"
+                      id="btnGeocodeAddress"
+                      disabled={geocoding || !props.address.trim()}
+                      onClick={() => void handleGeocode()}
+                    >
+                      {geocoding ? "검색 중…" : "주소로 위치 찾기"}
+                    </button>
+                  )}
+                </div>
+              </label>
+              {geocodeError && (
+                <p role="alert" className="error-text" id="adminGeocodeError">
+                  {geocodeError}
+                </p>
+              )}
+            </div>
+          )}
 
           <p id="adminPositionStatus" role="status">
             {latitude != null && longitude != null
               ? "지도 위치가 지정되었습니다."
               : "주소로 위치를 찾거나 지도에서 표시점을 선택해 주세요."}
           </p>
-          {/* 지도 및 표시점 위치 조정 */}
-          <div className="admin-map-section">
-            <div className="map-section-header">
-              <h4>지도 표시 위치 조정</h4>
-              <span className="field-help-text">
-                마커를 드래그하거나 지도를 클릭하여 위치를 조정할 수 있습니다.
-              </span>
-            </div>
-
-            {mapError && (
-              <div className="map-error-notice" role="alert">
-                <p>{mapError}</p>
-                <p className="field-help-text">
-                  지도에 연결할 수 없어도 위치 정보가 있는 시장을 목록에서 선택하셨다면 저장할 수
-                  있습니다.
-                </p>
+          {
+            <button
+              type="button"
+              id="btnMarketMapToggle"
+              aria-expanded={mapExpanded}
+              className="admin-text-action"
+              onClick={() => {
+                setMapExpanded((value) => !value);
+                setPendingPosition(null);
+                clearReference();
+              }}
+            >
+              {mapExpanded
+                ? "지도 닫기"
+                : latitude != null && longitude != null
+                  ? "지도에서 위치 확인"
+                  : "지도에서 위치 지정"}
+            </button>
+          }
+          {/* 지도 편집은 필요한 때에만 연결합니다. */}
+          {shouldRenderMap && (
+            <div className="admin-map-section">
+              <div className="map-section-header">
+                <h4>지도 위치</h4>
+                <span className="field-help-text">
+                  마커를 드래그하거나 지도를 클릭하여 위치를 조정할 수 있습니다.
+                </span>
               </div>
-            )}
 
-            <div
-              id="adminMapPicker"
-              ref={mapContainerRef}
-              className="admin-map-canvas"
-              style={{ minHeight: "260px", width: "100%", background: "#f0ede6" }}
-            />
-
-            {/* 참고 주소 안내 영역 */}
-            <div className="reference-address-box">
-              {refAddressLoading && (
-                <p className="ref-loading" role="status">
-                  참고 주소 조회 중…
-                </p>
-              )}
-              {refAddress && (
-                <p className="ref-success" id="adminReferenceAddress">
-                  <strong>지점 참고 주소:</strong> {refAddress}
-                </p>
-              )}
-              {refAddressError && (
-                <div className="ref-error" id="adminRefAddressError" role="alert">
-                  <span>{refAddressError}</span>
-                  {lastCoordsRef.current && (
-                    <button
-                      type="button"
-                      className="btn-retry-sm"
-                      onClick={() => lookupRefAddress(lastCoordsRef.current!)}
-                    >
-                      다시 조회
-                    </button>
-                  )}
+              {mapError && (
+                <div className="map-error-notice" role="alert">
+                  <p>{mapError}</p>
+                  <p className="field-help-text">
+                    지도에 연결할 수 없어도 위치 정보가 있는 시장을 목록에서 선택하셨다면 저장할 수
+                    있습니다.
+                  </p>
                 </div>
               )}
+
+              <div
+                id="adminMapPicker"
+                ref={mapContainerRef}
+                className="admin-map-canvas"
+                style={{ minHeight: "260px", width: "100%", background: "#f0ede6" }}
+              />
+
+              {pendingPosition && (
+                <div className="map-position-actions">
+                  <p role="status">선택한 위치로 변경할까요?</p>
+                  <button
+                    type="button"
+                    id="btnApplyMapPosition"
+                    className="admin-primary-action"
+                    onClick={() => {
+                      cancelGeocode();
+                      props.onLatitudeChange(pendingPosition.latitude);
+                      props.onLongitudeChange(pendingPosition.longitude);
+                      setPendingPosition(null);
+                    }}
+                  >
+                    이 위치 적용
+                  </button>
+                  <button
+                    type="button"
+                    id="btnCancelMapPosition"
+                    onClick={() => {
+                      setPendingPosition(null);
+                      clearReference();
+                      setMapVersion((value) => value + 1);
+                    }}
+                  >
+                    이동 취소
+                  </button>
+                </div>
+              )}
+              {/* 참고 주소 안내 영역 */}
+              <div className="reference-address-box">
+                {refAddressLoading && (
+                  <p className="ref-loading" role="status">
+                    참고 주소 조회 중…
+                  </p>
+                )}
+                {refAddress && (
+                  <p className="ref-success" id="adminReferenceAddress">
+                    <strong>지점 참고 주소:</strong> {refAddress}
+                  </p>
+                )}
+                {refAddressError && (
+                  <div className="ref-error" id="adminRefAddressError" role="alert">
+                    <span>{refAddressError}</span>
+                    {lastCoordsRef.current && (
+                      <button
+                        type="button"
+                        className="btn-retry-sm"
+                        onClick={() => lookupRefAddress(lastCoordsRef.current!)}
+                      >
+                        다시 조회
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

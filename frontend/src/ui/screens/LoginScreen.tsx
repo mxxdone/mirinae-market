@@ -146,7 +146,7 @@ export function LoginScreen({
                 type="text"
                 id="loginUserId"
                 className="input-box"
-                placeholder="아이디를 입력해 주세요 (예: market_lover)"
+                placeholder="아이디 입력"
                 autoComplete="username"
                 value={loginId}
                 aria-invalid={idError ? "true" : "false"}
@@ -192,7 +192,7 @@ export function LoginScreen({
                   type={showPassword ? "text" : "password"}
                   id="loginPassword"
                   className="input-box"
-                  placeholder="비밀번호를 입력해 주세요"
+                  placeholder="비밀번호 입력"
                   autoComplete="current-password"
                   value={password}
                   aria-invalid={passwordError ? "true" : "false"}

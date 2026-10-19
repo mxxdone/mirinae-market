@@ -81,6 +81,29 @@ const columns: Record<AdminSection, string[]> = {
   changes: ["occurredAt", "actorLoginId", "targetType", "targetId"],
 };
 
+function formatAdminTimestamp(value: unknown): string {
+  const normalized = String(value)
+    .replace(" ", "T")
+    .replace(/([+-]\d{2})$/, "$1:00");
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "-";
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map(({ type, value: part }) => [type, part]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
 function text(row: AdminRow, key: string): string {
   const value = row[key];
   if (value === null || value === undefined) {
@@ -92,6 +115,7 @@ function text(row: AdminRow, key: string): string {
     }
     return "-";
   }
+  if (key === "occurredAt" || key === "confirmedAt") return formatAdminTimestamp(value);
   if (typeof value === "boolean") {
     return value ? "예" : "아니오";
   }
@@ -107,6 +131,15 @@ function dateToday(): string {
   }).format(new Date());
 }
 
+function initialAdminFilters(): AdminFilters {
+  return { query: "", page: 0, date: dateToday(), type: "", from: "", until: "", targetId: "" };
+}
+
+interface AdminListData {
+  rows: AdminRow[];
+  filters: AdminFilters;
+}
+
 export function AdminScreen({
   onLogout,
   onSessionExpired,
@@ -119,6 +152,45 @@ export function AdminScreen({
   isLoggingOut: boolean;
 }) {
   const [section, setSection] = useState<AdminSection>("markets");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [loaded, setLoaded] = useState<{ section: AdminSection; data?: AdminListData }>({
+    section: "markets",
+  });
+  const [navigationPending, setNavigationPending] = useState(false);
+  const [navigationError, setNavigationError] = useState("");
+  const [navigationAttempt, setNavigationAttempt] = useState(0);
+
+  useEffect(() => {
+    if (section === loaded.section) {
+      setNavigationPending(false);
+      setNavigationError("");
+      return;
+    }
+    const controller = new AbortController();
+    let active = true;
+    const filters = initialAdminFilters();
+    setNavigationPending(true);
+    setNavigationError("");
+    void getAdminRows(section, filters, controller.signal)
+      .then((rows) => {
+        if (active) setLoaded({ section, data: { rows, filters } });
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        if (err instanceof ApiError && err.status === 401) onSessionExpired();
+        else
+          setNavigationError(
+            `${sections.find(([id]) => id === section)?.[1]} 화면을 불러오지 못했습니다. 다시 시도해 주세요.`,
+          );
+      })
+      .finally(() => {
+        if (active) setNavigationPending(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [section, loaded.section, navigationAttempt, onSessionExpired]);
 
   useEffect(() => {
     function restore() {
@@ -138,56 +210,91 @@ export function AdminScreen({
 
   return (
     <section className="hybrid-card admin-workspace" aria-label="관리자 업무">
-      <aside className="admin-sidebar">
-        <h1>미리내 관리</h1>
-        <nav aria-label="관리 메뉴">
-          {sections.map(([id, label]) => (
-            <a
-              key={id}
-              id={`admin-nav-${id}`}
-              href={`#admin/${id}`}
-              aria-current={section === id ? "page" : undefined}
-              onClick={() => setSection(id)}
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
-        <button type="button" id="btnAdminLogout" disabled={isLoggingOut} onClick={onLogout}>
-          {isLoggingOut ? "로그아웃 중…" : "로그아웃"}
-        </button>
+      <aside className="admin-sidebar" data-menu-open={menuOpen}>
+        <div className="admin-brand-row">
+          <h1>
+            <span>미리내 마켓</span> <span>관리자</span>
+          </h1>
+          <button
+            type="button"
+            className="admin-mobile-menu"
+            aria-expanded={menuOpen}
+            aria-controls="adminNavigation"
+            onClick={() => setMenuOpen((value) => !value)}
+          >
+            {menuOpen ? "메뉴 닫기" : `${sections.find(([id]) => id === section)?.[1]} · 메뉴`}
+          </button>
+        </div>
+        <div id="adminNavigation">
+          <nav aria-label="관리 메뉴">
+            {sections.map(([id, label]) => (
+              <a
+                key={id}
+                id={`admin-nav-${id}`}
+                href={`#admin/${id}`}
+                aria-current={loaded.section === id ? "page" : undefined}
+                onClick={() => {
+                  setSection(id);
+                  setMenuOpen(false);
+                }}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+          <button type="button" id="btnAdminLogout" disabled={isLoggingOut} onClick={onLogout}>
+            {isLoggingOut ? "로그아웃 중…" : "로그아웃"}
+          </button>
+        </div>
         {logoutError && <p role="alert">{logoutError}</p>}
+        {navigationError && (
+          <div className="admin-navigation-error" role="alert">
+            <p>{navigationError}</p>
+            <button type="button" onClick={() => setNavigationAttempt((value) => value + 1)}>
+              다시 시도
+            </button>
+          </div>
+        )}
+        {navigationPending && (
+          <p className="admin-navigation-announcement" role="status">
+            {sections.find(([id]) => id === section)?.[1]} 화면을 불러오는 중…
+          </p>
+        )}
       </aside>
-      <AdminList key={section} section={section} onSessionExpired={onSessionExpired} />
+      <AdminList
+        key={loaded.section}
+        section={loaded.section}
+        initialData={loaded.data}
+        navigationPending={navigationPending}
+        onSessionExpired={onSessionExpired}
+      />
     </section>
   );
 }
 
 function AdminList({
   section,
+  initialData,
+  navigationPending,
   onSessionExpired,
 }: {
   section: AdminSection;
+  initialData?: AdminListData;
+  navigationPending: boolean;
   onSessionExpired: () => void;
 }) {
-  const [filters, setFilters] = useState<AdminFilters>({
-    query: "",
-    page: 0,
-    date: dateToday(),
-    type: "",
-    from: "",
-    until: "",
-    targetId: "",
-  });
-  const [rows, setRows] = useState<AdminRow[]>([]);
+  const [initialFilters] = useState(() => initialData?.filters ?? initialAdminFilters());
+  const [filters, setFilters] = useState<AdminFilters>(initialFilters);
+  const [rows, setRows] = useState<AdminRow[]>(initialData?.rows ?? []);
   const [selected, setSelected] = useState<AdminRow | null>(null);
   const [creating, setCreating] = useState(false);
-  const [busy, setBusy] = useState(true);
+  const [busy, setBusy] = useState(initialData === undefined);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    if (initialData && filters === initialFilters && version === 0) return;
     const controller = new AbortController();
     let active = true;
     setBusy(true);
@@ -212,7 +319,7 @@ function AdminList({
       active = false;
       controller.abort();
     };
-  }, [section, filters, version, onSessionExpired]);
+  }, [section, filters, version, onSessionExpired, initialData, initialFilters]);
 
   function filter(key: keyof AdminFilters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value, page: 0 }));
@@ -228,10 +335,41 @@ function AdminList({
 
   const primaryKey = columns[section]?.[0] ?? "id";
 
+  if ((section === "markets" && (creating || selected)) || (section === "stores" && creating)) {
+    return (
+      <div
+        className={`admin-content ${section === "markets" ? "market-workspace" : "admin-store-registration"}`}
+        data-navigation-pending={navigationPending}
+        aria-busy={navigationPending}
+        inert={navigationPending}
+      >
+        <AdminDetail
+          key={creating ? "new" : selected?.id}
+          section={section}
+          row={selected}
+          onSaved={saved}
+          onClose={() => {
+            setCreating(false);
+            setSelected(null);
+          }}
+          onSessionExpired={onSessionExpired}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="admin-content">
+    <div
+      className={`admin-content ${section === "markets" ? "admin-market-list" : ""}`}
+      data-density={rows.length === 0 ? "empty" : rows.length <= 5 ? "compact" : "wide"}
+      data-navigation-pending={navigationPending}
+      aria-busy={navigationPending}
+      inert={navigationPending}
+    >
       <header className="admin-heading">
-        <h2>{sections.find(([id]) => id === section)?.[1]}</h2>
+        <h2>
+          {section === "markets" ? "시장 목록" : sections.find(([id]) => id === section)?.[1]}
+        </h2>
         {(section === "markets" || section === "stores") && (
           <button
             type="button"
@@ -250,13 +388,13 @@ function AdminList({
       <div className="admin-filters">
         {section !== "changes" && (
           <label>
-            검색
+            {section === "markets" ? "시장명 검색" : "검색"}
             <input
               type="search"
               id="adminSearchQuery"
               value={filters.query}
               onChange={(e) => filter("query", e.target.value)}
-              placeholder="이름 또는 ID 검색"
+              placeholder={section === "markets" ? "시장명 입력" : "이름 또는 ID 검색"}
             />
           </label>
         )}
@@ -354,7 +492,7 @@ function AdminList({
               <thead>
                 <tr>
                   {columns[section].map((key) => (
-                    <th key={key} scope="col">
+                    <th key={key} data-column={key} scope="col">
                       {labels[key] ?? key}
                     </th>
                   ))}
@@ -365,7 +503,14 @@ function AdminList({
                 {rows.slice(0, 50).map((row) => (
                   <tr key={row.id}>
                     {columns[section].map((key) => (
-                      <td key={key}>{text(row, key)}</td>
+                      <td
+                        key={key}
+                        data-column={key}
+                        data-empty={key === "address" && !String(row[key] ?? "").trim()}
+                        data-label={labels[key] ?? key}
+                      >
+                        {text(row, key)}
+                      </td>
                     ))}
                     <td>
                       <button
@@ -385,7 +530,11 @@ function AdminList({
               </tbody>
             </table>
           </div>
-          {rows.length === 0 && <p>조회 결과가 없습니다.</p>}
+          {rows.length === 0 && (
+            <div className="admin-empty" role="status">
+              <p>조회 결과가 없습니다.</p>
+            </div>
+          )}
           <nav className="admin-pages" aria-label="목록 페이지">
             <button
               type="button"
@@ -456,6 +605,8 @@ function AdminDetail({
     row && row.longitude != null ? Number(row.longitude) : null,
   );
   const [editLocationEnabled, setEditLocationEnabled] = useState(false);
+  const [marketReady, setMarketReady] = useState(Boolean(row));
+  const [mapPending, setMapPending] = useState(false);
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState(row && row.email != null ? String(row.email) : "");
@@ -513,6 +664,10 @@ function AdminDetail({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (mapPending) {
+      setError("지도 위치 변경을 적용하거나 취소해 주세요.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -616,9 +771,21 @@ function AdminDetail({
               ? "새 시장 등록"
               : "매장·판매자 등록"}
         </h3>
-        <button type="button" id="btnAdminDetailClose" disabled={busy} onClick={onClose}>
-          닫기
-        </button>
+        {!(section === "markets" && !row && marketReady) && (
+          <button
+            type="button"
+            id="btnAdminDetailClose"
+            className="admin-text-action"
+            disabled={busy}
+            onClick={onClose}
+          >
+            {section === "markets"
+              ? "← 시장 목록"
+              : section === "stores" && !row
+                ? "← 매장 목록"
+                : "닫기"}
+          </button>
+        )}
       </header>
 
       {row && (
@@ -644,10 +811,15 @@ function AdminDetail({
       )}
 
       {editable && (
-        <form className="market-form" onSubmit={(event) => void submit(event)}>
+        <form
+          className={`market-form ${section === "stores" && !row ? "store-registration-form" : ""}`}
+          onSubmit={(event) => void submit(event)}
+        >
           {section === "markets" ? (
             <AdminMarketLocationForm
               onSessionExpired={onSessionExpired}
+              onStageChange={setMarketReady}
+              onMapPendingChange={setMapPending}
               name={name}
               onNameChange={setName}
               regionCode={regionCode}
@@ -666,7 +838,7 @@ function AdminDetail({
               currentLatitude={row?.latitude != null ? Number(row.latitude) : null}
               currentLongitude={row?.longitude != null ? Number(row.longitude) : null}
             />
-          ) : section === "stores" ? (
+          ) : section === "stores" && row ? (
             <label>
               매장 이름
               <input
@@ -678,56 +850,74 @@ function AdminDetail({
               />
             </label>
           ) : null}
-
           {section === "stores" && !row && (
             <>
-              <label>
-                소속 시장
-                <select
-                  id="adminSelectMarket"
-                  required
-                  value={marketId}
-                  onChange={(e) => setMarketId(e.target.value)}
-                >
-                  <option value="">시장을 선택해 주세요</option>
-                  {markets.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                판매자 로그인 ID
-                <input
-                  id="adminInputLoginId"
-                  required
-                  autoComplete="off"
-                  minLength={5}
-                  maxLength={20}
-                  value={loginId}
-                  onChange={(e) => setLoginId(e.target.value)}
-                />
-              </label>
-              <label>
-                첫 비밀번호
-                <input
-                  id="adminInputPassword"
-                  required
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  maxLength={32}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              <p>첫 비밀번호는 판매자에게 별도로 전달해 주세요. 첫 로그인 후 변경이 필요합니다.</p>
+              <fieldset className="admin-field-group">
+                <legend>매장 정보</legend>
+                <label>
+                  소속 시장
+                  <select
+                    id="adminSelectMarket"
+                    required
+                    value={marketId}
+                    onChange={(e) => setMarketId(e.target.value)}
+                  >
+                    <option value="">시장을 선택해 주세요</option>
+                    {markets.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  매장 이름
+                  <input
+                    id="adminInputName"
+                    required
+                    maxLength={100}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+              </fieldset>
+              <fieldset className="admin-field-group">
+                <legend>판매자 계정</legend>
+                <label>
+                  판매자 로그인 ID
+                  <input
+                    id="adminInputLoginId"
+                    required
+                    autoComplete="off"
+                    minLength={5}
+                    maxLength={20}
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                  />
+                </label>
+                <label>
+                  첫 비밀번호
+                  <input
+                    id="adminInputPassword"
+                    required
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    maxLength={32}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </label>
+                <p className="field-help-text">
+                  첫 비밀번호는 판매자에게 별도로 전달해 주세요. 첫 로그인 후 변경이 필요합니다.
+                </p>
+              </fieldset>
             </>
           )}
 
           {(section === "sellers" || (section === "stores" && !row)) && (
-            <>
+            <fieldset className="admin-field-group admin-contact-fields">
+              <legend>담당자 정보</legend>
               <label>
                 담당자 이름
                 <input
@@ -761,12 +951,27 @@ function AdminDetail({
                 />
               </label>
               <p>담당자 정보는 구매자에게 공개하지 않습니다.</p>
-            </>
+            </fieldset>
           )}
 
-          <button type="submit" id="btnAdminSubmit" disabled={busy}>
-            {busy ? "저장 중…" : "저장"}
-          </button>
+          {(section !== "markets" || marketReady) && (
+            <div className="admin-form-actions">
+              <button
+                type="submit"
+                id="btnAdminSubmit"
+                className="admin-primary-action"
+                disabled={busy || mapPending}
+              >
+                {busy
+                  ? "저장 중…"
+                  : !row
+                    ? section === "markets"
+                      ? "시장 등록"
+                      : "매장·판매자 등록"
+                    : "저장"}
+              </button>
+            </div>
+          )}
         </form>
       )}
 

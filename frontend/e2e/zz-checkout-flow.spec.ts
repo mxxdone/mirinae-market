@@ -1,3 +1,4 @@
+import { chooseBuyerMarket } from "./buyerMarket";
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
 function required(name: string): string {
@@ -59,11 +60,10 @@ async function loginBuyer(page: Page) {
   await page.locator("#loginUserId").fill(required("E2E_BUYER_LOGIN_ID"));
   await page.locator("#loginPassword").fill(required("E2E_DEMO_PASSWORD"));
   await page.locator("#btnLoginSubmit").click();
-  await expect(page.locator("#heading-buyer-summary")).toBeVisible();
-  await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
+  await expect(page.locator("#heading-market")).toBeVisible();
 }
 async function addFromScreen(page: Page, market: number, name: string) {
-  await page.locator("#marketSelect").selectOption(String(market));
+  await chooseBuyerMarket(page, String(market));
   await page.locator("#productSearch").fill(name);
   await page.getByRole("button", { name: "상품 검색", exact: true }).click();
   await page

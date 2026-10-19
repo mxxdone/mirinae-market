@@ -142,11 +142,13 @@ export function SignupScreen({
                 type="text"
                 id="signupUserId"
                 className="input-box"
-                placeholder="영문 소문자·숫자·_·- 5~20자"
+                placeholder="아이디 입력"
                 autoComplete="username"
                 value={loginId}
                 aria-invalid={idError ? "true" : "false"}
-                aria-describedby={idError ? "signupUserIdError" : undefined}
+                aria-describedby={
+                  idError ? "signupUserIdHelp signupUserIdError" : "signupUserIdHelp"
+                }
                 disabled={isLoading}
                 onChange={(e) => {
                   setLoginId(e.target.value);
@@ -155,6 +157,9 @@ export function SignupScreen({
                 }}
                 required
               />
+              <p id="signupUserIdHelp" className="field-help-text">
+                영문 소문자·숫자·_·- 5~20자
+              </p>
               {idError && (
                 <div id="signupUserIdError" className="field-error-msg" role="alert">
                   <svg
@@ -187,7 +192,7 @@ export function SignupScreen({
                 type="email"
                 id="signupEmail"
                 className="input-box"
-                placeholder="이메일 주소 (예: user@example.com)"
+                placeholder="예: user@example.com"
                 autoComplete="email"
                 value={email}
                 aria-invalid={emailError ? "true" : "false"}
@@ -233,7 +238,7 @@ export function SignupScreen({
                 type="text"
                 id="signupName"
                 className="input-box"
-                placeholder="매장에서 불릴 이름 (예: 김단골)"
+                placeholder="매장에서 불릴 이름"
                 autoComplete="nickname"
                 value={displayName}
                 aria-invalid={nameError ? "true" : "false"}
@@ -282,11 +287,13 @@ export function SignupScreen({
                   type={showPassword ? "text" : "password"}
                   id="signupPassword"
                   className="input-box"
-                  placeholder="영문·숫자·특수문자를 포함한 8~32자"
+                  placeholder="비밀번호 입력"
                   autoComplete="new-password"
                   value={password}
                   aria-invalid={passwordError ? "true" : "false"}
-                  aria-describedby={passwordError ? "signupPasswordError" : undefined}
+                  aria-describedby={
+                    passwordError ? "signupPasswordHelp signupPasswordError" : "signupPasswordHelp"
+                  }
                   disabled={isLoading}
                   onChange={(e) => {
                     setPassword(e.target.value);
@@ -333,6 +340,9 @@ export function SignupScreen({
                   )}
                 </button>
               </div>
+              <p id="signupPasswordHelp" className="field-help-text">
+                영문·숫자·특수문자를 포함한 8~32자
+              </p>
               {passwordError && (
                 <div id="signupPasswordError" className="field-error-msg" role="alert">
                   <svg

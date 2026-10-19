@@ -70,8 +70,6 @@ export function MarketCandidatePicker({
 
   return (
     <section className="admin-candidate-section" aria-label="지역별 시장 선택">
-      <h4>지역에서 시장 찾기</h4>
-      <p>시도·시군구를 고르면 해당 지역의 시장이 나옵니다. 주소는 입력하지 않아도 됩니다.</p>
       <div className="location-row">
         <label>
           시도
@@ -85,7 +83,7 @@ export function MarketCandidatePicker({
               setPage(0);
             }}
           >
-            <option value="">시도를 선택하세요</option>
+            <option value="">시도 선택</option>
             {provinces.map(([code, name]) => (
               <option key={code} value={code}>
                 {name}
@@ -123,7 +121,7 @@ export function MarketCandidatePicker({
             id="adminCandidateSearch"
             type="search"
             maxLength={100}
-            placeholder="시장명으로 목록 좁히기"
+            placeholder="시장명 입력"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {

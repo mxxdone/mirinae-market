@@ -37,7 +37,8 @@ export type ScreenId =
 function buyerScreenFromLocation(): ScreenId {
   if (window.location.hash === "#cart") return "buyer-cart";
   if (window.location.hash === "#orders") return "buyer-orders";
-  return isMarketLocation() ? "buyer-market" : "buyer-summary";
+  if (window.location.hash === "#account") return "buyer-summary";
+  return "buyer-market";
 }
 
 /**
@@ -130,6 +131,13 @@ export function App(): ReactElement {
         } else if (me.role === "SELLER") {
           setCurrentScreen("seller-store");
         } else {
+          const state = window.history.state as { mirinaeReturnMarket?: unknown } | null;
+          if (
+            window.location.hash === "#account" &&
+            typeof state?.mirinaeReturnMarket === "string"
+          ) {
+            lastMarketLocation.current = readMarketLocation(state.mirinaeReturnMarket);
+          }
           setCurrentScreen(buyerScreenFromLocation());
         }
       } catch {
@@ -165,17 +173,24 @@ export function App(): ReactElement {
   }, [currentUser]);
 
   useEffect(() => {
-    if (
-      !isRestoringSession &&
-      !currentUser &&
-      currentScreen === "login" &&
-      (isMarketLocation() ||
+    if (isRestoringSession || currentUser || currentScreen !== "login") return;
+    function clearProtectedLocation() {
+      if (
+        isMarketLocation() ||
         isSellerLocation() ||
         window.location.hash.startsWith("#admin") ||
-        ["#cart", "#orders"].includes(window.location.hash))
-    ) {
-      leaveMarketLocation();
+        ["#cart", "#orders", "#account"].includes(window.location.hash)
+      ) {
+        leaveMarketLocation();
+      }
     }
+    clearProtectedLocation();
+    window.addEventListener("popstate", clearProtectedLocation);
+    window.addEventListener("hashchange", clearProtectedLocation);
+    return () => {
+      window.removeEventListener("popstate", clearProtectedLocation);
+      window.removeEventListener("hashchange", clearProtectedLocation);
+    };
   }, [isRestoringSession, currentUser, currentScreen]);
 
   /**
@@ -305,7 +320,7 @@ export function App(): ReactElement {
   return (
     <div className="app-container">
       <main className="main-viewport" id="mainViewport">
-        <div className="screen-container">
+        <div className="screen-container" data-screen={currentScreen}>
           {currentScreen === "login" && (
             <LoginScreen
               initialLoginId={registeredLoginId}
@@ -363,7 +378,12 @@ export function App(): ReactElement {
               onCart={() => navigatePurchase("buyer-cart")}
               onOrders={() => navigatePurchase("buyer-orders")}
               onAccount={() => {
-                leaveMarketLocation(true);
+                if (isMarketLocation()) lastMarketLocation.current = readMarketLocation();
+                window.history.pushState(
+                  { mirinaeReturnMarket: window.location.hash },
+                  "",
+                  "#account",
+                );
                 setCurrentScreen("buyer-summary");
               }}
               onSessionExpired={handleSessionExpired}

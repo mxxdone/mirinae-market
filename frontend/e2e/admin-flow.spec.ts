@@ -1,3 +1,4 @@
+import { chooseBuyerMarket } from "./buyerMarket";
 import { expect, test } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
 
@@ -39,16 +40,17 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.locator("#btnLoginSubmit").click();
 
     await expect(page.locator(".admin-workspace")).toBeVisible();
-    await expect(page.locator(".admin-sidebar h1")).toHaveText("미리내 관리");
+    await expect(page.locator(".admin-sidebar h1")).toHaveText("미리내 마켓 관리자");
 
     // 시장 등록 (후보 검색 및 선택으로 위치 필수 입력 자동 반영 후 저장)
     await page.locator('a[href="#admin/markets"]').click();
-    await expect(page.locator(".admin-heading h2")).toHaveText("시장");
+    await expect(page.locator(".admin-heading h2")).toHaveText("시장 목록");
     await page.locator("#btnAdminCreate").click();
     await page.locator("#adminCandidateSearch").fill("성정시장");
     await page.locator("#btnSearchCandidates").click();
     await expect(page.locator(".candidate-row").first()).toBeVisible();
     await page.locator(".candidate-row .btn-select-candidate").first().click();
+    await page.locator("#btnEditMarketLocation").click();
     await page.locator("#adminInputName").fill(marketName);
     await page.locator("#btnAdminSubmit").click();
     await expect(page.locator("#adminNoticeBox")).toContainText("저장했습니다.");
@@ -137,15 +139,14 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.locator("#loginUserId").fill(buyerLoginId);
     await page.locator("#loginPassword").fill(demoPassword);
     await page.locator("#btnLoginSubmit").click();
-    await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+    await expect(page.locator("#heading-market")).toBeVisible();
 
-    await page.getByRole("button", { name: "시장 상품 둘러보기" }).click();
     await expect(page.locator("#heading-market")).toBeVisible();
 
     // 새로 등록된 시장 선택 후 상품 검색
     const marketOption = page.locator("#marketSelect option").filter({ hasText: marketName });
     const marketOptionValue = await marketOption.getAttribute("value");
-    await page.locator("#marketSelect").selectOption(marketOptionValue!);
+    await chooseBuyerMarket(page, marketOptionValue!);
     await page.locator("#productSearch").fill(productName);
     await page.getByRole("button", { name: "상품 검색", exact: true }).click();
 
@@ -187,6 +188,7 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.locator("#btnSearchCandidates").click();
     await expect(page.locator(".candidate-row").first()).toBeVisible();
     await page.locator(".candidate-row .btn-select-candidate").first().click();
+    await page.locator("#btnEditMarketLocation").click();
     await page.locator("#adminInputName").fill(initialMarketName);
     await page.locator("#btnAdminSubmit").click();
     await expect(page.locator("#adminNoticeBox")).toContainText("저장했습니다.");
@@ -263,8 +265,235 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     );
     expect(noOverflow).toBe(true);
 
-    // 관리자 로그아웃
+    // 접힌 모바일 메뉴에서 로그아웃합니다.
+    await page.locator(".admin-mobile-menu").click();
     await page.locator("#btnAdminLogout").click();
     await expect(page.locator("#heading-login")).toBeVisible();
+  });
+});
+
+test("관리자 메뉴 전환은 기존 본문과 크기를 유지하고 실패·연속 이동을 처리한다", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 2560, height: 1440 });
+  await page.goto("/");
+  await page.locator("#loginUserId").fill(required("E2E_ADMIN_LOGIN_ID"));
+  await page.locator("#loginPassword").fill(required("E2E_ADMIN_PASSWORD"));
+  await page.locator("#btnLoginSubmit").click();
+  const heading = page.locator(".admin-heading h2");
+  const content = page.locator(".admin-content");
+  const workspace = page.locator(".admin-workspace");
+  await expect(page.locator(".admin-table-wrap tbody tr").first()).toBeVisible();
+  const initialRows = await page.locator(".admin-table-wrap tbody").innerText();
+  const initialBounds = await workspace.boundingBox();
+  if (!initialBounds) throw new Error("관리자 작업 공간이 없습니다.");
+  const baseHeight = await page.evaluate(() => {
+    const main = document.querySelector(".main-viewport");
+    const footer = document.querySelector(".app-footer");
+    if (!main || !footer) throw new Error("앱 레이아웃이 없습니다.");
+    const style = getComputedStyle(main);
+    return (
+      innerHeight -
+      parseFloat(style.paddingTop) -
+      parseFloat(style.paddingBottom) -
+      footer.getBoundingClientRect().height
+    );
+  });
+
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let orderRequests = 0;
+  await page.route("**/api/admin/orders?*", async (route) => {
+    orderRequests += 1;
+    const response = await route.fetch();
+    await gate;
+    await route.fulfill({ response });
+  });
+  await page.locator("#admin-nav-orders").click();
+  await expect(content).toHaveAttribute("aria-busy", "true");
+  await expect(content).toHaveAttribute("inert", "");
+  await expect(heading).toHaveText("시장 목록");
+  expect(await page.locator(".admin-table-wrap tbody").innerText()).toBe(initialRows);
+  expect((await workspace.boundingBox())?.width).toBe(initialBounds.width);
+  await page.screenshot({
+    path: "../output/playwright/admin-navigation-overlay.png",
+    fullPage: true,
+  });
+  release();
+  await expect(heading).toHaveText("주문");
+  await expect(content).toHaveAttribute("aria-busy", "false");
+  expect(orderRequests).toBe(1);
+  await page.unroute("**/api/admin/orders?*");
+
+  await page.route("**/api/admin/sales?*", (route) =>
+    route.fulfill({ status: 503, json: { message: "조회 장애 검증" } }),
+  );
+  await page.locator("#admin-nav-sales").click();
+  await expect(page.locator(".admin-navigation-error")).toBeVisible();
+  await expect(heading).toHaveText("주문");
+  await expect(content).not.toHaveAttribute("inert", "");
+  await page.unroute("**/api/admin/sales?*");
+  await page.locator(".admin-navigation-error button").click();
+  await expect(heading).toHaveText("판매 현황");
+  await expect(page.locator(".admin-navigation-error")).toHaveCount(0);
+
+  let releaseLate = () => {};
+  const lateGate = new Promise<void>((resolve) => {
+    releaseLate = resolve;
+  });
+  let finishLate = () => {};
+  const lateFinished = new Promise<void>((resolve) => {
+    finishLate = resolve;
+  });
+  await page.route("**/api/admin/orders?*", async (route) => {
+    const response = await route.fetch();
+    await lateGate;
+    await route.fulfill({ response });
+    finishLate();
+  });
+  await page.locator("#admin-nav-orders").click();
+  await expect(content).toHaveAttribute("aria-busy", "true");
+  await page.locator("#admin-nav-buyers").click();
+  await expect(heading).toHaveText("구매자");
+  releaseLate();
+  await lateFinished;
+  await expect(heading).toHaveText("구매자");
+  await page.unroute("**/api/admin/orders?*");
+  await page.goBack();
+  await expect(heading).toHaveText("주문");
+
+  for (const [section, title] of [
+    ["markets", "시장 목록"],
+    ["stores", "매장"],
+    ["sellers", "판매자"],
+    ["buyers", "구매자"],
+    ["orders", "주문"],
+    ["sales", "판매 현황"],
+    ["changes", "변경 이력"],
+  ] as const) {
+    await page.locator(`#admin-nav-${section}`).click();
+    await expect(heading).toHaveText(title);
+    const bounds = await workspace.boundingBox();
+    expect(bounds?.width).toBe(initialBounds.width);
+    expect(bounds?.height).toBeGreaterThanOrEqual(baseHeight - 1);
+    if (section === "orders" || section === "sales") {
+      await page.locator("#adminSearchQuery").fill("없는메뉴_기본높이검증_893");
+      await expect(page.locator("#adminBusyBox")).toHaveCount(0);
+      await expect(page.locator(".admin-table-wrap tbody tr")).toHaveCount(0);
+      expect((await workspace.boundingBox())?.width).toBe(initialBounds.width);
+      expect((await workspace.boundingBox())?.height).toBeCloseTo(baseHeight, 1);
+      const emptyArea = await page.locator(".admin-empty").boundingBox();
+      const emptyMessage = await page.locator(".admin-empty p").boundingBox();
+      if (!emptyArea || !emptyMessage) throw new Error("빈 결과 안내가 없습니다.");
+      expect(emptyMessage.x + emptyMessage.width / 2).toBeCloseTo(
+        emptyArea.x + emptyArea.width / 2,
+        0,
+      );
+      expect(emptyMessage.y + emptyMessage.height / 2).toBeCloseTo(
+        emptyArea.y + emptyArea.height / 2,
+        0,
+      );
+      await page.screenshot({
+        path: `../output/playwright/admin-empty-${section}.png`,
+        fullPage: true,
+      });
+      await page.locator("#adminSearchQuery").fill("");
+      await expect(page.locator("#adminBusyBox")).toHaveCount(0);
+    }
+  }
+  await page.screenshot({
+    path: "../output/playwright/admin-navigation-desktop.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".admin-mobile-menu").click();
+  await page.locator("#admin-nav-markets").click();
+  await expect(heading).toHaveText("시장 목록");
+  await expect(page.locator("#adminNavigation")).toBeHidden();
+  await page.screenshot({
+    path: "../output/playwright/admin-navigation-mobile.png",
+    fullPage: true,
+  });
+  await page.locator("#adminSearchQuery").fill("없는모바일_빈결과_893");
+  await expect(page.locator(".admin-empty")).toBeVisible();
+  const emptyArea = await page.locator(".admin-empty").boundingBox();
+  const emptyMessage = await page.locator(".admin-empty p").boundingBox();
+  if (!emptyArea || !emptyMessage) throw new Error("모바일 빈 결과 안내가 없습니다.");
+  expect(emptyMessage.x + emptyMessage.width / 2).toBeCloseTo(emptyArea.x + emptyArea.width / 2, 0);
+  expect(emptyMessage.y + emptyMessage.height / 2).toBeCloseTo(
+    emptyArea.y + emptyArea.height / 2,
+    0,
+  );
+  await page.screenshot({ path: "../output/playwright/admin-empty-mobile.png", fullPage: true });
+});
+
+test.describe("관리자 시각 표시", () => {
+  test.use({ timezoneId: "America/New_York" });
+  test("변경·결제 시각은 한국 시간으로 초까지만 표시한다", async ({ page }) => {
+    await page.route("**/api/admin/changes?*", (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: 900001,
+            occurredAt: "2026-10-16 14:35:39.23148+09",
+            actorLoginId: "검증 관리자",
+            targetType: "MARKET",
+            targetId: 1,
+          },
+          {
+            id: 900002,
+            occurredAt: "2026-10-18T15:00:00.987654Z",
+            actorLoginId: "검증 관리자",
+            targetType: "MARKET",
+            targetId: 2,
+          },
+        ],
+      }),
+    );
+    await page.route("**/api/admin/orders?*", (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: 900001,
+            buyerLoginId: "검증 구매자",
+            buyerName: "검증 이름",
+            totalWon: "1000",
+            confirmedAt: "2026-10-18T12:34:56.789-04:00",
+          },
+          {
+            id: 900002,
+            buyerLoginId: "검증 구매자",
+            buyerName: "검증 이름",
+            totalWon: "1000",
+            confirmedAt: null,
+          },
+        ],
+      }),
+    );
+    await page.goto("/");
+    await page.locator("#loginUserId").fill(required("E2E_ADMIN_LOGIN_ID"));
+    await page.locator("#loginPassword").fill(required("E2E_ADMIN_PASSWORD"));
+    await page.locator("#btnLoginSubmit").click();
+    await expect(page.locator(".admin-table-wrap tbody tr").first()).toBeVisible();
+    await page.locator("#admin-nav-changes").click();
+    await expect(page.locator('tbody [data-column="occurredAt"]')).toHaveText([
+      "2026-10-16 14:35:39",
+      "2026-10-19 00:00:00",
+    ]);
+    await page.locator(".admin-table-wrap tbody tr button").first().click();
+    await expect(
+      page.locator(".admin-values").getByText("2026-10-16 14:35:39", { exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: "../output/playwright/admin-timestamp-seconds.png",
+      fullPage: true,
+    });
+    await page.locator("#admin-nav-orders").click();
+    await expect(page.locator('tbody [data-column="confirmedAt"]')).toHaveText([
+      "2026-10-19 01:34:56",
+      "-",
+    ]);
   });
 });

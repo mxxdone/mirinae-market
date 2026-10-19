@@ -31,6 +31,9 @@ export function BuyerMarketContainer({
   onSessionExpired: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const [choosingMarket, setChoosingMarket] = useState(
+    () => readMarketLocation().marketId === null,
+  );
   const [regions, setRegions] = useState<RegionView[]>([]);
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
@@ -157,7 +160,7 @@ export function BuyerMarketContainer({
         } else {
           const targetMarket = result.find((m) => m.id === marketId) ?? result[0];
           if (targetMarket) {
-            void load(targetMarket.id, "", 0);
+            void load(targetMarket.id, "", 0, !choosingMarket);
           }
         }
       } catch (failure) {
@@ -167,7 +170,7 @@ export function BuyerMarketContainer({
         }
       }
     },
-    [marketId, load, handleError],
+    [marketId, load, handleError, choosingMarket],
   );
 
   const initialize = useCallback(async () => {
@@ -188,7 +191,7 @@ export function BuyerMarketContainer({
         setPage(location.page);
         await open({ marketId: market.id, id: location.offerId }, false);
       } else if (market) {
-        await load(market.id, location.query, location.page);
+        await load(market.id, location.query, location.page, location.marketId !== null);
       } else {
         setLoading(false);
       }
@@ -215,8 +218,12 @@ export function BuyerMarketContainer({
 
   useEffect(() => {
     function restoreLocation() {
-      if (!isMarketLocation()) return;
       const location = readMarketLocation();
+      if (!isMarketLocation() || location.marketId === null) {
+        setChoosingMarket(true);
+        return;
+      }
+      setChoosingMarket(false);
       const market = markets.find((item) => item.id === location.marketId);
       if (!market) return;
       if (location.offerId !== null) {
@@ -235,11 +242,11 @@ export function BuyerMarketContainer({
       const next = todayPickupDate();
       if (date !== next) {
         setDate(next);
-        if (marketId !== null) void load(marketId, productQuery, 0);
+        if (marketId !== null) void load(marketId, productQuery, 0, !choosingMarket);
       }
     }, 30000);
     return () => clearInterval(timer);
-  }, [date, marketId, productQuery, load]);
+  }, [date, marketId, productQuery, load, choosingMarket]);
 
   function handleProvinceChange(code: string) {
     ++geoRequest.current;
@@ -327,11 +334,18 @@ export function BuyerMarketContainer({
 
   function handleSelectMarket(id: number) {
     if (id === marketId) return;
-    void load(id, "", 0);
+    void load(id, "", 0, !choosingMarket);
   }
 
   return (
     <BuyerMarketScreen
+      choosingMarket={choosingMarket}
+      onChangeMarket={() => setChoosingMarket(true)}
+      onConfirmMarket={() => {
+        if (marketId === null) return;
+        writeMarketLocation({ marketId, query: productQuery, page, offerId: null }, true);
+        setChoosingMarket(false);
+      }}
       onCheckout={onCart}
       onOrders={onOrders}
       adding={adding}
@@ -371,7 +385,7 @@ export function BuyerMarketContainer({
         const location = readMarketLocation();
         if (marketId === null) void initialize();
         else if (location.offerId !== null) void open({ marketId, id: location.offerId }, false);
-        else void load(marketId, productQuery, page);
+        else void load(marketId, productQuery, page, !choosingMarket);
       }}
       regions={regions}
       selectedProvince={selectedProvince}

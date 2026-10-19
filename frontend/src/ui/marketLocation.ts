@@ -9,9 +9,9 @@ export function isMarketLocation(): boolean {
   return window.location.hash === "#market" || window.location.hash.startsWith("#market?");
 }
 
-export function readMarketLocation(): MarketLocation {
+export function readMarketLocation(hash = window.location.hash): MarketLocation {
   const parameters = new URLSearchParams(
-    isMarketLocation() ? window.location.hash.split("?")[1] : "",
+    hash === "#market" || hash.startsWith("#market?") ? hash.split("?")[1] : "",
   );
   function positive(name: string): number | null {
     const value = parameters.get(name);

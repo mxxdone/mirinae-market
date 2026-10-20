@@ -4,6 +4,7 @@ import { ApiError, type StoreView, type UserMe } from "../../api/types";
 import { SellerProfilePanel } from "../components/SellerProfilePanel";
 import { SellerProductsPanel } from "../components/SellerProductsPanel";
 import { SellerOrdersPanel } from "../components/SellerOrdersPanel";
+import { SellerDashboardPanel } from "../components/SellerDashboardPanel";
 import { StatusAlert } from "../components/StatusAlert";
 import {
   isSellerLocation,
@@ -39,7 +40,9 @@ export function SellerStoreScreen({
   const [errorAlert, setErrorAlert] = useState<string | null>(null);
   const [location, setLocation] = useState(() => window.location.hash);
   const [salesLocation, setSalesLocation] = useState(() =>
-    readSellerPage() === "store" || readSellerPage() === "orders"
+    readSellerPage() === "store" ||
+    readSellerPage() === "orders" ||
+    readSellerPage() === "dashboard"
       ? "#seller"
       : window.location.hash,
   );
@@ -61,7 +64,7 @@ export function SellerStoreScreen({
   }, []);
 
   function navigate(next: SellerPage) {
-    if (next === "sales" && (page === "store" || page === "orders"))
+    if (next === "sales" && (page === "store" || page === "orders" || page === "dashboard"))
       writeProductPage(readProductPage(salesLocation));
     else writeSellerPage(next);
     setLocation(window.location.hash);
@@ -138,6 +141,17 @@ export function SellerStoreScreen({
               }}
             >
               주문 관리
+            </a>
+            <a
+              href="#seller/dashboard"
+              id="navSellerDashboard"
+              aria-current={page === "dashboard" ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("dashboard");
+              }}
+            >
+              대시보드
             </a>
             <a
               href="#seller/store"
@@ -247,6 +261,14 @@ export function SellerStoreScreen({
                 onSessionExpired={onSessionExpired}
               />
             </div>
+          )}
+
+          {page === "dashboard" && store && (
+            <SellerDashboardPanel
+              key={`dashboard-${store.id}`}
+              store={store}
+              onSessionExpired={onSessionExpired}
+            />
           )}
 
           {/* 로그아웃 실패 시 인라인 오류 배너 (role="alert", 재시도 가능) */}

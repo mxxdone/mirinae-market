@@ -1,6 +1,6 @@
 # 미리내 마켓
 
-Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·구매자 가입·서버 세션 인증과 판매자 본인 매장 조회를 제공한다. 상품 등록·수정·삭제, 통합 판매 표의 오늘 판매 일괄 적용, 시장 검색·단위당 보조 가격을 제공한다. 주문·결제는 후속 페이즈다.
+Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·서버 세션 인증을 사용하며 상품·당일 판매 관리, 시장 검색, 통합 모의 결제와 주문 취소·수령·환불, 관리자 운영과 판매자 대시보드를 제공한다.
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
 - 요구사항·계정 입력 규칙·API 계약: [SPEC.md](SPEC.md)
@@ -230,3 +230,13 @@ V8·V9는 지역·시장 후보 기준자료와 nullable 위치 필드를 추가
 DB 갱신 전에는 기존 백업·별도 복원 검증 절차를 수행한다. 이전 앱은 새 상태를 이해하지 못하므로 갱신 DB에 직접 연결하지 않는다. 복구는 서비스 중지 → 갱신 후 데이터 별도 백업 → 갱신 전 백업을 별도 DB에 복원·검증 → 이전 앱 연결 순서다.
 
 브라우저 수령 운영 검증은 `frontend/e2e/fixtures/fulfillment.sql`의 전용 계정·주문을 사용한다. 기존 결제 fixture와 동일하게 독립 테스트 DB에만 적재하며 psql 변수 `source_buyer`에는 테스트 구매자 로그인 ID를 전달한다. 서버/브라우저는 기존 고정 시각을 사용한다.
+
+## 판매자 대시보드 (Phase 6)
+
+판매자로 로그인한 뒤 **대시보드** 메뉴를 연다. 수령일과 조회 월을 선택하고, 주문·수령·취소·환불 처리 후 **새로고침**으로 최신 결과를 확인한다. 집계 대상과 월별 금액의 해석은 [Spec의 판매자 대시보드](SPEC.md#판매자-대시보드), API 요청·응답은 Swagger UI를 참조한다. 기존 스키마 원본을 조회하며 별도 캐시·집계 테이블은 사용하지 않는다.
+
+브라우저 대시보드 검증은 기존 결제·수령 fixture에 더해 아래 전용 fixture를 독립 테스트 DB에 적재한다. 일반 시연·운영 DB에 적용하지 않는다. 테스트 구매자의 비밀번호 해시를 복사하며 고정 서버·브라우저 시각은 위 E2E 절차와 같다. CI도 같은 fixture를 적재한다.
+
+```powershell
+Get-Content frontend/e2e/fixtures/seller-dashboard.sql -Raw | docker exec -i $testContainer psql -U $testDbUser -d $testDbName -v ON_ERROR_STOP=1 --set "source_buyer=$env:E2E_BUYER_LOGIN_ID"
+```

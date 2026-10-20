@@ -140,6 +140,12 @@ jobs:
         run: |
           docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_buyer=$E2E_BUYER_LOGIN_ID" < frontend/e2e/fixtures/fulfillment.sql
 
+      - name: Seed seller dashboard integration orders
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_buyer=$E2E_BUYER_LOGIN_ID" < frontend/e2e/fixtures/seller-dashboard.sql
+
       - name: Install browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium

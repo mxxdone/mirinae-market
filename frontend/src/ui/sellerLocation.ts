@@ -1,15 +1,17 @@
-export type SellerPage = "sales" | "store" | "orders";
+export type SellerPage = "sales" | "store" | "orders" | "dashboard";
 
 export function isSellerLocation(): boolean {
   return (
     window.location.hash === "#seller" ||
     window.location.hash === "#seller/orders" ||
+    window.location.hash === "#seller/dashboard" ||
     window.location.hash === "#seller/store" ||
     /^#seller\/product\/(new|[1-9]\d*)$/.test(window.location.hash)
   );
 }
 
 export function readSellerPage(hash = window.location.hash): SellerPage {
+  if (hash === "#seller/dashboard") return "dashboard";
   if (hash === "#seller/orders") return "orders";
   return hash === "#seller/store" ? "store" : "sales";
 }
@@ -28,7 +30,13 @@ export function writeProductPage(id: number | "new" | null): void {
 
 export function writeSellerPage(page: SellerPage, push = true): void {
   const hash =
-    page === "store" ? "#seller/store" : page === "orders" ? "#seller/orders" : "#seller";
+    page === "dashboard"
+      ? "#seller/dashboard"
+      : page === "store"
+        ? "#seller/store"
+        : page === "orders"
+          ? "#seller/orders"
+          : "#seller";
   if (window.location.hash === hash) return;
   if (push) window.history.pushState(null, "", hash);
   else window.history.replaceState(null, "", hash);

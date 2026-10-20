@@ -9,6 +9,7 @@ import {
 } from "../../api/operations";
 import { ApiError } from "../../api/types";
 import { BuyerStoreReportModal } from "./BuyerStoreReportModal";
+import { OrderStatementModal } from "./OrderStatementModal";
 import { StatusAlert } from "./StatusAlert";
 
 interface Props {
@@ -51,6 +52,9 @@ export function BuyerOrdersPanel({
     id: number;
     name: string;
   } | null>(null);
+
+  // 모의 결제 내역서 모달 상태
+  const [viewingStatementId, setViewingStatementId] = useState<number | null>(null);
 
   const request = useRef(0);
   const mutating = useRef(false);
@@ -227,9 +231,20 @@ export function BuyerOrdersPanel({
 
         {orders.map((order) => (
           <article className="checkout-order" key={order.id}>
-            <h2>
-              통합 주문 {order.id} · {BigInt(order.totalWon).toLocaleString()}원
-            </h2>
+            <div className="checkout-order-header">
+              <h2>
+                통합 주문 {order.id} · {BigInt(order.totalWon).toLocaleString()}원
+              </h2>
+              <button
+                type="button"
+                className="btn-query-store btn-order-statement"
+                id={`btnOrderStatement-${order.id}`}
+                disabled={isCancelling}
+                onClick={() => setViewingStatementId(order.id)}
+              >
+                모의 결제 내역서
+              </button>
+            </div>
             {order.storeOrders.map((store) => (
               <section key={store.id} className="store-order-card" data-store-order-id={store.id}>
                 <div className="store-order-header">
@@ -413,6 +428,16 @@ export function BuyerOrdersPanel({
             storeId={reportingStore.id}
             storeName={reportingStore.name}
             onClose={() => setReportingStore(null)}
+            onSessionExpired={onSessionExpired}
+          />
+        )}
+
+        {/* 모의 결제 내역서 모달 */}
+        {viewingStatementId !== null && (
+          <OrderStatementModal
+            key={viewingStatementId}
+            checkoutId={viewingStatementId}
+            onClose={() => setViewingStatementId(null)}
             onSessionExpired={onSessionExpired}
           />
         )}

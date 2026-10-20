@@ -240,3 +240,9 @@ DB 갱신 전에는 기존 백업·별도 복원 검증 절차를 수행한다. 
 ```powershell
 Get-Content frontend/e2e/fixtures/seller-dashboard.sql -Raw | docker exec -i $testContainer psql -U $testDbUser -d $testDbName -v ON_ERROR_STOP=1 --set "source_buyer=$env:E2E_BUYER_LOGIN_ID"
 ```
+
+## 모의 결제 내역서와 Phase 7 시연 (Phase 7)
+
+구매자는 주문 내역에서 **본인의 확정 주문**을 골라 모의 결제 내역서를 새로 조회하고 인쇄할 수 있다. 상품·수량·단가·총액·결제 시각과 조회 시점의 취소·환불 상태를 확인한다. 실제 청구·공식 세무 증빙이 아닌 테스트 내역이며 카드 승인번호·현금영수증 발급번호를 제공하지 않는다. API는 `GET /api/buyer/orders/{checkoutId}/statement`이고, 인가·응답·실패 계약은 Swagger UI와 [Spec의 결제 내역서 계약](SPEC.md#관리자-운영결제-내역서-추가-계약)을 참조한다.
+
+새 시연 DB 분리, 첫 기동 시 관리자·데모 계정 초기화, 당일 판매 준비, 시연 순서와 예외 흐름, 종료·재개, 백업·별도 DB 복원 절차는 [Phase 7 시연·복구 실행 안내](docs/DEMO.md)를 따른다. `demo`는 첫 데이터 생성에만 사용하고 이후 기본 프로필로 실제 시간에 시연한다. 고정 시각 E2E와 DB를 섞지 않는다.

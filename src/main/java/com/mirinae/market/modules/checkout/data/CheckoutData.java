@@ -111,6 +111,22 @@ public class CheckoutData {
     return rows("SELECT * FROM checkouts WHERE buyer_id=? ORDER BY id DESC LIMIT 100", buyerId);
   }
 
+  public Optional<StatementRow> confirmedStatement(long buyerId, long checkoutId) {
+    // 본인·확정 주문만 조회하며 없는 주문·타인 주문·미확정 주문은 같은 결과로 구분하지 않는다.
+    return jdbc
+        .query(
+            "SELECT id,total_won,confirmed_at FROM checkouts WHERE id=? AND buyer_id=? AND status='CONFIRMED'",
+            (rs, n) ->
+                new StatementRow(
+                    rs.getLong("id"),
+                    rs.getLong("total_won"),
+                    rs.getTimestamp("confirmed_at").toInstant()),
+            checkoutId,
+            buyerId)
+        .stream()
+        .findFirst();
+  }
+
   private List<CheckoutRow> rows(String sql, Object... args) {
     return jdbc.query(
         sql,

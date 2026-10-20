@@ -57,3 +57,15 @@ export function getCheckout(key: string): Promise<Checkout> {
 export function getOrders(): Promise<Checkout[]> {
   return apiGet("/api/buyer/orders");
 }
+
+export interface Statement {
+  id: number;
+  confirmedAt: string;
+  totalWon: string;
+  storeOrders: StoreOrderView[];
+  testNotice: string;
+}
+
+export function getOrderStatement(checkoutId: number, signal?: AbortSignal): Promise<Statement> {
+  return apiGet(`/api/buyer/orders/${checkoutId}/statement`, signal);
+}

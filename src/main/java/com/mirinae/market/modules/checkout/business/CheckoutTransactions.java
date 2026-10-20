@@ -12,10 +12,14 @@ import java.time.Clock;
 import java.util.List;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CheckoutTransactions {
+  // 실제 청구·세무 증빙이 아닌 모의 결제 테스트 내역임을 응답에 명시한다.
+  private static final String STATEMENT_NOTICE =
+      "이 내역서는 실제 청구나 공식·세무 증빙이 아닌 모의 결제 테스트 내역입니다. 카드 승인번호와 현금영수증 발급번호는 제공하지 않습니다.";
   private final CheckoutData data;
   private final InventoryService inventory;
   private final AccountService accounts;
@@ -259,6 +263,19 @@ public class CheckoutTransactions {
   @Transactional(readOnly = true)
   public List<CheckoutView> history(String loginId) {
     return data.history(buyer(loginId)).stream().map(this::view).toList();
+  }
+
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public StatementView statement(String loginId, long checkoutId) {
+    long buyer = buyer(loginId);
+    var row = data.confirmedStatement(buyer, checkoutId).orElseThrow(ProductNotFoundException::new);
+    // 결제 당시 총액·스냅샷과 조회 시점의 취소·환불 상태를 같은 읽기 스냅샷에서 읽는다.
+    return new StatementView(
+        row.id(),
+        row.confirmedAt(),
+        Long.toString(row.totalWon()),
+        fulfillment.checkoutOrders(row.id()),
+        STATEMENT_NOTICE);
   }
 
   @Transactional

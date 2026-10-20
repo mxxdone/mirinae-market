@@ -3487,3 +3487,536 @@ body {
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   Phase 7: 모의 결제 내역서 및 전체 화면 디자인 통일
+   ========================================================================== */
+
+/* 주문 내역 통합 주문 헤더 */
+.checkout-order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--color-border-subtle);
+}
+
+.checkout-order-header h2 {
+  font-size: 18px;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.btn-order-statement {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+/* 모의 결제 내역서 모달 */
+.statement-modal-backdrop {
+  margin: 0;
+  border: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 32, 29, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+  backdrop-filter: blur(2px);
+}
+
+.order-statement-modal {
+  background: var(--color-surface);
+  max-width: 820px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.statement-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-warm);
+}
+
+.statement-header h2 {
+  font-size: 20px;
+  color: var(--color-text-main);
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.statement-subtitle {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  margin: 0;
+}
+
+.statement-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.statement-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 테스트·비공식 증빙 안내 박스 */
+.statement-test-notice {
+  background: #fdf8f4;
+  border: 1px solid var(--color-primary-border);
+  border-left: 4px solid var(--color-primary);
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-main);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.statement-test-notice p {
+  margin-bottom: 6px;
+}
+
+.statement-test-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.statement-test-warning {
+  color: var(--color-primary-hover);
+  font-size: 12px;
+}
+
+/* 주문 기본 정보 테이블 */
+.statement-section {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.statement-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.statement-meta-table th {
+  background: var(--color-surface-warm);
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-subtle);
+  width: 22%;
+  white-space: nowrap;
+}
+
+.statement-meta-table td {
+  padding: 10px 14px;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-main);
+  width: 28%;
+}
+
+.statement-amount-highlight {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-size: 15px;
+}
+
+.statement-cancelled-amount {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.statement-refunded-amount {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+/* 매장별 주문 상세 카드 */
+.statement-stores-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.statement-store-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+  background: var(--color-surface);
+}
+
+.statement-store-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.statement-store-header h3 {
+  font-size: 16px;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.statement-pickup-window {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+/* 상품 표 */
+.statement-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  background: var(--color-surface);
+}
+
+.statement-items-table th {
+  background: var(--color-surface-warm);
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-subtle);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.statement-items-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.statement-items-table .item-qty-cell,
+.statement-items-table .item-price-cell,
+.statement-items-table .item-subtotal-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.statement-items-table .item-name-cell {
+  color: var(--color-text-main);
+}
+
+.statement-item-cancelled {
+  background-color: var(--color-error-bg);
+  color: var(--color-text-muted);
+}
+
+.badge-normal {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+/* 매장 환불 안내 */
+.statement-store-refund-info {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--color-surface-warm);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.statement-refund-amounts {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.statement-refund-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statement-refund-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.refund-time {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   인쇄 전용 스타일 (@media print)
+   - 선택된 모의 결제 내역서 및 테스트 안내만 표시
+   - 메뉴, 상단 헤더, 버튼, 조작부, 수령 코드, 배경은 모두 숨김
+   - 다중 페이지 표는 나누고 개별 행의 잘림 방지
+   ========================================================================== */
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    background-image: none !important;
+  }
+
+  /* 내역서는 body의 포털에 있어 앱 전체를 숨겨도 선택한 문서만 남는다. */
+  body:has(.statement-modal-backdrop) #root {
+    display: none !important;
+  }
+
+  /* 1. 최상위 앱의 다른 모든 화면 및 내비게이션 숨김 */
+  .app-header,
+  .site-header,
+  .brand-intro-panel,
+  .market-workspace,
+  .checkout-workspace > header,
+  .checkout-actions,
+  .admin-workspace,
+  .seller-workspace,
+  .toast,
+  .status-alert-box,
+  button,
+  .no-print,
+  .statement-actions {
+    display: none !important;
+  }
+
+  /* 본문 내의 일반 주문 카드들도 숨김 */
+  .checkout-order {
+    display: none !important;
+  }
+
+  /* 2. 모달 백드롭 및 컨테이너를 일반 인쇄용 문서 흐름으로 변환 */
+  .modal-backdrop.statement-modal-backdrop {
+    position: static !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    inset: auto !important;
+    display: block !important;
+    background: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+  }
+
+  .modal-content.order-statement-modal {
+    position: static !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .statement-header {
+    background: none !important;
+    border-bottom: 2px solid #000000 !important;
+    padding: 0 0 12pt 0 !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .statement-header h2 {
+    font-size: 18pt !important;
+    color: #000000 !important;
+  }
+
+  .statement-body {
+    padding: 0 !important;
+    gap: 12pt !important;
+  }
+
+  /* 3. 수령 코드(pickupCode)는 인쇄에서 완전히 제외 */
+  .pickup-code-box,
+  [id^="pickupCode-"],
+  [id^="statementPickupCode-"] {
+    display: none !important;
+  }
+
+  /* 4. 테스트 모의 결제 안내문은 인쇄에 반드시 포함 */
+  .statement-test-notice {
+    display: block !important;
+    background: #ffffff !important;
+    border: 2px solid #000000 !important;
+    color: #000000 !important;
+    margin-bottom: 14pt !important;
+    padding: 8pt 12pt !important;
+    font-size: 9.5pt !important;
+  }
+
+  .statement-test-notice p {
+    color: #000000 !important;
+  }
+
+  .statement-test-warning {
+    color: #333333 !important;
+    font-weight: 600 !important;
+  }
+
+  /* 5. 표 스타일 및 다중 페이지 행 잘림 방지 */
+  .statement-meta-table,
+  .statement-items-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .statement-meta-table th,
+  .statement-meta-table td,
+  .statement-items-table th,
+  .statement-items-table td {
+    border: 1px solid #333333 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    padding: 6pt 8pt !important;
+  }
+
+  .statement-meta-table th,
+  .statement-items-table th {
+    font-weight: 700 !important;
+    background: #f0f0f0 !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .statement-store-card {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    border: 1px solid #666666 !important;
+    margin-bottom: 14pt !important;
+    padding: 10pt !important;
+    background: #ffffff !important;
+  }
+
+  .statement-store-header h3 {
+    color: #000000 !important;
+    font-size: 13pt !important;
+  }
+
+  .statement-amount-highlight {
+    color: #000000 !important;
+    font-weight: 700 !important;
+  }
+
+  .statement-cancelled-amount {
+    color: #666666 !important;
+  }
+
+  .statement-refunded-amount {
+    color: #333333 !important;
+  }
+
+  .badge-tag,
+  .badge-cancelled,
+  .badge-normal {
+    border: 1px solid #333333 !important;
+    color: #000000 !important;
+    background: transparent !important;
+  }
+}
+
+/* ==========================================================================
+   반응형 및 화면 일관성 (360px ~ 768px 모바일 대응)
+   ========================================================================== */
+@media (max-width: 640px) {
+  .order-statement-modal {
+    max-height: 95vh;
+  }
+
+  .statement-header {
+    padding: 16px;
+  }
+
+  .statement-body {
+    padding: 16px;
+  }
+
+  .statement-meta-table th,
+  .statement-meta-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .statement-meta-table tr {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    border: 1px solid var(--color-border-subtle);
+  }
+
+  .statement-items-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .statement-store-card {
+    padding: 12px;
+  }
+}

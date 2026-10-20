@@ -3,6 +3,7 @@ package com.mirinae.market.modules.checkout.presentation;
 import com.mirinae.market.modules.checkout.business.CartView;
 import com.mirinae.market.modules.checkout.business.CheckoutService;
 import com.mirinae.market.modules.checkout.business.CheckoutView;
+import com.mirinae.market.modules.checkout.business.StatementView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -99,5 +100,18 @@ public class CheckoutController {
   @GetMapping("/orders")
   public List<CheckoutView> orders(Principal principal) {
     return service.history(principal.getName());
+  }
+
+  @Operation(
+      summary = "본인 확정 주문의 모의 결제 내역서",
+      description =
+          "본인의 CONFIRMED 주문만 조회합니다. 결제 확정 시각은 원본 UTC(confirmedAt), 총액은 결제 당시 저장값(totalWon)이며, storeOrders는 조회 시점의 상품 스냅샷·취소·완료 환불 상태를 일관된 읽기 스냅샷으로 제공합니다. 실제 청구·공식 세무 증빙이 아닌 모의 결제 테스트 내역이며 카드 승인번호·현금영수증 발급번호는 제공하지 않습니다. 없는 주문·타인 주문·미확정(PENDING/FAILED) 주문은 모두 같은 404입니다.")
+  @ApiResponse(responseCode = "200", description = "원본 결제 시각·총액·매장별 주문과 모의 결제 테스트 안내")
+  @ApiResponse(responseCode = "401", description = "미로그인·세션 만료")
+  @ApiResponse(responseCode = "403", description = "구매자가 아닌 판매자·관리자")
+  @ApiResponse(responseCode = "404", description = "없는 주문·타인의 주문·미확정 주문")
+  @GetMapping("/orders/{checkoutId}/statement")
+  public StatementView statement(Principal principal, @PathVariable long checkoutId) {
+    return service.statement(principal.getName(), checkoutId);
   }
 }

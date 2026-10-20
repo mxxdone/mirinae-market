@@ -51,6 +51,10 @@ public class CheckoutService {
     return transactions.history(loginId);
   }
 
+  public StatementView statement(String loginId, long checkoutId) {
+    return transactions.statement(loginId, checkoutId);
+  }
+
   @Scheduled(fixedDelay = 500, initialDelay = 500)
   public void recover() {
     for (var row : transactions.due()) {

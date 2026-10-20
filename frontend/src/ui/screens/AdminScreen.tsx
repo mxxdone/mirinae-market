@@ -23,7 +23,8 @@ import {
   type AdminCancellationReasonType,
   type StoreOrderView,
 } from "../../api/operations";
-import { ApiError, type LocatedMarketView } from "../../api/types";
+import { ApiError, type LocatedMarketView, type RegionView } from "../../api/types";
+import { getMarketRegions } from "../../api/location";
 import { AdminMarketLocationForm } from "../components/AdminMarketLocationForm";
 import { validateMarketRegistration } from "../../validation/locationValidation";
 
@@ -221,7 +222,17 @@ function dateToday(): string {
 }
 
 function initialAdminFilters(): AdminFilters {
-  return { query: "", page: 0, date: dateToday(), type: "", from: "", until: "", targetId: "" };
+  return {
+    query: "",
+    page: 0,
+    date: dateToday(),
+    type: "",
+    from: "",
+    until: "",
+    targetId: "",
+    provinceCode: "",
+    regionCode: "",
+  };
 }
 
 interface AdminListData {
@@ -382,6 +393,11 @@ function AdminList({
   const [initialFilters] = useState(() => initialData?.filters ?? initialAdminFilters());
   const [filters, setFilters] = useState<AdminFilters>(initialFilters);
   const [draftQuery, setDraftQuery] = useState(initialFilters.query);
+  const [draftProvince, setDraftProvince] = useState(initialFilters.provinceCode ?? "");
+  const [draftRegion, setDraftRegion] = useState(initialFilters.regionCode ?? "");
+  const [regions, setRegions] = useState<RegionView[] | null>(null);
+  const [regionError, setRegionError] = useState("");
+  const [regionAttempt, setRegionAttempt] = useState(0);
   const composingQuery = useRef(false);
   const [rows, setRows] = useState<AdminRow[]>(initialData?.rows ?? []);
   const [selected, setSelected] = useState<AdminRow | null>(null);
@@ -419,6 +435,33 @@ function AdminList({
     };
   }, [section, filters, version, onSessionExpired, initialData, initialFilters]);
 
+  useEffect(() => {
+    if (section !== "markets") return;
+    const controller = new AbortController();
+    let active = true;
+    setRegionError("");
+    void getMarketRegions(controller.signal)
+      .then((value) => {
+        if (active) setRegions(value);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        if (err instanceof ApiError && err.status === 401) onSessionExpired();
+        else setRegionError("지역 목록을 불러오지 못했습니다.");
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [section, regionAttempt, onSessionExpired]);
+
+  const provinces = Array.from(
+    new Map(
+      (regions ?? []).map((r) => [r.provinceCode, { code: r.provinceCode, name: r.provinceName }]),
+    ).values(),
+  ).sort((a, b) => a.code.localeCompare(b.code));
+  const districts = (regions ?? []).filter((r) => r.provinceCode === draftProvince);
+
   function filter(key: keyof AdminFilters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value, page: 0 }));
     setCreating(false);
@@ -430,6 +473,21 @@ function AdminList({
     const query = draftQuery.trim();
     setDraftQuery(query);
     setCreating(false);
+    if (section === "markets") {
+      const provinceCode = draftProvince;
+      const regionCode = provinceCode ? draftRegion : "";
+      const unchanged =
+        query === filters.query &&
+        provinceCode === (filters.provinceCode ?? "") &&
+        regionCode === (filters.regionCode ?? "");
+      if (unchanged && filters.page === 0) {
+        // 같은 조건의 첫 페이지를 보고 있으면 재조회를 위해 version만 올린다.
+        setVersion((v) => v + 1);
+      } else {
+        setFilters((prev) => ({ ...prev, query, provinceCode, regionCode, page: 0 }));
+      }
+      return;
+    }
     if (query === filters.query && filters.page === 0) {
       // 이미 같은 조건의 첫 페이지를 보고 있으면 재조회를 위해 version만 올린다.
       setVersion((v) => v + 1);
@@ -499,10 +557,49 @@ function AdminList({
       </header>
 
       <div className="admin-filters">
-        {!["changes", "refunds", "store-reports"].includes(section) && (
-          <form className="admin-search-form" onSubmit={submitSearch}>
+        {section === "markets" && (
+          <form
+            className="admin-search-form admin-market-search-form"
+            aria-label="시장 검색"
+            onSubmit={submitSearch}
+          >
             <label>
-              {section === "markets" ? "시장명 검색" : "검색"}
+              시도
+              <select
+                id="adminMarketProvince"
+                value={draftProvince}
+                disabled={regions === null}
+                onChange={(e) => {
+                  setDraftProvince(e.target.value);
+                  setDraftRegion("");
+                }}
+              >
+                <option value="">시도 전체</option>
+                {provinces.map((province) => (
+                  <option key={province.code} value={province.code}>
+                    {province.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              시군구
+              <select
+                id="adminMarketRegion"
+                value={draftRegion}
+                disabled={!draftProvince}
+                onChange={(e) => setDraftRegion(e.target.value)}
+              >
+                <option value="">시군구 전체</option>
+                {districts.map((district) => (
+                  <option key={district.code} value={district.code}>
+                    {district.districtName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              검색어
               <input
                 type="search"
                 id="adminSearchQuery"
@@ -520,7 +617,44 @@ function AdminList({
                     e.preventDefault();
                   }
                 }}
-                placeholder={section === "markets" ? "시장명 입력" : "이름 또는 ID 검색"}
+                placeholder="시장명 입력"
+              />
+            </label>
+            <button type="submit" id="btnAdminSearch">
+              검색
+            </button>
+          </form>
+        )}
+        {section === "markets" && regionError && (
+          <p className="admin-region-error" role="alert">
+            {regionError}{" "}
+            <button type="button" onClick={() => setRegionAttempt((v) => v + 1)}>
+              다시 시도
+            </button>
+          </p>
+        )}
+        {!["changes", "refunds", "store-reports", "markets"].includes(section) && (
+          <form className="admin-search-form" onSubmit={submitSearch}>
+            <label>
+              검색
+              <input
+                type="search"
+                id="adminSearchQuery"
+                value={draftQuery}
+                onChange={(e) => setDraftQuery(e.target.value)}
+                onCompositionStart={() => {
+                  composingQuery.current = true;
+                }}
+                onCompositionEnd={() => {
+                  composingQuery.current = false;
+                }}
+                onKeyDown={(e) => {
+                  // 한글 조합 중 Enter는 조합 확정용이므로 검색을 제출하지 않는다.
+                  if (e.key === "Enter" && (e.nativeEvent.isComposing || composingQuery.current)) {
+                    e.preventDefault();
+                  }
+                }}
+                placeholder="이름 또는 ID 검색"
               />
             </label>
             <button type="submit" id="btnAdminSearch">

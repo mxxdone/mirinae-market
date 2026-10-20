@@ -1709,9 +1709,17 @@ body {
   gap: 8px;
   align-items: end;
   min-width: 0;
+  flex-wrap: wrap;
 }
 .admin-search-form label {
   min-width: 0;
+}
+.admin-market-search-form label {
+  flex: 1 1 130px;
+}
+.admin-region-error {
+  margin: 0;
+  color: #9b2c2c;
 }
 .admin-workspace input,
 .admin-workspace select,
@@ -2625,6 +2633,10 @@ body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
+  }
+  .admin-market-list .admin-market-search-form,
+  .admin-market-list .admin-region-error {
+    grid-column: 1 / -1;
   }
   .admin-market-list button {
     min-height: 44px;

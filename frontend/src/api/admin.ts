@@ -35,6 +35,8 @@ export interface AdminFilters {
   from: string;
   until: string;
   targetId: string;
+  provinceCode?: string;
+  regionCode?: string;
 }
 
 export async function getAdminRows(
@@ -44,8 +46,15 @@ export async function getAdminRows(
 ): Promise<AdminRow[]> {
   if (section === "markets") {
     const rows = await apiGet<AdminRow[]>("/api/admin/markets", signal);
+    const keyword = filters.query.trim().toLowerCase();
+    // 지역 조건과 키워드는 AND로 적용하고 페이지 분할 전에 거른다.
     return rows
-      .filter((row) => String(row.name).toLowerCase().includes(filters.query.toLowerCase()))
+      .filter(
+        (row) =>
+          (!filters.provinceCode || row.provinceCode === filters.provinceCode) &&
+          (!filters.regionCode || row.regionCode === filters.regionCode) &&
+          (!keyword || String(row.name).toLowerCase().includes(keyword)),
+      )
       .slice(filters.page * 50, filters.page * 50 + 51);
   }
 

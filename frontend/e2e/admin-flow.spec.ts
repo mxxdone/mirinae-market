@@ -209,6 +209,7 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     // 시장 이름 수정
     await page.locator('a[href="#admin/markets"]').click();
     await page.locator("#adminSearchQuery").fill(initialMarketName);
+    await page.locator("#btnAdminSearch").click();
     const marketRow = page
       .locator(".info-data-table tbody tr")
       .filter({ hasText: initialMarketName });
@@ -218,11 +219,13 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.locator("#btnAdminSubmit").click();
     await expect(page.locator("#adminNoticeBox")).toContainText("저장했습니다.");
     await page.locator("#adminSearchQuery").fill(updatedMarketName);
+    await page.locator("#btnAdminSearch").click();
     await expect(page.locator(".info-data-table")).toContainText(updatedMarketName);
 
     // 매장 이름 수정
     await page.locator('a[href="#admin/stores"]').click();
     await page.locator("#adminSearchQuery").fill(initialStoreName);
+    await page.locator("#btnAdminSearch").click();
     const storeRow = page
       .locator(".info-data-table tbody tr")
       .filter({ hasText: initialStoreName });
@@ -232,11 +235,13 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.locator("#btnAdminSubmit").click();
     await expect(page.locator("#adminNoticeBox")).toContainText("저장했습니다.");
     await page.locator("#adminSearchQuery").fill(updatedStoreName);
+    await page.locator("#btnAdminSearch").click();
     await expect(page.locator(".info-data-table")).toContainText(updatedStoreName);
 
     // 판매자 담당자 정보 수정 (관리자만 가능)
     await page.locator('a[href="#admin/sellers"]').click();
     await page.locator("#adminSearchQuery").fill(sellerLoginId);
+    await page.locator("#btnAdminSearch").click();
     const sellerRow = page.locator(".info-data-table tbody tr").filter({ hasText: sellerLoginId });
     await expect(sellerRow).toBeVisible();
     await sellerRow.locator("button:has-text('상세')").click();
@@ -380,6 +385,7 @@ test("관리자 메뉴 전환은 기존 본문과 크기를 유지하고 실패�
     expect(bounds?.height).toBeGreaterThanOrEqual(baseHeight - 1);
     if (section === "orders" || section === "sales") {
       await page.locator("#adminSearchQuery").fill("없는메뉴_기본높이검증_893");
+      await page.locator("#btnAdminSearch").click();
       await expect(page.locator("#adminBusyBox")).toHaveCount(0);
       await expect(page.locator(".admin-table-wrap tbody tr")).toHaveCount(0);
       expect((await workspace.boundingBox())?.width).toBe(initialBounds.width);
@@ -400,6 +406,7 @@ test("관리자 메뉴 전환은 기존 본문과 크기를 유지하고 실패�
         fullPage: true,
       });
       await page.locator("#adminSearchQuery").fill("");
+      await page.locator("#btnAdminSearch").click();
       await expect(page.locator("#adminBusyBox")).toHaveCount(0);
     }
   }
@@ -417,6 +424,7 @@ test("관리자 메뉴 전환은 기존 본문과 크기를 유지하고 실패�
     fullPage: true,
   });
   await page.locator("#adminSearchQuery").fill("없는모바일_빈결과_893");
+  await page.locator("#btnAdminSearch").click();
   await expect(page.locator(".admin-empty")).toBeVisible();
   const emptyArea = await page.locator(".admin-empty").boundingBox();
   const emptyMessage = await page.locator(".admin-empty p").boundingBox();

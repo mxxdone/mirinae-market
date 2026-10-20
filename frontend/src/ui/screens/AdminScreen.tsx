@@ -381,6 +381,8 @@ function AdminList({
   }, []);
   const [initialFilters] = useState(() => initialData?.filters ?? initialAdminFilters());
   const [filters, setFilters] = useState<AdminFilters>(initialFilters);
+  const [draftQuery, setDraftQuery] = useState(initialFilters.query);
+  const composingQuery = useRef(false);
   const [rows, setRows] = useState<AdminRow[]>(initialData?.rows ?? []);
   const [selected, setSelected] = useState<AdminRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -420,6 +422,21 @@ function AdminList({
   function filter(key: keyof AdminFilters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value, page: 0 }));
     setCreating(false);
+  }
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    if (composingQuery.current) return;
+    const query = draftQuery.trim();
+    setDraftQuery(query);
+    setCreating(false);
+    if (query === filters.query && filters.page === 0) {
+      // 이미 같은 조건의 첫 페이지를 보고 있으면 재조회를 위해 version만 올린다.
+      setVersion((v) => v + 1);
+    } else {
+      // 검색 제출은 항상 첫 페이지부터 조회한다.
+      setFilters((prev) => ({ ...prev, query, page: 0 }));
+    }
   }
 
   function saved() {
@@ -483,16 +500,33 @@ function AdminList({
 
       <div className="admin-filters">
         {!["changes", "refunds", "store-reports"].includes(section) && (
-          <label>
-            {section === "markets" ? "시장명 검색" : "검색"}
-            <input
-              type="search"
-              id="adminSearchQuery"
-              value={filters.query}
-              onChange={(e) => filter("query", e.target.value)}
-              placeholder={section === "markets" ? "시장명 입력" : "이름 또는 ID 검색"}
-            />
-          </label>
+          <form className="admin-search-form" onSubmit={submitSearch}>
+            <label>
+              {section === "markets" ? "시장명 검색" : "검색"}
+              <input
+                type="search"
+                id="adminSearchQuery"
+                value={draftQuery}
+                onChange={(e) => setDraftQuery(e.target.value)}
+                onCompositionStart={() => {
+                  composingQuery.current = true;
+                }}
+                onCompositionEnd={() => {
+                  composingQuery.current = false;
+                }}
+                onKeyDown={(e) => {
+                  // 한글 조합 중 Enter는 조합 확정용이므로 검색을 제출하지 않는다.
+                  if (e.key === "Enter" && (e.nativeEvent.isComposing || composingQuery.current)) {
+                    e.preventDefault();
+                  }
+                }}
+                placeholder={section === "markets" ? "시장명 입력" : "이름 또는 ID 검색"}
+              />
+            </label>
+            <button type="submit" id="btnAdminSearch">
+              검색
+            </button>
+          </form>
         )}
         {section === "store-reports" && (
           <label>
@@ -691,7 +725,7 @@ function AdminList({
             >
               이전
             </button>
-            <span>{filters.page + 1}페이지</span>
+            <span>{filters.page + 1}</span>
             <button
               type="button"
               disabled={rows.length <= 50}

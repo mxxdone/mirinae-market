@@ -55,6 +55,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
     id: number;
   }[];
   await page.locator("#adminSearchQuery").fill("미리내시장");
+  await page.locator("#btnAdminSearch").click();
   await expect(page.locator(".admin-table-wrap tbody tr")).toHaveCount(1);
   expect(
     await page
@@ -66,6 +67,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
     fullPage: true,
   });
   await page.locator("#adminSearchQuery").fill("없는결과_너비확인");
+  await page.locator("#btnAdminSearch").click();
   await expect(page.locator(".admin-table-wrap tbody tr")).toHaveCount(0);
   expect(
     await page
@@ -73,6 +75,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
       .evaluate((element) => element.getBoundingClientRect().width),
   ).toBeLessThanOrEqual(1920);
   await page.locator("#adminSearchQuery").fill("");
+  await page.locator("#btnAdminSearch").click();
   await expect(page.locator(".admin-table-wrap tbody tr")).toHaveCount(
     Math.min(initialMarkets.length, 50),
   );

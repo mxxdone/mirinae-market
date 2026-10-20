@@ -1704,6 +1704,15 @@ body {
   gap: 6px;
   font-size: 14px;
 }
+.admin-search-form {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+.admin-search-form label {
+  min-width: 0;
+}
 .admin-workspace input,
 .admin-workspace select,
 .admin-detail input {

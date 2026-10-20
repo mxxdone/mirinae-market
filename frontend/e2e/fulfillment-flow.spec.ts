@@ -275,6 +275,7 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     await page.locator("#admin-nav-stores").click();
     await expect(page.locator(".admin-heading h2")).toHaveText("매장");
     await page.locator("#adminSearchQuery").fill("검증매장");
+    await page.locator("#btnAdminSearch").click();
     await adminRow(page, order.storeId).getByRole("button", { name: /상세/ }).click();
     await page.locator("#adminOperationReasonInput").fill("담당자에게 임시 휴업 확인");
     const lateOperation = await holdFirstResponse(
@@ -318,6 +319,7 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     await page.locator("#admin-nav-orders").click();
     await expect(page.locator(".admin-heading h2")).toHaveText("주문");
     await page.locator("#adminSearchQuery").fill(String(checkout.id));
+    await page.locator("#btnAdminSearch").click();
     const operationPattern = `**/api/admin/orders/${checkout.id}/store-orders`;
     await page.route(operationPattern, (route) =>
       route.fulfill({ status: 503, json: { message: "일시적인 조회 실패" } }),

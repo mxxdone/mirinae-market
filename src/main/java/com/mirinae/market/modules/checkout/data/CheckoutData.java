@@ -17,6 +17,22 @@ public class CheckoutData {
     this.jdbc = jdbc;
   }
 
+  public List<java.util.Map<String, Object>> managedOrders(String query, int page) {
+    return jdbc.queryForList(
+        "SELECT c.id,a.login_id AS \"buyerLoginId\",a.display_name AS \"buyerName\",CAST(c.total_won AS text) AS \"totalWon\",CAST(c.confirmed_at AS text) AS \"confirmedAt\" FROM checkouts c JOIN accounts a ON a.id=c.buyer_id WHERE c.status='CONFIRMED' AND (position(lower(?) in lower(a.login_id))>0 OR position(lower(?) in lower(a.display_name))>0 OR CAST(c.id AS text)=? OR EXISTS(SELECT 1 FROM store_orders s WHERE s.checkout_id=c.id AND position(lower(?) in lower(s.store_name))>0)) ORDER BY c.id DESC LIMIT 51 OFFSET ?",
+        query,
+        query,
+        query,
+        query,
+        page * 50);
+  }
+
+  public List<java.util.Map<String, Object>> managedOrderItems(long id) {
+    return jdbc.queryForList(
+        "SELECT s.id AS \"storeOrderId\",s.store_id AS \"storeId\",s.store_name AS \"storeName\",CAST(s.pickup_date AS text) AS \"pickupDate\",CAST(s.start_time AS text) AS \"startTime\",CAST(s.end_time AS text) AS \"endTime\",i.product_name AS \"productName\",i.unit_type AS \"unitType\",i.unit_amount AS \"unitAmount\",i.price_won AS \"priceWon\",i.quantity FROM store_orders s JOIN order_items i ON i.store_order_id=s.id JOIN checkouts c ON c.id=s.checkout_id WHERE c.id=? AND c.status='CONFIRMED' ORDER BY s.id,i.id",
+        id);
+  }
+
   public void lockBuyer(long buyerId) {
     jdbc.update("INSERT INTO carts(buyer_id) VALUES (?) ON CONFLICT DO NOTHING", buyerId);
     jdbc.queryForObject(
@@ -95,6 +111,22 @@ public class CheckoutData {
     return rows("SELECT * FROM checkouts WHERE buyer_id=? ORDER BY id DESC LIMIT 100", buyerId);
   }
 
+  public Optional<StatementRow> confirmedStatement(long buyerId, long checkoutId) {
+    // 본인·확정 주문만 조회하며 없는 주문·타인 주문·미확정 주문은 같은 결과로 구분하지 않는다.
+    return jdbc
+        .query(
+            "SELECT id,total_won,confirmed_at FROM checkouts WHERE id=? AND buyer_id=? AND status='CONFIRMED'",
+            (rs, n) ->
+                new StatementRow(
+                    rs.getLong("id"),
+                    rs.getLong("total_won"),
+                    rs.getTimestamp("confirmed_at").toInstant()),
+            checkoutId,
+            buyerId)
+        .stream()
+        .findFirst();
+  }
+
   private List<CheckoutRow> rows(String sql, Object... args) {
     return jdbc.query(
         sql,
@@ -159,6 +191,25 @@ public class CheckoutData {
         id);
   }
 
+  public Optional<String> freePickupCode(long store, LocalDate date) {
+    var candidate =
+        jdbc
+            .queryForList(
+                "WITH seed AS MATERIALIZED(SELECT lpad(floor(random()*1000000)::text,6,'0') AS code) SELECT code FROM seed WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=seed.code)",
+                String.class,
+                store,
+                date)
+            .stream()
+            .findFirst();
+    if (candidate.isPresent()) return candidate;
+    return jdbc
+        .queryForList(
+            "WITH seed AS MATERIALIZED(SELECT floor(random()*1000000)::integer AS start) SELECT lpad(((n+seed.start)%1000000)::text,6,'0') FROM seed CROSS JOIN generate_series(0,999999) n WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=lpad(((n+seed.start)%1000000)::text,6,'0')) LIMIT 1",
+            String.class, store, date)
+        .stream()
+        .findFirst();
+  }
+
   public long storeOrder(
       long checkoutId,
       long storeId,
@@ -167,9 +218,10 @@ public class CheckoutData {
       LocalDate date,
       LocalTime start,
       LocalTime end,
-      LocalTime deadline) {
+      LocalTime deadline,
+      String pickupCode) {
     return jdbc.queryForObject(
-        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(checkout_id,store_id) DO UPDATE SET store_id=EXCLUDED.store_id RETURNING id",
+        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline,pickup_code) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(checkout_id,store_id) DO UPDATE SET store_id=EXCLUDED.store_id RETURNING id",
         Long.class,
         checkoutId,
         storeId,
@@ -178,7 +230,8 @@ public class CheckoutData {
         date,
         start,
         end,
-        deadline);
+        deadline,
+        pickupCode);
   }
 
   public void orderItem(

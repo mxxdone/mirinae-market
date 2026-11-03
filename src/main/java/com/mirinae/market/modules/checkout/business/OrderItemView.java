@@ -1,4 +1,12 @@
 package com.mirinae.market.modules.checkout.business;
 
 public record OrderItemView(
-    String productName, String unitType, int unitAmount, int priceWon, int quantity) {}
+    long id,
+    String productName,
+    String unitType,
+    int unitAmount,
+    int priceWon,
+    int quantity,
+    boolean cancelled,
+    String cancellationType,
+    String cancellationReason) {}

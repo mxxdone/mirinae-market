@@ -18,25 +18,46 @@ public class ProductService {
   private final ProductData data;
   private final StoreService stores;
   private final Clock clock;
+  private final ProductImageService images;
 
-  public ProductService(ProductData data, StoreService stores, Clock clock) {
+  public ProductService(
+      ProductData data, StoreService stores, Clock clock, ProductImageService images) {
     this.data = data;
     this.stores = stores;
     this.clock = clock;
+    this.images = images;
+  }
+
+  public List<java.util.Map<String, Object>> managedSales(LocalDate date, String query, int page) {
+    return data.managedSales(date, query, page);
   }
 
   @Transactional
   public ProductView create(
       String loginId, long storeId, String name, String description, String type, Integer amount) {
+    return create(loginId, storeId, name, description, type, amount, null);
+  }
+
+  @Transactional
+  public ProductView create(
+      String loginId,
+      long storeId,
+      String name,
+      String description,
+      String type,
+      Integer amount,
+      String imageId) {
     authorizeAndLock(loginId, storeId);
     SaleUnit unit = ProductRules.unit(type, amount);
-    return productView(
+    var row =
         data.create(
             storeId,
             ProductRules.name(name),
             ProductRules.description(description),
             unit.kind().name(),
-            unit.amount()));
+            unit.amount());
+    images.change(storeId, row.id(), imageId);
+    return productView(row);
   }
 
   @Transactional
@@ -48,6 +69,19 @@ public class ProductService {
       String description,
       String type,
       Integer amount) {
+    return update(loginId, storeId, productId, name, description, type, amount, null);
+  }
+
+  @Transactional
+  public ProductView update(
+      String loginId,
+      long storeId,
+      long productId,
+      String name,
+      String description,
+      String type,
+      Integer amount,
+      String imageId) {
     authorizeAndLock(loginId, storeId);
     ProductRow previous =
         data.product(storeId, productId).orElseThrow(ProductNotFoundException::new);
@@ -69,6 +103,7 @@ public class ProductService {
         normalizedDescription,
         unit.kind().name(),
         unit.amount());
+    images.change(storeId, productId, imageId);
     return new ProductView(
         productId,
         storeId,
@@ -102,6 +137,7 @@ public class ProductService {
     if (!data.hasProduct(storeId, productId)) {
       throw new ProductNotFoundException();
     }
+    images.retire(productId);
     data.archive(storeId, productId);
   }
 
@@ -248,6 +284,25 @@ public class ProductService {
     if (!OfferRules.now(current).isBefore(row.orderDeadline()))
       throw new ProductNotFoundException();
     return offerView(row);
+  }
+
+  @Transactional(
+      readOnly = true,
+      isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+  public OfferPage searchStore(long marketId, long storeId, String query, int page, int size) {
+    ProductRules.page(page, size);
+    String text = ProductRules.query(query);
+    stores.publicStore(marketId, storeId);
+    Clock current = Clock.fixed(clock.instant(), clock.getZone());
+    var date = OfferRules.today(current);
+    var time = OfferRules.now(current);
+    var rows = data.searchStore(marketId, storeId, date, time, text, page * size, size + 1);
+    return new OfferPage(
+        rows.stream().limit(size).map(ProductService::offerView).toList(),
+        page,
+        size,
+        rows.size() > size,
+        data.storeOfferCount(marketId, storeId, date, time, text));
   }
 
   private void checkInventoryVersion(long storeId, long productId, LocalDate date, Long expected) {

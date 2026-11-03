@@ -58,6 +58,12 @@ jobs:
       E2E_SELLER_A_LOGIN_ID: ${{ secrets.E2E_SELLER_A_LOGIN_ID }}
       E2E_SELLER_B_LOGIN_ID: ${{ secrets.E2E_SELLER_B_LOGIN_ID }}
       E2E_DEMO_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+      ADMIN_BOOTSTRAP_ENABLED: "true"
+      ADMIN_BOOTSTRAP_LOGIN_ID: e2e_admin
+      ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
+      ADMIN_BOOTSTRAP_EMAIL: e2e-admin@example.com
+      E2E_ADMIN_LOGIN_ID: e2e_admin
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_DEMO_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -128,7 +134,25 @@ jobs:
         run: |
           docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_seller_a=$E2E_SELLER_A_LOGIN_ID" --set "source_seller_b=$E2E_SELLER_B_LOGIN_ID" < frontend/e2e/fixtures/checkout.sql
 
-      - name: Install Chromium
+      - name: Seed fulfillment integration orders
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_buyer=$E2E_BUYER_LOGIN_ID" < frontend/e2e/fixtures/fulfillment.sql
+
+      - name: Seed seller dashboard integration orders
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_buyer=$E2E_BUYER_LOGIN_ID" < frontend/e2e/fixtures/seller-dashboard.sql
+
+      - name: Seed store review integration orders
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec -i "$POSTGRES_CONTAINER" psql -U mirinae_test -d mirinae_frontend_test -v ON_ERROR_STOP=1 --set "source_buyer=$E2E_BUYER_LOGIN_ID" < frontend/e2e/fixtures/reviews.sql
+
+      - name: Install browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 

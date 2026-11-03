@@ -14,6 +14,58 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(
+      com.mirinae.market.modules.product.business.ProductImageForbiddenException.class)
+  public ResponseEntity<Map<String, String>> imageForbidden(RuntimeException exception) {
+    return ResponseEntity.status(403)
+        .body(Map.of("code", "FORBIDDEN", "message", exception.getMessage()));
+  }
+
+  @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+  public ResponseEntity<Map<String, String>> imageTooLarge(RuntimeException exception) {
+    return ResponseEntity.status(413)
+        .body(Map.of("code", "IMAGE_TOO_LARGE", "message", "사진은 최대 5MiB까지 등록할 수 있습니다."));
+  }
+
+  @ExceptionHandler({java.io.UncheckedIOException.class, java.io.IOException.class})
+  public ResponseEntity<Map<String, String>> imageStorage(Exception exception) {
+    return ResponseEntity.status(503)
+        .body(
+            Map.of(
+                "code",
+                "IMAGE_STORAGE_UNAVAILABLE",
+                "message",
+                "사진 저장소를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."));
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.review.business.ReviewNotFoundException.class)
+  public ResponseEntity<Map<String, String>> reviewNotFound(
+      com.mirinae.market.modules.review.business.ReviewNotFoundException exception) {
+    return ResponseEntity.status(404)
+        .body(Map.of("code", "NOT_FOUND", "message", exception.getMessage()));
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.review.business.ReviewConflictException.class)
+  public ResponseEntity<Map<String, String>> reviewConflict(
+      com.mirinae.market.modules.review.business.ReviewConflictException exception) {
+    return ResponseEntity.status(409)
+        .body(Map.of("code", "REVIEW_STATE_CONFLICT", "message", exception.getMessage()));
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.store.business.StoreNotFoundException.class)
+  public ResponseEntity<Map<String, String>> storeNotFound(
+      com.mirinae.market.modules.store.business.StoreNotFoundException exception) {
+    return ResponseEntity.status(404)
+        .body(Map.of("code", "NOT_FOUND", "message", exception.getMessage()));
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.store.business.StoreOperationConflictException.class)
+  public ResponseEntity<Map<String, String>> storeOperationConflict(
+      com.mirinae.market.modules.store.business.StoreOperationConflictException exception) {
+    return ResponseEntity.status(409)
+        .body(Map.of("code", "REPORT_STATE_CONFLICT", "message", exception.getMessage()));
+  }
+
   @ExceptionHandler(com.mirinae.market.modules.checkout.business.CheckoutConflictException.class)
   public ResponseEntity<Map<String, String>> checkoutConflict(
       com.mirinae.market.modules.checkout.business.CheckoutConflictException exception) {
@@ -56,6 +108,18 @@ public class ApiExceptionHandler {
   public ResponseEntity<Map<String, String>> duplicate(DuplicateAccountException exception) {
     return ResponseEntity.status(409)
         .body(Map.of("code", "DUPLICATE_ACCOUNT", "message", exception.getMessage()));
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.account.business.AccountForbiddenException.class)
+  public ResponseEntity<Map<String, String>> accountForbidden() {
+    return ResponseEntity.status(403)
+        .body(Map.of("code", "FORBIDDEN", "message", "관리자 권한이 필요합니다."));
+  }
+
+  @ExceptionHandler(org.springframework.dao.DuplicateKeyException.class)
+  public ResponseEntity<Map<String, String>> duplicateKey() {
+    return ResponseEntity.status(409)
+        .body(Map.of("code", "DUPLICATE_RESOURCE", "message", "이미 등록된 이름 또는 계정 정보입니다."));
   }
 
   @ExceptionHandler(StoreForbiddenException.class)

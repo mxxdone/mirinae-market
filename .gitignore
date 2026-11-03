@@ -4,6 +4,7 @@ bin/
 out/
 frontend/dist/
 frontend/*.tsbuildinfo
+/frontend/.env.local
 
 # Gradle caches (wrapper jar itself must be tracked)
 .gradle/
@@ -40,3 +41,5 @@ output/playwright/
 
 # Local execution plan; durable requirements and decisions remain tracked
 /PLAN.md
+
+/.playwright-cli/

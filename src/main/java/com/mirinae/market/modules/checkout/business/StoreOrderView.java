@@ -12,4 +12,12 @@ public record StoreOrderView(
     LocalTime startTime,
     LocalTime endTime,
     LocalTime orderDeadline,
-    List<OrderItemView> items) {}
+    List<OrderItemView> items,
+    String status,
+    String pickupCode,
+    boolean hasFulfillmentFailure,
+    boolean canCancel,
+    boolean canCancelRemaining,
+    String cancelledWon,
+    String refundedWon,
+    List<RefundView> refunds) {}

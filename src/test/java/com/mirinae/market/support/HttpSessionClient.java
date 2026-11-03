@@ -60,6 +60,11 @@ public final class HttpSessionClient implements AutoCloseable {
     return mutation("PUT", path, body, "application/json", includeCsrf);
   }
 
+  public HttpResponse<String> patch(String path, String body, boolean includeCsrf)
+      throws Exception {
+    return mutation("PATCH", path, body, "application/json", includeCsrf);
+  }
+
   public HttpResponse<String> delete(String path, boolean includeCsrf) throws Exception {
     return mutation("DELETE", path, "", "application/json", includeCsrf);
   }

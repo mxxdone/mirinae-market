@@ -13,7 +13,7 @@ interface BuyerSummaryScreenProps {
 }
 
 /**
- * 구매자 계정 요약 화면
+ * 구매자가 직접 여는 내 계정 화면
  * 실제 인증된 계정의 me 응답(표시이름, 로그인 아이디, 역할) 중심 렌더링
  */
 export function BuyerSummaryScreen({
@@ -37,17 +37,16 @@ export function BuyerSummaryScreen({
         <div className="summary-card-header">
           <div className="summary-tag-row">
             <span className="pill-badge primary">구매자 계정</span>
-            <span className="pill-badge secondary">연결된 세션</span>
           </div>
           <h1 id="heading-buyer-summary" className="summary-heading">
-            반갑습니다, {user.displayName} 님!
+            내 계정
           </h1>
-          <p className="summary-subtext">등록된 구매자 계정 기본정보와 로그인 상태입니다.</p>
+          <p className="summary-subtext">내 계정 정보를 확인할 수 있습니다.</p>
         </div>
 
         <div className="summary-card-body">
           <button type="button" className="btn-submit-primary" onClick={onBrowse}>
-            시장 상품 둘러보기
+            장보기로 돌아가기
           </button>
           <nav className="checkout-actions" aria-label="구매 메뉴">
             <button className="text-action-link" onClick={onCart}>

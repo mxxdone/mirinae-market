@@ -269,6 +269,16 @@ export function BuyerCheckoutPanel({
               원 · 모의 결제이며 실제 금액은 청구하지 않습니다.
             </p>
             <p>결제한 가격과 매장별 수령 조건은 주문에 고정됩니다.</p>
+            <div className="checkout-notice-box" role="note" id="checkoutPickupNotice">
+              <p>
+                <strong>수령 및 취소 안내</strong>
+              </p>
+              <ul>
+                <li>매장별 수령 시간 및 일반 취소 마감 시각을 확인해 주세요.</li>
+                <li>일반 취소는 각 매장의 주문 마감 전까지만 가능합니다.</li>
+                <li>수령 마감 정각까지 찾아가지 않은 구매자 미수령 건은 자동 환불되지 않습니다.</li>
+              </ul>
+            </div>
             <label className="field-label" htmlFor="payment-mode">
               모의 결제 결과
             </label>

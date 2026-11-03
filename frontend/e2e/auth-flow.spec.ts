@@ -68,7 +68,14 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     // 로그인 실행
     await page.locator("#btnLoginSubmit").click();
 
-    // 구매자 계정 요약 화면 진입 확인
+    // 로그인과 새로고침은 장보기로 진입하고 내 계정은 직접 연다.
+    await expect(page.locator("#heading-market")).toBeVisible();
+    await expect(page.locator("#heading-buyer-summary")).toHaveCount(0);
+    await expect(page.locator("#buyerSelectProvince")).toBeVisible();
+    await page.reload();
+    await expect(page.locator("#buyerSelectProvince")).toBeVisible();
+    await page.getByRole("button", { name: "내 계정", exact: true }).click();
+    await expect(page).toHaveURL(/#account$/);
     await expect(page.locator("#heading-buyer-summary")).toBeVisible();
     await expect(page.locator("#userSummaryDisplayName")).toHaveText(testName);
     await expect(page.locator("#userSummaryLoginId")).toHaveText(testLoginId);
@@ -140,7 +147,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.locator("#loginPassword").fill(demoPassword);
     await page.locator("#btnLoginSubmit").click();
 
-    await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+    await expect(page.locator("#heading-market")).toBeVisible();
 
     // 구매자 UI는 매장 진입을 제공하지 않으며, 같은 브라우저 세션의 직접 요청도 거부됩니다.
     const response = await context.request.get(`/api/seller/stores/${storeAId}`);
@@ -148,9 +155,10 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     expect(await response.json()).toMatchObject({ code: "FORBIDDEN" });
     const currentStore = await context.request.get("/api/seller/stores/me");
     expect(currentStore.status()).toBe(403);
-    await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+    await expect(page.locator("#heading-market")).toBeVisible();
     await expect(page.locator("#storeInfoId")).not.toBeVisible();
 
+    await page.getByRole("button", { name: "내 계정", exact: true }).click();
     // 로그아웃
     await page.locator("#btnLogout").click();
     await expect(page.locator("#heading-login")).toBeVisible();
@@ -281,7 +289,9 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.locator("#loginPassword").fill(demoPassword);
     await page.locator("#btnLoginSubmit").click();
 
-    // 구매자 계정 요약 진입 확인
+    await expect(page.locator("#heading-market")).toBeVisible();
+    await page.getByRole("button", { name: "내 계정", exact: true }).click();
+    // 직접 연 내 계정에서 오프라인 로그아웃 확인
     await expect(page.locator("#heading-buyer-summary")).toBeVisible();
     await expect(page.locator("#userSummaryLoginId")).toHaveText(buyerId);
 

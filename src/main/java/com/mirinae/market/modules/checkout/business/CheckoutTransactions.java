@@ -4,31 +4,42 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.checkout.data.CheckoutData;
 import com.mirinae.market.modules.checkout.data.CheckoutRow;
 import com.mirinae.market.modules.checkout.data.LineRow;
-import com.mirinae.market.modules.checkout.data.OrderRow;
 import com.mirinae.market.modules.product.business.InventoryService;
 import com.mirinae.market.modules.product.business.ProductConflictException;
 import com.mirinae.market.modules.product.business.ProductNotFoundException;
 import com.mirinae.market.modules.product.business.PurchaseLine;
 import java.time.Clock;
-import java.util.ArrayList;
 import java.util.List;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CheckoutTransactions {
+  // 실제 청구·세무 증빙이 아닌 모의 결제 테스트 내역임을 응답에 명시한다.
+  private static final String STATEMENT_NOTICE =
+      "이 내역서는 실제 청구나 공식·세무 증빙이 아닌 모의 결제 테스트 내역입니다. 카드 승인번호와 현금영수증 발급번호는 제공하지 않습니다.";
   private final CheckoutData data;
   private final InventoryService inventory;
   private final AccountService accounts;
   private final Clock clock;
+  private final FulfillmentService fulfillment;
+  private final com.mirinae.market.modules.store.business.StoreService stores;
 
   public CheckoutTransactions(
-      CheckoutData data, InventoryService inventory, AccountService accounts, Clock clock) {
+      CheckoutData data,
+      InventoryService inventory,
+      AccountService accounts,
+      Clock clock,
+      FulfillmentService fulfillment,
+      com.mirinae.market.modules.store.business.StoreService stores) {
     this.data = data;
     this.inventory = inventory;
     this.accounts = accounts;
     this.clock = clock;
+    this.fulfillment = fulfillment;
+    this.stores = stores;
   }
 
   private long buyer(String loginId) {
@@ -164,7 +175,21 @@ public class CheckoutTransactions {
     }
     var lines = data.items(row.id());
     List<com.mirinae.market.modules.product.business.OfferView> offers;
+    var codes = new java.util.HashMap<Long, String>();
     try {
+      var requested =
+          lines.stream().map(line -> inventory.describe(line.offerId()).offer()).toList();
+      requested.stream().map(o -> o.storeId()).distinct().sorted().forEach(stores::lockStore);
+      for (var offer : requested) {
+        if (!codes.containsKey(offer.storeId()))
+          codes.put(
+              offer.storeId(),
+              data.freePickupCode(offer.storeId(), offer.pickupDate())
+                  .orElseThrow(
+                      () ->
+                          new ProductConflictException(
+                              "PICKUP_CODE_EXHAUSTED", "해당 매장·수령일의 수령 코드를 더 발급할 수 없습니다.")));
+      }
       offers =
           inventory.purchase(
               lines.stream()
@@ -202,7 +227,8 @@ public class CheckoutTransactions {
               offer.pickupDate(),
               offer.startTime(),
               offer.endTime(),
-              offer.orderDeadline());
+              offer.orderDeadline(),
+              codes.get(offer.storeId()));
       data.orderItem(
           storeOrder,
           offer.id(),
@@ -225,8 +251,31 @@ public class CheckoutTransactions {
   }
 
   @Transactional(readOnly = true)
+  public List<java.util.Map<String, Object>> managedOrders(String query, int page) {
+    return data.managedOrders(query, page);
+  }
+
+  @Transactional(readOnly = true)
+  public List<java.util.Map<String, Object>> managedOrderItems(long id) {
+    return data.managedOrderItems(id);
+  }
+
+  @Transactional(readOnly = true)
   public List<CheckoutView> history(String loginId) {
     return data.history(buyer(loginId)).stream().map(this::view).toList();
+  }
+
+  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+  public StatementView statement(String loginId, long checkoutId) {
+    long buyer = buyer(loginId);
+    var row = data.confirmedStatement(buyer, checkoutId).orElseThrow(ProductNotFoundException::new);
+    // 결제 당시 총액·스냅샷과 조회 시점의 취소·환불 상태를 같은 읽기 스냅샷에서 읽는다.
+    return new StatementView(
+        row.id(),
+        row.confirmedAt(),
+        Long.toString(row.totalWon()),
+        fulfillment.checkoutOrders(row.id()),
+        STATEMENT_NOTICE);
   }
 
   @Transactional
@@ -245,31 +294,6 @@ public class CheckoutTransactions {
   }
 
   private CheckoutView view(CheckoutRow row) {
-    List<OrderRow> orders = data.orders(row.id());
-    var groups = new ArrayList<StoreOrderView>();
-    for (long id : orders.stream().map(OrderRow::storeOrderId).distinct().toList()) {
-      var group = orders.stream().filter(item -> item.storeOrderId() == id).toList();
-      var first = group.getFirst();
-      groups.add(
-          new StoreOrderView(
-              id,
-              first.storeId(),
-              first.storeName(),
-              first.pickupDate(),
-              first.startTime(),
-              first.endTime(),
-              first.orderDeadline(),
-              group.stream()
-                  .map(
-                      item ->
-                          new OrderItemView(
-                              item.productName(),
-                              item.unitType(),
-                              item.unitAmount(),
-                              item.priceWon(),
-                              item.quantity()))
-                  .toList()));
-    }
     return new CheckoutView(
         row.id(),
         row.requestKey(),
@@ -277,6 +301,6 @@ public class CheckoutTransactions {
         row.errorCode(),
         row.message(),
         Long.toString(row.totalWon()),
-        groups);
+        fulfillment.checkoutOrders(row.id()));
   }
 }

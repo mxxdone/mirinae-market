@@ -1,5 +1,7 @@
 import { apiGet, apiPutJson, apiPostJson, apiDeleteEmpty } from "./client";
 import type { OfferView } from "./types";
+import type { OrderItemView, StoreOrderView } from "./operations";
+
 export interface CartItem {
   offer: OfferView;
   quantity: number;
@@ -11,23 +13,9 @@ export interface Cart {
   version: number;
   items: CartItem[];
 }
-export interface OrderItem {
-  productName: string;
-  unitType: string;
-  unitAmount: number;
-  priceWon: number;
-  quantity: number;
-}
-export interface StoreOrder {
-  id: number;
-  storeId: number;
-  storeName: string;
-  pickupDate: string;
-  startTime: string;
-  endTime: string;
-  orderDeadline: string;
-  items: OrderItem[];
-}
+export type OrderItem = OrderItemView;
+export type StoreOrder = StoreOrderView;
+
 export interface Checkout {
   id: number;
   requestKey: string;
@@ -68,4 +56,16 @@ export function getCheckout(key: string): Promise<Checkout> {
 }
 export function getOrders(): Promise<Checkout[]> {
   return apiGet("/api/buyer/orders");
+}
+
+export interface Statement {
+  id: number;
+  confirmedAt: string;
+  totalWon: string;
+  storeOrders: StoreOrderView[];
+  testNotice: string;
+}
+
+export function getOrderStatement(checkoutId: number, signal?: AbortSignal): Promise<Statement> {
+  return apiGet(`/api/buyer/orders/${checkoutId}/statement`, signal);
 }

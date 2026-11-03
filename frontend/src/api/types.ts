@@ -30,13 +30,14 @@ export interface LoginResponse {
   authenticated: boolean;
 }
 
-export type UserRole = "BUYER" | "SELLER";
+export type UserRole = "BUYER" | "SELLER" | "ADMIN";
 
 export interface UserMe {
   id: number;
   loginId: string;
   displayName: string;
   role: UserRole;
+  requiresPasswordChange: boolean;
 }
 
 export interface StoreView {
@@ -70,11 +71,66 @@ export interface MarketView {
   id: number;
   name: string;
 }
+
+export interface RegionView {
+  code: string;
+  provinceCode: string;
+  provinceName: string;
+  provinceShortName: string;
+  districtName: string;
+}
+
+export interface LocatedMarketView {
+  id: number;
+  name: string;
+  regionCode: string | null;
+  provinceCode: string | null;
+  regionLabel: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  distanceKm: number | null;
+}
+
+export interface MarketCandidateView {
+  id: string;
+  name: string;
+  regionCode: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  sourceDate: string;
+}
+
+export interface MarketLocationInput {
+  regionCode: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface MarketCreateInput extends MarketLocationInput {
+  name: string;
+}
+
+export interface MarketUpdateInput {
+  name: string;
+  location?: MarketLocationInput | null;
+}
+
+export interface MarketFilterParams {
+  provinceCode?: string;
+  regionCode?: string;
+  query?: string;
+  latitude?: number;
+  longitude?: number;
+}
 export interface ProductInput {
   name: string;
   description: string;
   unitType: UnitType;
   unitAmount: number;
+  imageId?: string;
 }
 export interface ProductView extends ProductInput {
   id: number;
@@ -113,6 +169,10 @@ export interface ResultPage<T> {
 }
 
 export interface ProductPage extends ResultPage<ProductView> {
+  totalItems: number;
+}
+
+export interface StorePage extends ResultPage<StoreView> {
   totalItems: number;
 }
 

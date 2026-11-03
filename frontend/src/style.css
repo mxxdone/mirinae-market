@@ -67,6 +67,8 @@ body {
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -98,7 +100,7 @@ body {
 
 .main-viewport {
   flex: 1;
-  padding: 36px 20px 48px;
+  padding: 36px clamp(20px, 2.5vw, 96px) 48px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -107,7 +109,7 @@ body {
 
 .screen-container {
   width: 100%;
-  max-width: 1040px;
+  min-width: 0;
 }
 
 /* 카드 및 스플릿 레이아웃 */
@@ -969,7 +971,7 @@ body {
 /* 기존 한지색·테라코타·먹색 스타일을 장보기와 상인 등록 화면에 이어서 적용한다. */
 .market-workspace {
   width: 100%;
-  max-width: 1040px;
+  max-width: none;
   margin: 0 auto;
 }
 .market-header {
@@ -993,7 +995,7 @@ body {
 }
 .offer-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
   gap: 18px;
 }
 .offer-card {
@@ -1060,10 +1062,6 @@ body {
   gap: 3px;
   font-size: 12px;
   color: var(--color-text-muted);
-}
-.offer-detail-button {
-  width: 100%;
-  margin-top: 9px;
 }
 .offer-detail {
   display: flex;
@@ -1333,7 +1331,8 @@ body {
 }
 
 .seller-workspace {
-  max-width: 1040px;
+  width: 100%;
+  max-width: none;
 }
 .seller-workspace-header {
   display: flex;
@@ -1638,4 +1637,3091 @@ body {
 }
 .checkout-order ul {
   padding-left: 1.25rem;
+}
+
+/* 관리자 목록·상세 작업 공간은 좁은 화면에서 세로로 배치한다. */
+.admin-workspace {
+  display: grid;
+  grid-template-columns: clamp(170px, 12vw, 224px) minmax(0, 1fr);
+  width: 100%;
+  max-width: 120rem;
+  margin: 0 auto;
+  overflow: hidden;
+}
+.admin-sidebar {
+  padding: 24px 16px;
+  background: var(--color-bg-soft, #f5f3ec);
+  border-right: 1px solid #dedbd2;
+}
+.admin-sidebar h1 {
+  font-size: 20px;
+  margin: 0 0 24px;
+}
+.admin-sidebar nav {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 32px;
+}
+.admin-sidebar a {
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.admin-sidebar a[aria-current="page"] {
+  background: var(--color-primary, #24654d);
+  color: white;
+}
+.admin-content {
+  padding: 24px;
+  min-width: 0;
+}
+.admin-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-heading h2,
+.admin-heading h3 {
+  margin: 0;
+}
+.admin-filters {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.admin-workspace label,
+.admin-detail label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+.admin-search-form {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.admin-search-form label {
+  min-width: 0;
+}
+.admin-workspace .admin-filters :is(input, select, button) {
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0;
+  line-height: 1.4;
+}
+.admin-market-search-form label {
+  flex: 1 1 130px;
+}
+.admin-region-error {
+  margin: 0;
+  color: #9b2c2c;
+}
+.admin-workspace input,
+.admin-workspace select,
+.admin-detail input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #c8c7be;
+  border-radius: 6px;
+  background: white;
+  color: #20251f;
+  font: inherit;
+}
+.admin-workspace button,
+.admin-detail button {
+  padding: 9px 14px;
+  border: 1px solid #b8c8ba;
+  border-radius: 6px;
+  background: #f4f8f3;
+  color: #1c5137;
+  cursor: pointer;
+  font: inherit;
+}
+.admin-workspace button:disabled,
+.admin-detail button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.admin-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.admin-table-wrap table {
+  width: 100%;
+  text-align: left;
+}
+.admin-table-wrap th,
+.admin-table-wrap td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #e6e5de;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.admin-pages {
+  display: flex;
+  justify-content: end;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.admin-detail {
+  padding: 24px;
+  border: 1px solid #d7dfd5;
+  border-radius: 10px;
+  margin-top: 20px;
+  background: #fcfdf9;
+  min-width: 0;
+}
+.admin-detail .market-form {
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+}
+.admin-values {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 24px;
+}
+.admin-values div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+}
+.admin-values dt {
+  color: var(--color-text-muted, #62695f);
+}
+.admin-values dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .admin-workspace {
+    grid-template-columns: 1fr;
+    width: 100%;
+    margin: 0;
+  }
+  .admin-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #dedbd2;
+  }
+  .admin-sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .admin-content,
+  .admin-detail {
+    padding: 16px;
+  }
+  .admin-values div {
+    grid-template-columns: 100px minmax(0, 1fr);
+  }
+}
+
+/* 시장 위치 및 지역 선택 스타일 */
+.admin-market-location-fields {
+  display: grid;
+  gap: 14px;
+}
+
+.location-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.location-edit-toggle {
+  padding: 10px;
+  background: #f7f5ef;
+  border-radius: 6px;
+  border: 1px solid #e2ddd4;
+}
+
+.input-with-button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-with-button input {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-candidate-section {
+  border: 1px solid #d7dfd5;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fdfcf9;
+}
+
+.candidate-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.candidate-section-header h4 {
+  font-size: 14px;
+  color: var(--color-text-main);
+}
+
+.candidate-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.candidate-input-row label {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-workspace .market-workspace .admin-candidate-section :is(input, select, button),
+.admin-workspace .admin-market-location-fields .input-with-button :is(input, button) {
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0;
+  line-height: 1.4;
+}
+
+.candidate-input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.candidate-results-table-wrap {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #e6e5de;
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.candidate-table {
+  font-size: 13px;
+  width: 100%;
+}
+
+.candidate-table th,
+.candidate-table td {
+  padding: 8px;
+}
+
+.btn-select-candidate {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.candidate-pages {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.admin-map-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.map-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-map-canvas,
+.buyer-map-canvas {
+  border: 1px solid #c8c7be;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.reference-address-box {
+  padding: 8px 12px;
+  background: #f7f5ef;
+  border: 1px solid #e6e2d8;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ref-loading {
+  color: var(--color-text-muted);
+}
+
+.ref-success {
+  color: #1c5137;
+}
+
+.ref-error {
+  color: #ad281e;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-fallback-notice,
+.map-error-notice {
+  padding: 10px 12px;
+  background: #fdf2f1;
+  border: 1px solid #e8b6b2;
+  border-radius: 6px;
+  color: #ad281e;
+  font-size: 13px;
+}
+
+.market-policy-banner {
+  padding: 8px 12px;
+  background: #f4eee3;
+  border: 1px solid #ded5c7;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #574e47;
+  margin-bottom: 12px;
+}
+
+.market-filter-panel {
+  background: #fdfbf7;
+  border: 1px solid #e6decb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.filter-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.filter-controls-row .field-group {
+  min-width: 140px;
+  flex: 1 1 auto;
+}
+
+.filter-controls-row .location-action-group {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.market-name-search-form {
+  min-width: 200px;
+  flex: 2 1 auto;
+}
+
+.buyer-market-selection .filter-controls-row :is(input, select, button) {
+  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
+  padding-block: 0;
+  line-height: 1.4;
+}
+
+.btn-nearby-location {
+  padding: 9px 14px;
+  border: 1px solid #b94b23;
+  background: #faeee8;
+  color: #b94b23;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-nearby-location.active {
+  background: #b94b23;
+  color: #ffffff;
+}
+
+.btn-secondary-sm {
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #c8c7be;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--color-text-main);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-retry-sm {
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid #ad281e;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #ad281e;
+  cursor: pointer;
+}
+
+.map-caption {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.notice-text {
+  padding: 8px 12px;
+  background: #edf7f1;
+  border: 1px solid #b8dfca;
+  border-radius: 6px;
+  color: #286b43;
+  font-size: 13px;
+}
+
+.error-text {
+  color: #ad281e;
+  font-size: 13px;
+}
+
+/* 시장 등록은 목록과 분리하고 현재 작업에 필요한 항목만 표시합니다. */
+.admin-workspace .market-workspace .admin-detail {
+  margin-top: 0;
+}
+.admin-workspace .market-workspace {
+  max-width: 860px;
+}
+.market-flow-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.market-flow-heading h4 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.admin-market-location-fields [hidden] {
+  display: none;
+}
+.admin-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #ddd);
+}
+@media (max-width: 600px) {
+  .admin-workspace .market-workspace .admin-detail {
+    padding: 16px;
+  }
+  .admin-form-actions button {
+    width: 100%;
+  }
+  .admin-workspace .market-workspace .location-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 관리자 모바일 탐색과 시장 등록의 동작 우선순위 */
+.admin-brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.admin-workspace .admin-mobile-menu {
+  display: none;
+}
+.admin-workspace .admin-primary-action {
+  background: var(--color-primary, #24654d);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 700;
+  min-height: 48px;
+}
+.admin-workspace .admin-text-action {
+  background: transparent;
+  border-color: transparent;
+  padding: 8px 0;
+  text-align: left;
+  min-height: 44px;
+}
+.market-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.market-summary-heading h4 {
+  margin: 0;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.market-confirmation {
+  background: #f4f5f1;
+  border-radius: 8px;
+  padding: 16px;
+}
+.market-confirmation dl {
+  margin: 16px 0 0;
+  display: grid;
+  gap: 16px;
+}
+.market-confirmation dt {
+  font-size: 13px;
+  color: #62695f;
+  margin-bottom: 4px;
+}
+.market-confirmation dd {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.map-position-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+}
+.map-position-actions p {
+  flex-basis: 100%;
+  margin: 0 0 4px;
+}
+.admin-market-location-fields #btnToggleManualMarket {
+  margin-top: 16px;
+  background: transparent;
+}
+.admin-market-location-fields #adminPositionStatus {
+  margin: 0;
+  font-size: 13px;
+  color: #62695f;
+}
+@media (max-width: 700px) {
+  .admin-workspace {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .admin-sidebar {
+    padding: 12px 16px;
+  }
+  .admin-sidebar h1 {
+    margin: 0;
+    font-size: 17px;
+  }
+  .admin-workspace .admin-mobile-menu {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+  }
+  .admin-sidebar[data-menu-open="false"] #adminNavigation {
+    display: none;
+  }
+  .admin-sidebar #adminNavigation {
+    padding-top: 16px;
+  }
+  .admin-sidebar nav {
+    margin-bottom: 12px;
+  }
+  .admin-workspace .market-workspace {
+    padding: 0;
+  }
+  .admin-workspace .market-workspace .admin-detail {
+    border: 0;
+    border-radius: 0;
+    padding: 20px 16px;
+  }
+  .admin-workspace .market-workspace .admin-heading {
+    margin-bottom: 16px;
+  }
+  .admin-workspace .market-workspace .admin-heading h3 {
+    font-size: 17px;
+  }
+  .admin-workspace .market-workspace input,
+  .admin-workspace .market-workspace select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .admin-workspace .market-workspace .admin-candidate-section {
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .admin-workspace .market-workspace .candidate-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+    margin-top: 16px;
+  }
+  .admin-workspace .market-workspace .candidate-input-row button {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  .admin-workspace .market-workspace .location-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .admin-workspace .market-workspace .candidate-results-table-wrap {
+    border: 0;
+    margin-top: 16px;
+    overflow: visible;
+  }
+  .admin-workspace .market-workspace .candidate-table {
+    display: block;
+  }
+  .admin-workspace .market-workspace .candidate-table caption,
+  .admin-workspace .market-workspace .candidate-table thead {
+    display: none;
+  }
+  .admin-workspace .market-workspace .candidate-table tbody {
+    display: grid;
+    gap: 8px;
+  }
+  .admin-workspace .market-workspace .candidate-table .candidate-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    border: 1px solid #d7dfd5;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .admin-workspace .market-workspace .candidate-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .admin-workspace .market-workspace .candidate-table td:first-child {
+    font-weight: 700;
+  }
+  .admin-workspace .market-workspace .candidate-table td:nth-child(2) {
+    grid-column: 1;
+    color: #62695f;
+    font-size: 13px;
+  }
+  .admin-workspace .market-workspace .candidate-table td:last-child {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+  }
+  .admin-workspace .market-workspace .candidate-table button {
+    min-height: 44px;
+  }
+  .admin-workspace .market-workspace .input-with-button {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-workspace .market-workspace .map-section-header {
+    display: grid;
+    gap: 8px;
+  }
+  .admin-workspace .market-workspace .admin-map-canvas {
+    height: min(45svh, 360px);
+  }
+  .admin-market-list .admin-table-wrap {
+    overflow: visible;
+  }
+  .admin-market-list .admin-table-wrap table,
+  .admin-market-list .admin-table-wrap tbody {
+    display: block;
+  }
+  .admin-market-list .admin-table-wrap thead {
+    display: none;
+  }
+  .admin-market-list .admin-table-wrap tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 16px 0;
+    border-bottom: 1px solid #e6e5de;
+  }
+  .admin-market-list .admin-table-wrap td {
+    padding: 0;
+    border: 0;
+    grid-column: 1;
+  }
+  .admin-market-list .admin-table-wrap td[data-column="id"],
+  .admin-market-list .admin-table-wrap td[data-column="address"][data-empty="true"] {
+    display: none;
+  }
+  .admin-market-list .admin-table-wrap td:nth-child(2) {
+    font-weight: 700;
+  }
+  .admin-market-list .admin-table-wrap td:nth-child(3),
+  .admin-market-list .admin-table-wrap td:nth-child(4) {
+    font-size: 13px;
+    color: #62695f;
+  }
+  .admin-market-list .admin-table-wrap td:last-child {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+  }
+  .admin-market-list .admin-table-wrap tr:has(td[data-empty="true"]) td:last-child {
+    grid-row: 1 / span 2;
+  }
+}
+
+/* 시장 선택과 상품 탐색, 매장 등록의 작업 영역을 구분합니다. */
+.buyer-market-selection[hidden],
+.buyer-product-browse[hidden] {
+  display: none;
+}
+.buyer-market-choice {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  margin-top: 20px;
+}
+.buyer-market-choice .field-group {
+  flex: 1;
+  min-width: 0;
+}
+.buyer-current-market {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 20px;
+}
+.buyer-current-market span,
+.buyer-current-market p {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.buyer-current-market h2 {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+.admin-store-registration .admin-detail {
+  margin-top: 0;
+}
+.admin-store-registration .store-registration-form {
+  max-width: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+.admin-field-group {
+  min-width: 0;
+  border: 0;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 0;
+}
+.admin-field-group legend {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  padding: 0;
+}
+.admin-store-registration .admin-contact-fields,
+.admin-store-registration .admin-form-actions {
+  grid-column: 1 / -1;
+}
+.admin-store-registration .admin-contact-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.admin-store-registration .admin-contact-fields p {
+  grid-column: 1 / -1;
+}
+@media (max-width: 700px) {
+  .buyer-market-choice {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .buyer-market-selection .filter-controls-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .buyer-market-selection .market-name-search-form {
+    grid-column: 1 / -1;
+  }
+  .buyer-market-selection .input-box {
+    font-size: 16px;
+  }
+  .buyer-market-selection .location-action-group .field-label {
+    display: none;
+  }
+  .buyer-market-choice button {
+    width: 100%;
+  }
+  .admin-store-registration {
+    padding: 0;
+  }
+  .admin-store-registration .admin-detail {
+    border: 0;
+    border-radius: 0;
+    padding: 20px 16px;
+  }
+  .admin-store-registration .store-registration-form,
+  .admin-store-registration .admin-contact-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-store-registration input,
+  .admin-store-registration select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+/* 화면의 정보 성격에 맞춰 작업 공간과 읽기·입력 영역의 폭을 구분합니다. */
+.screen-container[data-screen="login"],
+.screen-container[data-screen="signup"] {
+  max-width: 65rem;
+}
+.screen-container[data-screen="buyer-summary"] {
+  max-width: 47.5rem;
+}
+.screen-container[data-screen="signup-complete"] {
+  max-width: 38.75rem;
+}
+.screen-container[data-screen="buyer-cart"],
+.screen-container[data-screen="buyer-orders"] {
+  max-width: 72rem;
+}
+.market-workspace[data-layout="selection"],
+.market-workspace[data-layout="detail"],
+.market-workspace[data-layout="compact"] {
+  max-width: 72rem;
+}
+.market-workspace[data-layout="medium"] {
+  max-width: 96rem;
+}
+.market-workspace .summary-tag-row {
+  justify-content: flex-start;
+  gap: 16px;
+}
+.market-workspace .market-search-bar {
+  max-width: 64rem;
+  margin-bottom: 24px;
+}
+.market-workspace .market-empty {
+  padding: 24px;
+  min-height: 0;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+.market-workspace .market-empty h2 {
+  font-size: 20px;
+}
+.seller-workspace:not(:has(.sale-table)) {
+  max-width: 72rem;
+}
+.seller-workspace:has(.product-editor),
+.seller-workspace:has(#btnRefreshStore) {
+  max-width: 64rem;
+}
+.seller-workspace .sales-common-time {
+  max-width: 56rem;
+}
+.seller-workspace .sale-table .input-box {
+  max-width: 12rem;
+}
+.admin-workspace:has(.admin-store-registration),
+.admin-workspace:has(.admin-content.market-workspace) {
+  max-width: 88rem;
+}
+.admin-workspace .admin-store-registration {
+  max-width: 72rem;
+}
+.admin-workspace .admin-table-wrap th[data-column="id"] {
+  width: 5rem;
+}
+.admin-workspace .admin-table-wrap th:last-child {
+  width: 6rem;
+}
+.admin-workspace .admin-values {
+  max-width: 64rem;
+}
+@media (min-width: 861px) {
+  .offer-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .main-viewport {
+    padding-inline: 20px;
+  }
+  .admin-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 701px) {
+  .seller-workspace .sale-table th:nth-child(2) {
+    width: auto;
+  }
+  .seller-workspace .sale-table th:nth-child(3),
+  .seller-workspace .sale-table th:nth-child(4) {
+    width: 14rem;
+  }
+}
+
+.screen-container[data-screen="seller-store"]:has(> .admin-detail) {
+  max-width: 42rem;
+}
+
+.seller-workspace:has(.sale-table) {
+  max-width: 112rem;
+}
+@media (min-width: 701px) {
+  .sales-apply-bar .btn-submit-primary {
+    width: auto;
+    min-width: 12rem;
+  }
+}
+@media (min-width: 1280px) {
+  .admin-workspace .admin-table-wrap table {
+    table-layout: fixed;
+  }
+  .admin-workspace .admin-table-wrap th[data-column] {
+    width: auto;
+  }
+  .admin-workspace .admin-table-wrap th[data-column="id"] {
+    width: 5rem;
+  }
+  .admin-workspace .admin-table-wrap th[data-column="name"] {
+    width: 20rem;
+  }
+  .admin-workspace .admin-table-wrap th[data-column="regionLabel"] {
+    width: 14rem;
+  }
+  .admin-workspace .admin-table-wrap th[data-column="loginId"],
+  .admin-workspace .admin-table-wrap th[data-column="buyerLoginId"] {
+    width: 16rem;
+  }
+  .admin-workspace .admin-table-wrap th:last-child {
+    width: 6rem;
+  }
+}
+
+/* PC 관리자 틀은 남은 화면 높이를 채우고 목록의 행 높이는 유지합니다. */
+@media (min-width: 701px) {
+  .main-viewport:has(> .screen-container[data-screen="admin"]) {
+    align-items: stretch;
+  }
+  .screen-container[data-screen="admin"] {
+    display: flex;
+    flex-direction: column;
+  }
+  .screen-container[data-screen="admin"] > .admin-workspace {
+    flex: 1;
+  }
+  .admin-sidebar {
+    display: flex;
+    flex-direction: column;
+  }
+  .admin-sidebar #adminNavigation {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-sidebar nav {
+    width: 100%;
+  }
+  .admin-sidebar #btnAdminLogout {
+    margin-top: auto;
+  }
+  .admin-content[data-density] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-content[data-density] > .admin-pages {
+    margin-top: auto;
+    margin-bottom: 0;
+    padding-top: 24px;
+  }
+}
+
+/* 모바일 시장 목록은 카드 테두리와 조작 버튼 사이에 여유를 둡니다. */
+@media (max-width: 700px) {
+  .admin-brand-row {
+    flex-wrap: wrap;
+  }
+  .admin-market-list .admin-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+  .admin-market-list .admin-market-search-form,
+  .admin-market-list .admin-region-error {
+    grid-column: 1 / -1;
+  }
+  .admin-market-list button {
+    min-height: 44px;
+  }
+  .admin-market-list .admin-table-wrap table {
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .admin-market-list .admin-table-wrap tbody {
+    display: grid;
+    gap: 12px;
+  }
+  .admin-market-list .admin-table-wrap tr {
+    gap: 8px 16px;
+    padding: 16px;
+    border: 1px solid #e6e5de;
+    border-radius: 10px;
+    background: var(--color-surface);
+  }
+}
+
+/* 위치 수정 선택은 작은 체크박스와 줄바꿈 가능한 설명으로 배치합니다. */
+.admin-workspace .location-edit-toggle .checkbox-label {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-height: 44px;
+  padding-block: 8px;
+  cursor: pointer;
+}
+.admin-workspace .market-workspace .location-edit-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  margin-top: 2px;
+  padding: 0;
+  accent-color: var(--color-primary);
+}
+
+/* 메뉴 조회 중에는 기존 본문을 보존하고 조작만 차단합니다. */
+.admin-content {
+  position: relative;
+}
+.admin-content[data-navigation-pending="true"]::after {
+  content: "불러오는 중…";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: rgb(255 255 255 / 72%);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.admin-navigation-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.admin-navigation-error {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--color-error);
+}
+.admin-navigation-error button {
+  margin-top: 8px;
+}
+
+/* 관리자 이름은 의미 단위로 두 줄을 유지합니다. */
+.admin-brand-row h1 span {
+  display: block;
+}
+@media (max-width: 420px) {
+  .admin-workspace .market-workspace .location-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.admin-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 180px;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 420px) {
+  .buyer-market-selection .filter-controls-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .buyer-market-selection .filter-controls-row .field-group {
+    min-width: 0;
+  }
+  .buyer-market-selection .location-action-group button {
+    min-height: 44px;
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Phase 5 — 취소·환불·수령·제보 스타일
+   ========================================================================== */
+
+/* 모달 및 대화상자 */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 32, 29, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.modal-content.store-report-modal,
+.modal-content.cancel-confirm-modal {
+  background: var(--color-surface);
+  max-width: 540px;
+  width: 100%;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.report-guidance-text {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin-top: 8px;
+  background: var(--color-surface-panel);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary);
+}
+
+.store-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.own-reports-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: 16px;
+}
+
+.own-reports-section h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.own-reports-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.own-report-item {
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-warm);
+}
+
+.own-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.own-report-desc {
+  font-size: 14px;
+  color: var(--color-text-main);
+  margin-bottom: 6px;
+}
+
+.own-report-resolution {
+  font-size: 13px;
+  color: var(--color-primary-active);
+  background: var(--color-primary-light);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  border: 1px solid var(--color-primary-border);
+}
+
+.own-report-date {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  display: block;
+  margin-top: 4px;
+}
+
+/* 태그 및 상태 뱃지 */
+.badge-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.badge-tag.badge-waiting {
+  background: #fdf3e7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
+.badge-tag.badge-picked_up {
+  background: #edf7f1;
+  color: var(--color-success);
+  border: 1px solid #a7f3d0;
+}
+
+.badge-tag.badge-no_show {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.badge-tag.badge-cancelled {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+}
+
+.badge-tag.badge-pending {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.badge-tag.badge-completed {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-tag.badge-needs_attention {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  font-weight: 700;
+}
+
+.badge-tag.badge-open {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.badge-tag.badge-reviewing {
+  background: #fef3c7;
+  color: #d97706;
+  border: 1px solid #fcd34d;
+}
+
+.badge-tag.badge-resolved {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.badge-valid {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #ecfdf5;
+  color: #047857;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+.badge-cancelled {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #6b7280;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+.badge-needs-contact {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-closure-alert {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* 매장 주문 카드 및 수령 코드 */
+.store-order-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  margin-top: 16px;
+}
+
+.store-order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.store-order-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pickup-code-box {
+  background: #fff8f5;
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  font-size: 15px;
+  margin-bottom: 14px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--color-primary);
+}
+
+.pickup-code-box strong {
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--color-primary-active);
+  font-family: monospace;
+}
+
+.store-pickup-window {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.store-order-items {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.store-order-item {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-warm);
+}
+
+.store-order-item.item-cancelled {
+  background: #f9f8f6;
+  opacity: 0.85;
+}
+
+.store-order-item.item-cancelled .item-main-info strong {
+  text-decoration: line-through;
+  color: var(--color-text-subtle);
+}
+
+.item-cancel-reason {
+  font-size: 12px;
+  color: var(--color-error);
+  margin-top: 4px;
+}
+
+.store-refund-summary {
+  background: var(--color-surface-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.store-refund-list {
+  margin-top: 8px;
+  border-top: 1px dashed var(--color-border);
+  padding-top: 8px;
+}
+
+.store-refund-list ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.refund-error-text {
+  color: var(--color-error);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.store-order-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-danger-outline {
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--color-error-bg);
+}
+
+.btn-danger-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-query-store.btn-danger {
+  background: var(--color-error);
+  color: #ffffff;
+  border-color: var(--color-error);
+}
+
+.btn-query-store.btn-danger:hover:not(:disabled) {
+  background: #8b1f17;
+  border-color: #8b1f17;
+}
+
+/* 결제 안내 상자 */
+.checkout-fulfillment-notice {
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.checkout-fulfillment-notice h4 {
+  color: var(--color-primary-active);
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.checkout-fulfillment-notice ul {
+  margin-left: 18px;
+  margin-top: 4px;
+  color: var(--color-text-main);
+}
+
+.checkout-fulfillment-notice li {
+  margin-bottom: 2px;
+}
+
+/* 판매자 주문 관리 */
+.seller-orders-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) max-content;
+  align-items: end;
+  gap: 6px 12px;
+  margin-bottom: 16px;
+}
+
+.seller-orders-filters > label {
+  grid-column: 1 / -1;
+}
+
+.seller-orders-filters :is(input, button) {
+  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
+  padding-block: 0;
+  line-height: 1.4;
+}
+
+.seller-orders-filters > button {
+  padding-inline: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-main);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.seller-orders-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.seller-orders-table {
+  width: 100%;
+  min-width: 620px;
+}
+
+.table-item-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+}
+
+.table-item-list .item-cancelled-text {
+  color: var(--color-text-subtle);
+  text-decoration: line-through;
+}
+
+.seller-order-detail-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.detail-top-nav {
+  margin-bottom: 12px;
+}
+
+.seller-order-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  background: var(--color-surface-panel);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin: 16px 0;
+  font-size: 14px;
+}
+
+.seller-order-meta dt {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.seller-order-meta dd {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.item-select-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seller-action-box {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-top: 18px;
+  background: var(--color-surface-warm);
+}
+
+.seller-action-box.pickup-box {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-light);
+}
+
+.seller-action-box h4 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.pickup-form-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.pickup-form-inline input {
+  width: 140px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+/* 390px 반응형 대응 */
+@media (max-width: 420px) {
+  .store-order-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pickup-code-box {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .store-order-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .store-order-actions button {
+    width: 100%;
+  }
+
+  .seller-orders-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pickup-form-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pickup-form-inline input,
+  .pickup-form-inline button {
+    width: 100%;
+  }
+}
+
+/* 운영 표는 좁은 화면에서도 열의 읽기 폭을 보존하고 표 안에서 이동합니다. */
+.admin-table-wrap table[data-section="store-reports"] {
+  min-width: 80rem;
+  table-layout: auto;
+}
+.admin-table-wrap table[data-section="refunds"] {
+  min-width: 50rem;
+  table-layout: auto;
+}
+.admin-table-wrap table[data-section="store-reports"] th,
+.admin-table-wrap table[data-section="refunds"] th {
+  word-break: keep-all;
+  overflow-wrap: normal;
+  vertical-align: bottom;
+}
+
+/* 긴 매장명·제보 내용은 열 폭을 확보해 읽고, 상세 패널에서 전체를 확인합니다. */
+.admin-table-wrap table[data-section="store-reports"] th[data-column="storeName"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="storeName"] {
+  width: 12rem;
+  min-width: 10rem;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.admin-table-wrap table[data-section="store-reports"] th[data-column="description"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="description"] {
+  width: 18rem;
+  min-width: 14rem;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.admin-table-wrap table[data-section="store-reports"] td[data-column="id"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="type"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="status"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="buyerLoginId"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="contactPhone"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="contactName"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="createdAt"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="unresolvedClosureCount"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="id"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="storeOrderId"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="amountWon"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="status"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="attempts"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="createdAt"],
+.admin-table-wrap table[data-section="refunds"] td[data-column="completedAt"] {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.admin-table-wrap table[data-section="store-reports"] td[data-column="contactPhone"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="createdAt"],
+.admin-table-wrap table[data-section="store-reports"] td[data-column="buyerLoginId"] {
+  word-break: normal;
+}
+
+/* 상세 버튼 열은 한 줄로 유지합니다. */
+.admin-table-wrap table[data-section="store-reports"] td:last-child,
+.admin-table-wrap table[data-section="refunds"] td:last-child {
+  white-space: nowrap;
+}
+
+/* 표만 가로로 이동하고 페이지 전체 가로 넘침은 막습니다. */
+.admin-table-wrap--scrollable {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c3b5 #eef0e9;
+  padding-bottom: 4px;
+}
+.admin-table-wrap--scrollable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.admin-table-wrap--scrollable::-webkit-scrollbar {
+  height: 10px;
+}
+.admin-table-wrap--scrollable::-webkit-scrollbar-thumb {
+  background: #b9c3b5;
+  border-radius: 999px;
+}
+.admin-table-wrap--scrollable::-webkit-scrollbar-track {
+  background: #eef0e9;
+  border-radius: 999px;
+}
+
+/* Phase 6 판매자 대시보드 */
+.seller-dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.seller-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.seller-dashboard-title-group h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin-bottom: 4px;
+}
+
+.seller-dashboard-title-group p {
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.dashboard-controls {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.dashboard-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dashboard-control-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.dashboard-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  padding: 10px 14px;
+  background: var(--color-surface-warm);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.dashboard-asof {
+  font-feature-settings: "tnum";
+}
+
+.dashboard-mock-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+}
+
+.dashboard-card-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dashboard-group-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.dashboard-group-header .group-help-text {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.dashboard-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.dashboard-metric-card.card-highlight {
+  background: #fbfdfa;
+  border-color: #c7dac6;
+}
+
+.dashboard-metric-card.card-subtle {
+  background: var(--color-surface-warm);
+  border-color: var(--color-border-subtle);
+}
+
+.dashboard-metric-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-metric-value {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  line-height: 1.25;
+  word-break: break-all;
+  font-feature-settings: "tnum";
+}
+
+.dashboard-metric-desc {
+  font-size: 12px;
+  color: var(--color-text-subtle);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.dashboard-highlight-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--color-surface-warm);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  gap: 12px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.dashboard-table-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-muted);
+  background: var(--color-surface-warm);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+}
+
+.dashboard-disclaimer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  background: var(--color-bg-subtle);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-primary-border);
+  line-height: 1.5;
+}
+
+@media (max-width: 420px) {
+  .dashboard-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .dashboard-metric-card {
+    padding: 10px 12px;
+  }
+
+  .dashboard-metric-value {
+    font-size: 16px;
+  }
+
+  .dashboard-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-controls input,
+  .dashboard-controls button {
+    width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Phase 7: 모의 결제 내역서 및 전체 화면 디자인 통일
+   ========================================================================== */
+
+/* 주문 내역 통합 주문 헤더 */
+.checkout-order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--color-border-subtle);
+}
+
+.checkout-order-header h2 {
+  font-size: 18px;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.btn-order-statement {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+/* 모의 결제 내역서 모달 */
+.statement-modal-backdrop {
+  margin: 0;
+  border: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 32, 29, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  overflow-y: auto;
+  backdrop-filter: blur(2px);
+}
+
+.order-statement-modal {
+  background: var(--color-surface);
+  max-width: 820px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.statement-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-warm);
+}
+
+.statement-header h2 {
+  font-size: 20px;
+  color: var(--color-text-main);
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.statement-subtitle {
+  font-size: 13px;
+  color: var(--color-text-subtle);
+  margin: 0;
+}
+
+.statement-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.statement-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 테스트·비공식 증빙 안내 박스 */
+.statement-test-notice {
+  background: #fdf8f4;
+  border: 1px solid var(--color-primary-border);
+  border-left: 4px solid var(--color-primary);
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-main);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.statement-test-notice p {
+  margin-bottom: 6px;
+}
+
+.statement-test-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.statement-test-warning {
+  color: var(--color-primary-hover);
+  font-size: 12px;
+}
+
+/* 주문 기본 정보 테이블 */
+.statement-section {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.statement-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.statement-meta-table th {
+  background: var(--color-surface-warm);
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-subtle);
+  width: 22%;
+  white-space: nowrap;
+}
+
+.statement-meta-table td {
+  padding: 10px 14px;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-main);
+  width: 28%;
+}
+
+.statement-amount-highlight {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-size: 15px;
+}
+
+.statement-cancelled-amount {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+.statement-refunded-amount {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+/* 매장별 주문 상세 카드 */
+.statement-stores-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.statement-store-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+  background: var(--color-surface);
+}
+
+.statement-store-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.statement-store-header h3 {
+  font-size: 16px;
+  margin: 0;
+  color: var(--color-text-main);
+}
+
+.statement-pickup-window {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+/* 상품 표 */
+.statement-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  background: var(--color-surface);
+}
+
+.statement-items-table th {
+  background: var(--color-surface-warm);
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-subtle);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.statement-items-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.statement-items-table .item-qty-cell,
+.statement-items-table .item-price-cell,
+.statement-items-table .item-subtotal-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.statement-items-table .item-name-cell {
+  color: var(--color-text-main);
+}
+
+.statement-item-cancelled {
+  background-color: var(--color-error-bg);
+  color: var(--color-text-muted);
+}
+
+.badge-normal {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+/* 매장 환불 안내 */
+.statement-store-refund-info {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--color-surface-warm);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.statement-refund-amounts {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.statement-refund-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statement-refund-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.refund-time {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   인쇄 전용 스타일 (@media print)
+   - 선택된 모의 결제 내역서 및 테스트 안내만 표시
+   - 메뉴, 상단 헤더, 버튼, 조작부, 수령 코드, 배경은 모두 숨김
+   - 다중 페이지 표는 나누고 개별 행의 잘림 방지
+   ========================================================================== */
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    background-image: none !important;
+  }
+
+  /* 내역서는 body의 포털에 있어 앱 전체를 숨겨도 선택한 문서만 남는다. */
+  body:has(.statement-modal-backdrop) #root {
+    display: none !important;
+  }
+
+  /* 1. 최상위 앱의 다른 모든 화면 및 내비게이션 숨김 */
+  .app-header,
+  .site-header,
+  .brand-intro-panel,
+  .market-workspace,
+  .checkout-workspace > header,
+  .checkout-actions,
+  .admin-workspace,
+  .seller-workspace,
+  .toast,
+  .status-alert-box,
+  button,
+  .no-print,
+  .statement-actions {
+    display: none !important;
+  }
+
+  /* 본문 내의 일반 주문 카드들도 숨김 */
+  .checkout-order {
+    display: none !important;
+  }
+
+  /* 2. 모달 백드롭 및 컨테이너를 일반 인쇄용 문서 흐름으로 변환 */
+  .modal-backdrop.statement-modal-backdrop {
+    position: static !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    inset: auto !important;
+    display: block !important;
+    background: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+  }
+
+  .modal-content.order-statement-modal {
+    position: static !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: none !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .statement-header {
+    background: none !important;
+    border-bottom: 2px solid #000000 !important;
+    padding: 0 0 12pt 0 !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .statement-header h2 {
+    font-size: 18pt !important;
+    color: #000000 !important;
+  }
+
+  .statement-body {
+    padding: 0 !important;
+    gap: 12pt !important;
+  }
+
+  /* 3. 수령 코드(pickupCode)는 인쇄에서 완전히 제외 */
+  .pickup-code-box,
+  [id^="pickupCode-"],
+  [id^="statementPickupCode-"] {
+    display: none !important;
+  }
+
+  /* 4. 테스트 모의 결제 안내문은 인쇄에 반드시 포함 */
+  .statement-test-notice {
+    display: block !important;
+    background: #ffffff !important;
+    border: 2px solid #000000 !important;
+    color: #000000 !important;
+    margin-bottom: 14pt !important;
+    padding: 8pt 12pt !important;
+    font-size: 9.5pt !important;
+  }
+
+  .statement-test-notice p {
+    color: #000000 !important;
+  }
+
+  .statement-test-warning {
+    color: #333333 !important;
+    font-weight: 600 !important;
+  }
+
+  /* 5. 표 스타일 및 다중 페이지 행 잘림 방지 */
+  .statement-meta-table,
+  .statement-items-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    margin-bottom: 12pt !important;
+  }
+
+  .statement-meta-table th,
+  .statement-meta-table td,
+  .statement-items-table th,
+  .statement-items-table td {
+    border: 1px solid #333333 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    padding: 6pt 8pt !important;
+  }
+
+  .statement-meta-table th,
+  .statement-items-table th {
+    font-weight: 700 !important;
+    background: #f0f0f0 !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .statement-store-card {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    border: 1px solid #666666 !important;
+    margin-bottom: 14pt !important;
+    padding: 10pt !important;
+    background: #ffffff !important;
+  }
+
+  .statement-store-header h3 {
+    color: #000000 !important;
+    font-size: 13pt !important;
+  }
+
+  .statement-amount-highlight {
+    color: #000000 !important;
+    font-weight: 700 !important;
+  }
+
+  .statement-cancelled-amount {
+    color: #666666 !important;
+  }
+
+  .statement-refunded-amount {
+    color: #333333 !important;
+  }
+
+  .badge-tag,
+  .badge-cancelled,
+  .badge-normal {
+    border: 1px solid #333333 !important;
+    color: #000000 !important;
+    background: transparent !important;
+  }
+}
+
+/* ==========================================================================
+   반응형 및 화면 일관성 (360px ~ 768px 모바일 대응)
+   ========================================================================== */
+@media (max-width: 640px) {
+  .order-statement-modal {
+    max-height: 95vh;
+  }
+
+  .statement-header {
+    padding: 16px;
+  }
+
+  .statement-body {
+    padding: 16px;
+  }
+
+  .statement-meta-table th,
+  .statement-meta-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .statement-meta-table tr {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 8px;
+    border: 1px solid var(--color-border-subtle);
+  }
+
+  .statement-items-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .statement-store-card {
+    padding: 12px;
+  }
+}
+
+/* 매장 탐색 및 개별 매장 페이지 */
+.market-nav-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+
+.market-tab-button {
+  padding: 8px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-warm);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: all 0.2s ease;
+}
+
+.market-tab-button:hover {
+  color: var(--color-text-main);
+  background: var(--color-surface);
+}
+
+.market-tab-button.active,
+.market-tab-button[aria-selected="true"] {
+  background: var(--color-primary);
+  color: #ffffff;
+  font-weight: 700;
+  border-color: var(--color-primary);
+}
+
+.offer-store-name .offer-store-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+
+.offer-store-name .offer-store-link:hover {
+  color: var(--color-primary-dark, #b94b23);
+}
+
+.store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.store-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.store-card-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.store-detail-button {
+  align-self: flex-start;
+  margin-top: auto;
+}
+
+.buyer-store-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 100%;
+}
+
+.buyer-store-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.store-cart-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #eaf5ea;
+  border: 1px solid #7bc67b;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.store-cart-message {
+  margin: 0;
+  color: #1e5a1e;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.store-cart-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-store-add-cart {
+  padding: 8px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-store-add-cart:hover:not(:disabled) {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-store-add-cart:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .store-grid {
+    grid-template-columns: 1fr;
+  }
+  .store-cart-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .store-cart-actions {
+    justify-content: flex-end;
+  }
+}
+/* 매장별 구매자 리뷰와 운영 처리 */
+.store-rating {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-text-sub, #555);
+  margin: 0.4rem 0;
+}
+.store-reviews,
+.seller-reviews,
+.buyer-review-editor {
+  margin-top: 1.5rem;
+  min-width: 0;
+}
+.store-reviews {
+  border-top: 1px solid var(--color-border, #ddd);
+  padding-top: 1.5rem;
+}
+.review-list {
+  display: grid;
+  gap: 1rem;
+}
+.review-card,
+.review-management-card,
+.review-editor-panel {
+  min-width: 0;
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 0.75rem 0;
+}
+.review-management-card > .review-card {
+  border: 0;
+  padding: 0;
+  margin-top: 0;
+}
+.review-card-heading,
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.review-card-heading time {
+  font-size: 0.8rem;
+  color: var(--color-text-sub, #666);
+}
+.review-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.review-reply {
+  background: var(--color-bg-sub, #f7f7f5);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.8rem;
+}
+.review-reply .review-content {
+  margin-bottom: 0;
+}
+.review-editor-panel form,
+form.review-editor-panel,
+.buyer-review-editor form {
+  display: grid;
+  gap: 0.8rem;
+}
+.review-editor-panel label {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.review-editor-panel textarea,
+.review-editor-panel select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem;
+  font: inherit;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 8px;
+}
+.review-editor-panel select,
+.review-actions button,
+.buyer-review-editor > button {
+  min-height: 44px;
+}
+.review-editor-panel textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+.review-actions button {
+  padding: 0.5rem 0.9rem;
+}
+.review-actions button,
+.buyer-review-editor > button,
+.review-editor-panel button {
+  font: inherit;
+  min-height: 44px;
+  border: 1px solid var(--color-border, #ccd5ce);
+  border-radius: 8px;
+  background: var(--color-bg-card, #fff);
+  color: var(--color-text-main, #25372b);
+}
+.review-editor-panel button {
+  padding: 0.5rem 0.9rem;
+}
+.review-editor-panel button[type="submit"],
+.review-actions button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--color-primary, #315b45);
+  border-color: var(--color-primary, #315b45);
+}
+.review-editor-panel [role="alert"] {
+  color: var(--color-error, #a42d2d);
+}
+.review-actions button:focus-visible,
+.review-editor-panel button:focus-visible {
+  outline: 3px solid var(--color-primary, #315b45);
+  outline-offset: 2px;
+}
+.admin-review-panel .review-management-card {
+  max-width: 70rem;
+}
+@media (max-width: 480px) {
+  .review-card,
+  .review-management-card,
+  .review-editor-panel {
+    padding: 0.8rem;
+  }
+  .review-actions {
+    gap: 0.4rem;
+  }
+}
+
+/* 상품 보기 방식과 반응형 목록 */
+.offer-view-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 80rem;
+  width: 100%;
+  margin-inline: auto;
+  margin-bottom: 12px;
+}
+.offer-view-controls button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-main);
+  font: inherit;
+  cursor: pointer;
+}
+.offer-view-controls > button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  padding: 0;
+}
+.offer-view-controls > button[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-surface-warm);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+.offer-grid[data-view] {
+  max-width: 80rem;
+  width: 100%;
+  margin-inline: auto;
+  gap: 14px;
+}
+.offer-grid[data-view="grid"] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.offer-grid[data-view] .offer-card {
+  padding: 16px;
+  gap: 12px;
+}
+.offer-card-main,
+.offer-card-pricing,
+.offer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.offer-card-main .offer-card-top {
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+.offer-card-main h3 {
+  font-size: 18px;
+}
+.offer-card-main .pill-badge {
+  flex-shrink: 0;
+  padding: 4px 7px;
+  font-size: 11px;
+}
+.offer-card-main .store-rating {
+  font-size: 12px;
+}
+.offer-card-pricing .offer-price {
+  margin: 0;
+  font-size: 22px;
+}
+.offer-actions {
+  margin-top: auto;
+}
+.offer-actions .btn-store-add-cart {
+  min-height: 44px;
+}
+.buyer-store-page .store-reviews {
+  width: 100%;
+  max-width: 60rem;
+  margin-inline: auto;
+}
+@media (max-width: 1199px) {
+  .offer-grid[data-view="grid"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 899px) {
+  .offer-grid[data-view="grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 599px) {
+  .offer-grid[data-view="grid"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .offer-actions .btn-store-add-cart {
+    font-size: 12px;
+    padding-inline: 10px;
+  }
+}
+
+/* 상품 대표 사진: 파일 픽셀 수와 화면 크기를 구분한다. */
+.offer-photo-button,
+.offer-product-name {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.offer-photo-button {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.offer-product-name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.offer-photo-button:focus-visible,
+.offer-product-name:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.product-photo {
+  aspect-ratio: 1;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-warm);
+}
+.product-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.product-photo--detail {
+  max-width: 420px;
+  margin-inline: auto;
+}
+.product-photo--placeholder {
+  display: grid;
+  place-items: center;
+}
+.product-photo--placeholder img {
+  width: 42%;
+  height: 42%;
+  max-width: 120px;
+  max-height: 120px;
+}
+.product-photo-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.product-photo-fallback svg {
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+.product-image-editor > .product-photo {
+  width: 180px;
+}
+.product-image-warning {
+  margin-right: auto;
+  font-size: 12px;
+}
+.offer-view-controls {
+  flex-wrap: wrap;
+}
+@media (max-width: 599px) {
+}
+
+.product-detail {
+  max-width: 1100px;
+}
+.product-detail > .text-action-link {
+  align-self: flex-start;
+}
+.product-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+}
+.product-detail-media,
+.product-detail-info {
+  min-width: 0;
+}
+.product-detail-media {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.product-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+@media (max-width: 767px) {
+  .product-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .product-detail-media .product-photo {
+    max-width: 320px;
+  }
+}
+
+/* 탭·검색·결과를 같은 콘텐츠 폭에 맞춘다. */
+.buyer-product-browse {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+}
+.market-workspace .buyer-product-browse .market-search-bar {
+  max-width: none;
+}
+.offer-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.offer-grid[data-view="list"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.offer-grid[data-view="list"] .offer-card {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+.offer-grid[data-view="list"] .offer-card-info {
+  gap: 10px;
+}
+.offer-grid[data-view="list"] .offer-pickup {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding-top: 10px;
+}
+.offer-grid[data-view="list"] .offer-actions {
+  align-self: flex-start;
+  margin: 0;
+}
+@media (max-width: 599px) {
+  .offer-grid[data-view="list"] .offer-card {
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+  .offer-grid[data-view="list"] .offer-card-top {
+    flex-wrap: wrap;
+  }
+  .offer-grid[data-view="list"] .offer-price {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
 }

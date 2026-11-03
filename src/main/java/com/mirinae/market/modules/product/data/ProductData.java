@@ -23,11 +23,20 @@ public class ProductData {
   private static final String PRODUCT_SELECT =
       "SELECT p.*, EXISTS (SELECT 1 FROM daily_offers o WHERE o.product_id = p.id) AS has_sales FROM products p ";
   private static final String OFFER_FILTER =
-      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND o.active AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
+      " WHERE s.market_id = ? AND o.pickup_date = ? AND w.order_deadline > ? AND o.active AND NOT s.suspended AND p.archived_at IS NULL AND position(lower(?) in lower(p.name)) > 0 ";
   private final JdbcTemplate jdbc;
 
   public ProductData(JdbcTemplate jdbc) {
     this.jdbc = jdbc;
+  }
+
+  public List<java.util.Map<String, Object>> managedSales(LocalDate date, String query, int page) {
+    return jdbc.queryForList(
+        "SELECT o.id,s.id AS \"storeId\",s.name AS \"storeName\",p.name AS \"productName\",p.unit_type AS \"unitType\",p.unit_amount AS \"unitAmount\",o.price_won AS \"priceWon\",o.online_quantity AS \"onlineQuantity\",o.active,p.archived_at IS NOT NULL AS archived,CAST(o.pickup_date AS text) AS \"pickupDate\" FROM daily_offers o JOIN products p ON p.id=o.product_id JOIN stores s ON s.id=o.store_id WHERE o.pickup_date=? AND (position(lower(?) in lower(s.name))>0 OR position(lower(?) in lower(p.name))>0) ORDER BY s.id,o.id LIMIT 51 OFFSET ?",
+        date,
+        query,
+        query,
+        page * 50);
   }
 
   public void lockStore(long storeId) {
@@ -178,11 +187,43 @@ public class ProductData {
         query);
   }
 
+  public List<OfferRow> searchStore(
+      long marketId,
+      long storeId,
+      LocalDate date,
+      LocalTime now,
+      String query,
+      int offset,
+      int limit) {
+    return jdbc.query(
+        OFFER_SELECT + OFFER_FILTER + "AND s.id=? ORDER BY o.id LIMIT ? OFFSET ?",
+        (rs, n) -> offerRow(rs),
+        marketId,
+        date,
+        now,
+        query,
+        storeId,
+        limit,
+        offset);
+  }
+
+  public long storeOfferCount(
+      long marketId, long storeId, LocalDate date, LocalTime now, String query) {
+    return jdbc.queryForObject(
+        "SELECT count(*) FROM (" + OFFER_SELECT + OFFER_FILTER + "AND s.id=?) visible",
+        Long.class,
+        marketId,
+        date,
+        now,
+        query,
+        storeId);
+  }
+
   public Optional<OfferRow> detail(long marketId, LocalDate date, long offerId) {
     return jdbc
         .query(
             OFFER_SELECT
-                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND o.active AND p.archived_at IS NULL",
+                + " WHERE s.market_id = ? AND o.pickup_date = ? AND o.id = ? AND o.active AND NOT s.suspended AND p.archived_at IS NULL",
             (rs, row) -> offerRow(rs),
             marketId,
             date,
@@ -223,11 +264,14 @@ public class ProductData {
   public Optional<CheckoutOfferRow> checkoutOffer(long offerId) {
     return jdbc
         .query(
-            OFFER_SELECT.replace("SELECT o.id", "SELECT o.active, p.archived_at, o.id")
+            OFFER_SELECT.replace("SELECT o.id", "SELECT o.active, s.suspended, p.archived_at, o.id")
                 + " WHERE o.id = ?",
             (rs, n) ->
                 new CheckoutOfferRow(
-                    offerRow(rs), rs.getBoolean("active"), rs.getTimestamp("archived_at") != null),
+                    offerRow(rs),
+                    rs.getBoolean("active"),
+                    rs.getTimestamp("archived_at") != null,
+                    rs.getBoolean("suspended")),
             offerId)
         .stream()
         .findFirst();
@@ -240,6 +284,13 @@ public class ProductData {
             offerId,
             quantity)
         != 1) throw new IllegalStateException("재고 차감 조건이 변경되었습니다.");
+  }
+
+  public void restore(long offerId, int quantity) {
+    jdbc.update(
+        "UPDATE daily_offers o SET online_quantity=(online_quantity::bigint+?)::integer,inventory_version=inventory_version+1 FROM products p WHERE o.id=? AND p.id=o.product_id AND o.active AND p.archived_at IS NULL",
+        quantity,
+        offerId);
   }
 
   public void lockWindow(long storeId, LocalDate date) {

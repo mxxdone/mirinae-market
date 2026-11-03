@@ -11,6 +11,7 @@ import { ApiError } from "../../api/types";
 import { BuyerStoreReportModal } from "./BuyerStoreReportModal";
 import { OrderStatementModal } from "./OrderStatementModal";
 import { StatusAlert } from "./StatusAlert";
+import { BuyerReviewEditor } from "./BuyerReviewEditor";
 
 interface Props {
   completedOrder: Checkout | null;
@@ -279,6 +280,9 @@ export function BuyerOrdersPanel({
                   <p className="pickup-code-box" id={`pickupCode-${store.id}`}>
                     수령 코드: <strong>{store.pickupCode}</strong>
                   </p>
+                )}
+                {store.status === "PICKED_UP" && (
+                  <BuyerReviewEditor orderId={store.id} onSessionExpired={onSessionExpired} />
                 )}
 
                 <p className="store-pickup-window">

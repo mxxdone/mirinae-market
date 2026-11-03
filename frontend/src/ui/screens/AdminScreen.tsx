@@ -27,8 +27,10 @@ import { ApiError, type LocatedMarketView, type RegionView } from "../../api/typ
 import { getMarketRegions } from "../../api/location";
 import { AdminMarketLocationForm } from "../components/AdminMarketLocationForm";
 import { validateMarketRegistration } from "../../validation/locationValidation";
+import { AdminReviewsPanel } from "../components/AdminReviewsPanel";
 
-const sections: [AdminSection, string][] = [
+type AdminScreenSection = AdminSection | "reviews";
+const sections: [AdminScreenSection, string][] = [
   ["markets", "시장"],
   ["stores", "매장"],
   ["sellers", "판매자"],
@@ -38,6 +40,7 @@ const sections: [AdminSection, string][] = [
   ["changes", "변경 이력"],
   ["refunds", "환불"],
   ["store-reports", "매장 제보"],
+  ["reviews", "리뷰 관리"],
 ];
 
 const labels: Record<string, string> = {
@@ -102,6 +105,8 @@ const labels: Record<string, string> = {
   STORE_ORDER: "매장 주문",
   REFUND: "환불",
   STORE_REPORT: "매장 제보",
+  REVIEW: "리뷰",
+  REVIEW_REQUEST: "리뷰 삭제 요청",
 };
 
 const columns: Record<AdminSection, string[]> = {
@@ -251,7 +256,7 @@ export function AdminScreen({
   logoutError: string | null;
   isLoggingOut: boolean;
 }) {
-  const [section, setSection] = useState<AdminSection>("markets");
+  const [section, setSection] = useState<AdminScreenSection>("markets");
   const [menuOpen, setMenuOpen] = useState(false);
   const [loaded, setLoaded] = useState<{ section: AdminSection; data?: AdminListData }>({
     section: "markets",
@@ -261,6 +266,11 @@ export function AdminScreen({
   const [navigationAttempt, setNavigationAttempt] = useState(0);
 
   useEffect(() => {
+    if (section === "reviews") {
+      setNavigationPending(false);
+      setNavigationError("");
+      return;
+    }
     if (section === loaded.section) {
       setNavigationPending(false);
       setNavigationError("");
@@ -296,7 +306,7 @@ export function AdminScreen({
     function restore() {
       const tab = window.location.hash.replace("#admin/", "");
       if (sections.some(([id]) => id === tab)) {
-        setSection(tab as AdminSection);
+        setSection(tab as AdminScreenSection);
       }
     }
     restore();
@@ -332,7 +342,11 @@ export function AdminScreen({
                 key={id}
                 id={`admin-nav-${id}`}
                 href={`#admin/${id}`}
-                aria-current={loaded.section === id ? "page" : undefined}
+                aria-current={
+                  (section === "reviews" ? id === "reviews" : loaded.section === id)
+                    ? "page"
+                    : undefined
+                }
                 onClick={() => {
                   setSection(id);
                   setMenuOpen(false);
@@ -361,13 +375,17 @@ export function AdminScreen({
           </p>
         )}
       </aside>
-      <AdminList
-        key={loaded.section}
-        section={loaded.section}
-        initialData={loaded.data}
-        navigationPending={navigationPending}
-        onSessionExpired={onSessionExpired}
-      />
+      {section === "reviews" ? (
+        <AdminReviewsPanel onSessionExpired={onSessionExpired} />
+      ) : (
+        <AdminList
+          key={loaded.section}
+          section={loaded.section}
+          initialData={loaded.data}
+          navigationPending={navigationPending}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
     </section>
   );
 }
@@ -401,6 +419,7 @@ function AdminList({
   const composingQuery = useRef(false);
   const [rows, setRows] = useState<AdminRow[]>(initialData?.rows ?? []);
   const [selected, setSelected] = useState<AdminRow | null>(null);
+  const [detailBusy, setDetailBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(initialData === undefined);
   const [error, setError] = useState("");
@@ -414,6 +433,7 @@ function AdminList({
     setBusy(true);
     setRows([]);
     setSelected(null);
+    setDetailBusy(false);
     setError("");
 
     void getAdminRows(section, filters, controller.signal)
@@ -500,11 +520,38 @@ function AdminList({
   function saved() {
     setCreating(false);
     setSelected(null);
+    setDetailBusy(false);
     setVersion((v) => v + 1);
     setNotice("저장했습니다.");
   }
 
+  // 목록 아래에 상세가 펼쳐지고 같은 행 버튼이 남는 목록만 토글한다.
+  // markets는 상세가 목록을 대체하므로 기존처럼 선택만 한다.
+  const inlineDetail = section !== "markets";
+
+  function toggleRow(row: AdminRow) {
+    if (!inlineDetail) {
+      setCreating(false);
+      setNotice("");
+      setSelected(row);
+      return;
+    }
+    if (selected?.id === row.id) {
+      // 상세의 닫기 버튼과 같은 계약: 처리 중에는 접지 않는다.
+      // 다른 항목으로의 전환은 기존처럼 허용해 늦은 응답이 새 상세를 덮지 않게 한다.
+      if (detailBusy) return;
+      setSelected(null);
+      return;
+    }
+    setCreating(false);
+    setNotice("");
+    setSelected(row);
+  }
+
   const primaryKey = columns[section]?.[0] ?? "id";
+  const detailElementId = `adminDetail-${section}`;
+  // 넓은 운영 표는 표 안에서 가로로 이동합니다. 안내와 키보드 포커스 영역을 함께 제공합니다.
+  const scrollableTable = section === "store-reports" || section === "refunds";
 
   if ((section === "markets" && (creating || selected)) || (section === "stores" && creating)) {
     return (
@@ -769,7 +816,16 @@ function AdminList({
 
       {!busy && !error && (
         <>
-          <div className="admin-table-wrap">
+          <div
+            className={`admin-table-wrap${scrollableTable ? " admin-table-wrap--scrollable" : ""}`}
+            role={scrollableTable ? "region" : undefined}
+            tabIndex={scrollableTable ? 0 : undefined}
+            aria-label={
+              scrollableTable
+                ? `${section === "store-reports" ? "매장 제보" : "환불"} 목록 표`
+                : undefined
+            }
+          >
             <table className="info-data-table" data-section={section}>
               <thead>
                 <tr>
@@ -832,11 +888,12 @@ function AdminList({
                       <button
                         type="button"
                         aria-label={`${text(row, primaryKey)} 상세`}
-                        onClick={() => {
-                          setSelected(row);
-                          setCreating(false);
-                          setNotice("");
-                        }}
+                        aria-expanded={inlineDetail ? selected?.id === row.id : undefined}
+                        aria-controls={
+                          inlineDetail && selected?.id === row.id ? detailElementId : undefined
+                        }
+                        disabled={inlineDetail && detailBusy && selected?.id === row.id}
+                        onClick={() => toggleRow(row)}
                       >
                         상세
                       </button>
@@ -874,12 +931,15 @@ function AdminList({
       {(creating || selected) && (
         <AdminDetail
           key={creating ? "new" : selected?.id}
+          id={detailElementId}
           section={section}
           row={selected}
           onSaved={saved}
+          onBusyChange={setDetailBusy}
           onClose={() => {
             setCreating(false);
             setSelected(null);
+            setDetailBusy(false);
           }}
           onSessionExpired={onSessionExpired}
         />
@@ -889,15 +949,19 @@ function AdminList({
 }
 
 function AdminDetail({
+  id,
   section,
   row,
   onSaved,
+  onBusyChange,
   onClose,
   onSessionExpired,
 }: {
+  id?: string;
   section: AdminSection;
   row: AdminRow | null;
   onSaved: () => void;
+  onBusyChange?: (busy: boolean) => void;
   onClose: () => void;
   onSessionExpired: () => void;
 }) {
@@ -949,6 +1013,13 @@ function AdminDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [loadVersion, setLoadVersion] = useState(0);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => {
+      if (busy) onBusyChange?.(false);
+    };
+  }, [busy, onBusyChange]);
 
   const editable = section === "markets" || section === "stores" || section === "sellers";
 
@@ -1098,7 +1169,7 @@ function AdminDetail({
   }
 
   return (
-    <section className="admin-detail" aria-label="선택한 항목 상세">
+    <section className="admin-detail" id={id} aria-label="선택한 항목 상세">
       <header className="admin-heading">
         <h3>
           {row

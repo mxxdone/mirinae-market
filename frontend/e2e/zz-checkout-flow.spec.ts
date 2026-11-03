@@ -69,9 +69,8 @@ async function addFromScreen(page: Page, market: number, name: string) {
   await page
     .locator(".offer-card")
     .first()
-    .getByRole("button", { name: /상품 상세 보기/ })
+    .getByRole("button", { name: "장바구니 담기", exact: true })
     .click();
-  await page.getByRole("button", { name: "장바구니 담기", exact: true }).click();
   await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/#cart$/);
   await expect(page.locator(".checkout-order")).toHaveCount(0);

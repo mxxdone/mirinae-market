@@ -130,6 +130,7 @@ export interface ProductInput {
   description: string;
   unitType: UnitType;
   unitAmount: number;
+  imageId?: string;
 }
 export interface ProductView extends ProductInput {
   id: number;
@@ -168,6 +169,10 @@ export interface ResultPage<T> {
 }
 
 export interface ProductPage extends ResultPage<ProductView> {
+  totalItems: number;
+}
+
+export interface StorePage extends ResultPage<StoreView> {
   totalItems: number;
 }
 

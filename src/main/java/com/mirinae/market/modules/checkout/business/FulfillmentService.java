@@ -198,6 +198,14 @@ public class FulfillmentService {
     return true;
   }
 
+  public ReviewOrderView reviewOrder(String actor, long id) {
+    requireBuyer(actor, id);
+    var row = order(id);
+    if (row.pickedUpAt() == null)
+      throw conflict("REVIEW_NOT_ALLOWED", "수령 완료한 매장 주문만 리뷰를 작성할 수 있습니다.");
+    return new ReviewOrderView(row.id(), row.storeId(), row.pickedUpAt());
+  }
+
   private long requireBuyer(String actor, long id) {
     var account = accounts.current(actor);
     if (!account.role().equals("BUYER")) throw new AccessDeniedException("구매자 권한이 필요합니다.");

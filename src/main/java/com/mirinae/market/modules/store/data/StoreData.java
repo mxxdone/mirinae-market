@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class StoreData {
+  private static final String PUBLIC_STORES =
+      " FROM stores s JOIN accounts a ON a.id=s.owner_account_id WHERE s.market_id=? AND NOT s.suspended AND a.role='SELLER' ";
   private final org.springframework.jdbc.core.JdbcTemplate jdbc;
   private final StoreJpaRepository stores;
   private final MarketJpaRepository markets;
@@ -71,6 +73,58 @@ public class StoreData {
 
   public void renameStore(long id, String name) {
     jdbc.update("UPDATE stores SET name=? WHERE id=?", name, id);
+  }
+
+  public List<StoreRow> publicStores(long marketId, String query, int offset, int limit) {
+    return jdbc.query(
+        "SELECT s.id,s.market_id,s.owner_account_id,s.name"
+            + PUBLIC_STORES
+            + "AND position(lower(?) in lower(s.name))>0 ORDER BY s.id LIMIT ? OFFSET ?",
+        (rs, n) ->
+            new StoreRow(
+                rs.getLong("id"),
+                rs.getLong("market_id"),
+                rs.getLong("owner_account_id"),
+                rs.getString("name")),
+        marketId,
+        query,
+        limit,
+        offset);
+  }
+
+  public List<Long> publicStoreIds(long marketId, List<Long> ids) {
+    String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+    var args = new java.util.ArrayList<Object>();
+    args.add(marketId);
+    args.addAll(ids);
+    return jdbc.queryForList(
+        "SELECT s.id" + PUBLIC_STORES + "AND s.id IN (" + placeholders + ")",
+        Long.class,
+        args.toArray());
+  }
+
+  public long publicStoreCount(long marketId, String query) {
+    return jdbc.queryForObject(
+        "SELECT count(*)" + PUBLIC_STORES + "AND position(lower(?) in lower(s.name))>0",
+        Long.class,
+        marketId,
+        query);
+  }
+
+  public Optional<StoreRow> publicStore(long marketId, long storeId) {
+    return jdbc
+        .query(
+            "SELECT s.id,s.market_id,s.owner_account_id,s.name" + PUBLIC_STORES + "AND s.id=?",
+            (rs, n) ->
+                new StoreRow(
+                    rs.getLong("id"),
+                    rs.getLong("market_id"),
+                    rs.getLong("owner_account_id"),
+                    rs.getString("name")),
+            marketId,
+            storeId)
+        .stream()
+        .findFirst();
   }
 
   public java.util.List<java.util.Map<String, Object>> managedStores(String query, int page) {

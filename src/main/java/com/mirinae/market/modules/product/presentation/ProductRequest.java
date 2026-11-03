@@ -18,4 +18,6 @@ public record ProductRequest(
             description = "정수 판매 구성. WEIGHT는 g(100g 배수), COUNT는 개수. 상품명에서 추출하지 않음",
             example = "3000",
             requiredMode = Schema.RequiredMode.REQUIRED)
-        Integer unitAmount) {}
+        Integer unitAmount,
+    @Schema(description = "임시 사진 ID. 생략/null은 기존 유지, 빈 문자열은 제거, UUID는 본인 매장 업로드 연결")
+        String imageId) {}

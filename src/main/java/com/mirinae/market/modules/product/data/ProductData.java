@@ -187,6 +187,38 @@ public class ProductData {
         query);
   }
 
+  public List<OfferRow> searchStore(
+      long marketId,
+      long storeId,
+      LocalDate date,
+      LocalTime now,
+      String query,
+      int offset,
+      int limit) {
+    return jdbc.query(
+        OFFER_SELECT + OFFER_FILTER + "AND s.id=? ORDER BY o.id LIMIT ? OFFSET ?",
+        (rs, n) -> offerRow(rs),
+        marketId,
+        date,
+        now,
+        query,
+        storeId,
+        limit,
+        offset);
+  }
+
+  public long storeOfferCount(
+      long marketId, long storeId, LocalDate date, LocalTime now, String query) {
+    return jdbc.queryForObject(
+        "SELECT count(*) FROM (" + OFFER_SELECT + OFFER_FILTER + "AND s.id=?) visible",
+        Long.class,
+        marketId,
+        date,
+        now,
+        query,
+        storeId);
+  }
+
   public Optional<OfferRow> detail(long marketId, LocalDate date, long offerId) {
     return jdbc
         .query(

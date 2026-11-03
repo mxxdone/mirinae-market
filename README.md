@@ -246,3 +246,28 @@ Get-Content frontend/e2e/fixtures/seller-dashboard.sql -Raw | docker exec -i $te
 구매자는 주문 내역에서 **본인의 확정 주문**을 골라 모의 결제 내역서를 새로 조회하고 인쇄할 수 있다. 상품·수량·단가·총액·결제 시각과 조회 시점의 취소·환불 상태를 확인한다. 실제 청구·공식 세무 증빙이 아닌 테스트 내역이며 카드 승인번호·현금영수증 발급번호를 제공하지 않는다. API는 `GET /api/buyer/orders/{checkoutId}/statement`이고, 인가·응답·실패 계약은 Swagger UI와 [Spec의 결제 내역서 계약](SPEC.md#관리자-운영결제-내역서-추가-계약)을 참조한다.
 
 새 시연 DB 분리, 첫 기동 시 관리자·데모 계정 초기화, 당일 판매 준비, 시연 순서와 예외 흐름, 종료·재개, 백업·별도 DB 복원 절차는 [Phase 7 시연·복구 실행 안내](docs/DEMO.md)를 따른다. `demo`는 첫 데이터 생성에만 사용하고 이후 기본 프로필로 실제 시간에 시연한다. 고정 시각 E2E와 DB를 섞지 않는다.
+
+## 매장 탐색·구매자 리뷰
+
+장보기의 기본 상품 탭에서 상품을 비교하거나 매장 탭에서 이름으로 매장을 찾는다. 상품의 매장명을 눌러도 같은 매장 페이지로 이동하며, 매장에서는 상품을 계속 담은 뒤 장바구니로 이동할 수 있다. 표시되는 별점은 매장 평점이며 리뷰 본문·판매자 답글은 해당 매장에만 모인다.
+
+상품은 카드형으로 시작하며 격자·목록 아이콘으로 보기를 전환한다. 목록형은 왼쪽 사진·오른쪽 정보로 표시한다. 사진이나 상품명을 누르면 상세 설명을 확인하고, 시장 상품 목록에서 바로 담으면 장바구니로 이동한다. 매장 페이지에서는 계속 담거나 장바구니로 이동할 수 있다.
+
+구매자는 주문 내역의 수령 완료 매장 주문에서 `리뷰 작성·관리`, 판매자는 `매장 리뷰`, 관리자는 `리뷰 관리` 메뉴를 사용한다. 작성 기한·삭제·복구와 평점 계약은 SPEC, API는 Swagger UI를 따른다.
+
+리뷰 브라우저 검증은 기존 독립 E2E DB 준비 후 다음 fixture도 적용한다. 전날 수령 완료 주문과 당일 판매 상품을 구분하며 실제 수령 상태 전환은 HTTP integration·기존 수령 E2E가 검증한다. API Mock 브라우저 회귀는 실제 서버·DB E2E와 별도다.
+
+```powershell
+Get-Content frontend/e2e/fixtures/reviews.sql -Raw | docker exec -i $testContainer psql -U $testDbUser -d $testDbName -v ON_ERROR_STOP=1 --set "source_buyer=$env:E2E_BUYER_LOGIN_ID"
+```
+
+
+## 상품 대표 사진
+
+판매자의 새 상품/상품 수정 화면에서 JPG·PNG 사진 한 장을 선택하고 미리보기를 확인한 뒤 상품을 저장한다. 사진 제거도 상품 저장 시 적용된다. 기존 판매 이력이 있어도 사진·설명은 수정할 수 있다. 사진이 없으면 `frontend/public/images/product-placeholder.svg`의 공통 기본 이미지를 사용한다. SVG는 프로젝트 정적 자산이며 판매자 업로드 형식에 포함하지 않는다. 자세한 제한·기한·API는 [Spec](SPEC.md#상품-대표-이미지-추가-계약)을 따른다.
+
+로컬 파일 저장 위치는 `PRODUCT_IMAGE_ROOT`로 지정하며 기본 위치는 `.local/uploads/product-images`다. 생성된 256/768/1600 JPEG는 업로드별 UUID 폴더에 저장하고 원본 파일은 보관하지 않는다. DB 연결을 잃지 않도록 DB와 이 폴더를 함께 백업·복원한다. 폴더를 지우거나 빈 폴더로 교체하면 DB 정보만으로 사진을 복원할 수 없다. 실제 배포에서는 컨테이너 밖 영구 경로를 연결하며 목표 구조·보류 범위는 [ADR-012](docs/ADR.md)를 참조한다.
+
+이미지 정리 작업은 DB의 기한이 지난 미사용 건을 처리하고, DB 저장 전에 실패한 고아 폴더도 유예 후 정리한다. 작업 간격은 `product.images.cleanup-delay-ms`, 최초 실행 지연은 `product.images.cleanup-initial-delay-ms`로 조정할 수 있다. 실패는 로그로 남고 다음 실행에서 재시도한다. 현재 상품이 사용하는 사진과 프런트의 공통 기본 이미지는 정리 대상이 아니다.
+
+실제 이미지 E2E는 `npm run test:e2e -- product-image-flow.spec.ts`다. 기존 README의 실제 백엔드/DB·데모 계정·고정 시각 환경을 사용한다. `E2E_SAMPLE_IMAGE_DIR`에 사과·딸기 파일이 있는 폴더를 지정하면 `apple.jpg`·`strawberry.jpg`를 사용하고, 지정하지 않으면 저장소에 포함된 작은 PNG 테스트 자료를 사용한다. 사용자가 제공한 로컬 시연 사진은 `.local/fixtures/product-images/`에 두며 Git에는 포함하지 않는다.

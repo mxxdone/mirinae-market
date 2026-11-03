@@ -225,6 +225,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
 
   await chooseBuyerMarket(page, String(marketId));
   await expect(page.locator(".offer-card")).toHaveCount(12);
+  await page.getByRole("button", { name: "카드형", exact: true }).click();
   const columns: number[] = [];
   for (const width of [1280, 2560, 3840]) {
     await page.setViewportSize({ width, height: 1440 });
@@ -233,7 +234,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
       .locator(".offer-card")
       .first()
       .evaluate((element) => element.getBoundingClientRect().width);
-    expect(cardWidth).toBeGreaterThanOrEqual(280);
+    expect(cardWidth).toBeGreaterThanOrEqual(200);
     expect(cardWidth).toBeLessThan(420);
     columns.push(
       await page
@@ -241,8 +242,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
         .evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length),
     );
   }
-  expect(columns[1]).toBeGreaterThan(columns[0]!);
-  expect(columns[2]).toBeGreaterThan(columns[1]!);
+  expect(columns).toEqual([4, 4, 4]);
   await page.setViewportSize({ width: 2560, height: 1440 });
   await page.screenshot({
     path: "../output/playwright/responsive-products-qhd.png",

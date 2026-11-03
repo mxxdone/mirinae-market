@@ -6,6 +6,7 @@ import { SellerProductsPanel } from "../components/SellerProductsPanel";
 import { SellerOrdersPanel } from "../components/SellerOrdersPanel";
 import { SellerDashboardPanel } from "../components/SellerDashboardPanel";
 import { StatusAlert } from "../components/StatusAlert";
+import { SellerReviewsPanel } from "../components/SellerReviewsPanel";
 import {
   isSellerLocation,
   readSellerPage,
@@ -42,7 +43,8 @@ export function SellerStoreScreen({
   const [salesLocation, setSalesLocation] = useState(() =>
     readSellerPage() === "store" ||
     readSellerPage() === "orders" ||
-    readSellerPage() === "dashboard"
+    readSellerPage() === "dashboard" ||
+    readSellerPage() === "reviews"
       ? "#seller"
       : window.location.hash,
   );
@@ -64,7 +66,10 @@ export function SellerStoreScreen({
   }, []);
 
   function navigate(next: SellerPage) {
-    if (next === "sales" && (page === "store" || page === "orders" || page === "dashboard"))
+    if (
+      next === "sales" &&
+      (page === "store" || page === "orders" || page === "dashboard" || page === "reviews")
+    )
       writeProductPage(readProductPage(salesLocation));
     else writeSellerPage(next);
     setLocation(window.location.hash);
@@ -152,6 +157,17 @@ export function SellerStoreScreen({
               }}
             >
               대시보드
+            </a>
+            <a
+              href="#seller/reviews"
+              id="navSellerReviews"
+              aria-current={page === "reviews" ? "page" : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                navigate("reviews");
+              }}
+            >
+              매장 리뷰
             </a>
             <a
               href="#seller/store"
@@ -267,6 +283,14 @@ export function SellerStoreScreen({
             <SellerDashboardPanel
               key={`dashboard-${store.id}`}
               store={store}
+              onSessionExpired={onSessionExpired}
+            />
+          )}
+
+          {page === "reviews" && store && (
+            <SellerReviewsPanel
+              key={store.id}
+              storeId={store.id}
               onSessionExpired={onSessionExpired}
             />
           )}

@@ -53,7 +53,8 @@ public class SellerProductController {
         request.name(),
         request.description(),
         request.unitType(),
-        request.unitAmount());
+        request.unitAmount(),
+        request.imageId());
   }
 
   @Operation(
@@ -84,7 +85,8 @@ public class SellerProductController {
         request.name(),
         request.description(),
         request.unitType(),
-        request.unitAmount());
+        request.unitAmount(),
+        request.imageId());
   }
 
   @Operation(

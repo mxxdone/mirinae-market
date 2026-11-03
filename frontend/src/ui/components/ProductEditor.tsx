@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { createProduct, updateProduct, getProduct, deleteProduct } from "../../api/products";
 import { ApiError, type ProductView, type UnitType } from "../../api/types";
 import { parseSaleUnit, convertWeightInput } from "../../validation/productValidation";
+import { getProductImage, uploadProductImage, type ProductImage } from "../../api/productImages";
+import { ProductPhoto } from "./ProductPhoto";
 import { StatusAlert } from "./StatusAlert";
 
 export function ProductEditor({
@@ -19,6 +21,21 @@ export function ProductEditor({
   onBack: () => void;
   onSessionExpired: () => void;
 }) {
+  const [photo, setPhoto] = useState<ProductImage | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [uploaded, setUploaded] = useState<{ file: File; image: ProductImage } | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!file) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
   const [product, setProduct] = useState<ProductView | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -55,6 +72,13 @@ export function ProductEditor({
       .then((value) => {
         if (!active) return;
         setProduct(value);
+        void getProductImage(storeId, productId, controller.signal)
+          .then((result) => {
+            if (active) setPhoto(result.image);
+          })
+          .catch((failure: unknown) => {
+            if (active) handleError(failure);
+          });
         setName(value.name);
         setDescription(value.description);
         setUnitType(value.unitType);
@@ -89,7 +113,18 @@ export function ProductEditor({
       )
         throw new Error("상품명은 제어 문자 없이 1~100자로 입력해 주세요.");
       if ([...description.trim()].length > 1000) throw new Error("설명은 최대 1,000자입니다.");
+      let imageId: string | undefined = removePhoto ? "" : undefined;
+      if (file) {
+        if (file.size > 5 * 1024 * 1024)
+          throw new Error("사진은 최대 5MiB까지 등록할 수 있습니다.");
+        const staged =
+          uploaded?.file === file ? uploaded.image : await uploadProductImage(storeId, file);
+        if (!mounted.current) return;
+        setUploaded({ file, image: staged });
+        imageId = staged.id;
+      }
       const input = {
+        imageId,
         name: normalized,
         description: description.trim(),
         unitType,
@@ -100,6 +135,7 @@ export function ProductEditor({
         : await createProduct(storeId, input);
       if (mounted.current) await onSaved(saved);
     } catch (failure) {
+      if (failure instanceof ApiError && failure.code === "IMAGE_UNAVAILABLE") setUploaded(null);
       handleError(failure);
     } finally {
       if (mounted.current) setBusy(false);
@@ -228,6 +264,56 @@ export function ProductEditor({
               disabled={busy}
               onChange={(event) => setDescription(event.target.value)}
             />
+          </div>
+          <div className="field-group product-image-editor">
+            <label className="field-label" htmlFor="productPhoto">
+              상품 사진 (선택)
+            </label>
+            {preview ? (
+              <div className="product-photo">
+                <img src={preview} alt="선택한 상품 사진 미리보기" />
+              </div>
+            ) : (
+              <ProductPhoto image={removePhoto ? null : photo} name={name || "상품"} />
+            )}
+            <input
+              id="productPhoto"
+              ref={fileInput}
+              type="file"
+              accept="image/jpeg,image/png"
+              disabled={busy}
+              onChange={(event) => {
+                const selected = event.target.files?.[0] ?? null;
+                if (selected && selected.size > 5 * 1024 * 1024) {
+                  setError("사진은 최대 5MiB까지 등록할 수 있습니다.");
+                  event.target.value = "";
+                  return;
+                }
+                setFile(selected);
+                setUploaded(null);
+                setRemovePhoto(false);
+                setError(null);
+              }}
+            />
+            <p className="field-help-text">
+              JPG·PNG 1장, 최대 5MiB. 작은 사진도 등록할 수 있습니다. 사진 변경은 상품 저장 시
+              적용됩니다.
+            </p>
+            {(photo || file) && !removePhoto && (
+              <button
+                type="button"
+                className="pagination-button"
+                disabled={busy}
+                onClick={() => {
+                  setFile(null);
+                  setUploaded(null);
+                  setRemovePhoto(true);
+                  if (fileInput.current) fileInput.current.value = "";
+                }}
+              >
+                사진 제거
+              </button>
+            )}
           </div>
           {product?.hasSales && (
             <p className="field-help-text">

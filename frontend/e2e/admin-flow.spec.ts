@@ -498,6 +498,16 @@ test.describe("관리자 시각 표시", () => {
       path: "../output/playwright/admin-timestamp-seconds.png",
       fullPage: true,
     });
+
+    // 같은 행 상세 버튼을 다시 누르면 접히고, 다른 행을 누르면 상세가 그 행으로 바뀝니다.
+    const detailButtons = page.locator(".info-data-table tbody button[aria-expanded]");
+    await detailButtons.first().click();
+    await expect(page.locator(".admin-detail")).toHaveCount(0);
+    await expect(detailButtons.first()).toHaveAttribute("aria-expanded", "false");
+    await detailButtons.nth(1).click();
+    await expect(page.locator(".admin-values")).toContainText("2026-10-19 00:00:00");
+    await expect(detailButtons.first()).toHaveAttribute("aria-expanded", "false");
+    await expect(detailButtons.nth(1)).toHaveAttribute("aria-expanded", "true");
     await page.locator("#admin-nav-orders").click();
     await expect(page.locator('tbody [data-column="confirmedAt"]')).toHaveText([
       "2026-10-19 01:34:56",

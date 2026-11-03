@@ -11,6 +11,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
+      "/media": {
+        target: backendUrl,
+        changeOrigin: true,
+      },
       "/api": {
         target: backendUrl,
         changeOrigin: true,

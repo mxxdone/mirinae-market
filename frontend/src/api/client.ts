@@ -167,6 +167,23 @@ export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> 
   return (await response.json()) as T;
 }
 
+/** 파일 경계 헤더는 브라우저가 생성하며 기존 세션·CSRF 보호를 유지한다. */
+export async function apiPostMultipart<T>(path: string, body: FormData): Promise<T> {
+  const csrf = await getCsrfToken();
+  const response = await fetchWithTimeout(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", [csrf.headerName]: csrf.token },
+    body,
+    timeoutMs: 30000,
+  });
+  if (!response.ok) {
+    if (response.status === 403) void refreshCsrfSilently();
+    throw await parseApiError(response, "사진을 업로드하지 못했습니다.");
+  }
+  return (await response.json()) as T;
+}
+
 /**
  * POST 요청 (JSON)
  */

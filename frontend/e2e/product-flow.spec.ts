@@ -80,7 +80,7 @@ test("상품 상세의 브라우저 뒤로·앞으로·새로고침과 로그아
   const card = page.locator(".offer-card").first();
   const name = await card.getByRole("heading").innerText();
   const listUrl = page.url();
-  await card.getByRole("button", { name: /^상품 상세 보기/ }).click();
+  await card.locator(".offer-product-name").click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   await expect(page).toHaveURL(/offer=/);
   await page.goBack();
@@ -183,7 +183,7 @@ test("판매자 kg 입력→일괄 공개→구매자 시장 검색·상세·타
     const card = buyerPage.locator(".offer-card").filter({ hasText: name });
     await expect(card).toContainText("9,000");
     await expect(card).toContainText("100g당 300.00원");
-    await card.getByRole("button", { name: /^상품 상세 보기/ }).click();
+    await card.locator(".offer-product-name").click();
     await expect(buyerPage.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(buyerPage.getByText("15:00~19:00", { exact: false })).toBeVisible();
     await buyerPage.getByRole("button", { name: "← 상품 목록으로", exact: true }).click();

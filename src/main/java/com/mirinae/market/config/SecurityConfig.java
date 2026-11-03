@@ -25,6 +25,8 @@ public class SecurityConfig {
     http.authorizeHttpRequests(
             authorize ->
                 authorize
+                    .requestMatchers(org.springframework.http.HttpMethod.GET, "/media/products/**")
+                    .permitAll()
                     .requestMatchers(
                         "/actuator/health",
                         "/v3/api-docs/**",

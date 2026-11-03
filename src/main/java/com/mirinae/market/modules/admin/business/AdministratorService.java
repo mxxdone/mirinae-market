@@ -30,6 +30,7 @@ public class AdministratorService {
   private final com.mirinae.market.modules.checkout.business.FulfillmentService fulfillment;
   private final com.mirinae.market.modules.checkout.business.RefundService refunds;
   private final com.mirinae.market.modules.store.business.StoreOperationService operations;
+  private final com.mirinae.market.modules.review.business.ReviewService reviews;
 
   public AdministratorService(
       AccountService accounts,
@@ -41,7 +42,8 @@ public class AdministratorService {
       MarketLocationService locations,
       com.mirinae.market.modules.checkout.business.FulfillmentService fulfillment,
       com.mirinae.market.modules.checkout.business.RefundService refunds,
-      com.mirinae.market.modules.store.business.StoreOperationService operations) {
+      com.mirinae.market.modules.store.business.StoreOperationService operations,
+      com.mirinae.market.modules.review.business.ReviewService reviews) {
     this.accounts = accounts;
     this.stores = stores;
     this.products = products;
@@ -52,6 +54,88 @@ public class AdministratorService {
     this.fulfillment = fulfillment;
     this.refunds = refunds;
     this.operations = operations;
+    this.reviews = reviews;
+  }
+
+  @Transactional(
+      readOnly = true,
+      isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+  public AdminReviewPage reviews(String actor, int page, int size) {
+    var result = reviews.managedReviews(actor, page, size);
+    return new AdminReviewPage(
+        result.items().stream()
+            .map(
+                row ->
+                    new AdminReviewPage.Item(
+                        row.review().id(),
+                        row.review().storeId(),
+                        row.storeOrderId(),
+                        row.storeName(),
+                        row.review().rating(),
+                        row.review().content(),
+                        row.review().createdAt(),
+                        row.authorDeleted(),
+                        row.adminDeleted(),
+                        row.adminReason()))
+            .toList(),
+        result.page(),
+        result.size(),
+        result.hasNext(),
+        result.totalItems());
+  }
+
+  @Transactional
+  public void deleteReview(String actor, long id, String reason) {
+    if (reviews.adminDelete(actor, id, reason))
+      record(actor, "REVIEW", id, "관리자 삭제 없음", "관리자 삭제: " + reason.strip());
+  }
+
+  @Transactional
+  public void restoreReview(String actor, long id) {
+    if (reviews.adminRestore(actor, id))
+      record(actor, "REVIEW", id, "관리자 삭제", "관리자 삭제 해제(작성자 삭제는 유지)");
+  }
+
+  @Transactional(
+      readOnly = true,
+      isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+  public AdminReviewRequestPage reviewRequests(String actor, int page, int size) {
+    var result = reviews.requests(actor, page, size);
+    return new AdminReviewRequestPage(
+        result.items().stream().map(AdministratorService::reviewRequest).toList(),
+        result.page(),
+        result.size(),
+        result.hasNext(),
+        result.totalItems());
+  }
+
+  @Transactional
+  public AdminReviewRequestPage.Item decideReviewRequest(
+      String actor, long id, boolean approved, String reason) {
+    var result = reviews.decide(actor, id, approved, reason);
+    if (result.changed())
+      record(
+          actor,
+          "REVIEW_REQUEST",
+          id,
+          "PENDING(리뷰 " + result.request().reviewId() + ")",
+          result.request().status() + ": " + reason.strip());
+    return reviewRequest(result.request());
+  }
+
+  private static AdminReviewRequestPage.Item reviewRequest(
+      com.mirinae.market.modules.review.business.DeletionRequestView row) {
+    return new AdminReviewRequestPage.Item(
+        row.id(),
+        row.reviewId(),
+        row.storeId(),
+        row.storeName(),
+        row.rating(),
+        row.content(),
+        row.reason(),
+        row.status(),
+        row.decisionReason(),
+        row.createdAt());
   }
 
   public List<AdminManagedReportView> reports(String actor, String status, int page) {

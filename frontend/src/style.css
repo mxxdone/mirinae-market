@@ -1146,6 +1146,9 @@ textarea.input-box {
 .market-workspace:has(> .market-header)[data-layout] {
   max-width: 80rem;
 }
+.market-workspace:has(> .market-header)[data-layout="compact"] {
+  max-width: 72rem;
+}
 .market-header {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

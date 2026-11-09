@@ -393,6 +393,7 @@ export function App(): ReactElement {
             <button
               type="button"
               className="buyer-logout-button"
+              id="btnLogout"
               onClick={() => void handleLogout()}
               disabled={isLoggingOut}
             >
@@ -403,7 +404,11 @@ export function App(): ReactElement {
       </BrandHeader>
       {currentUser?.role === "BUYER" && logoutError && (
         <div className="buyer-header-alert">
-          <StatusAlert message={logoutError} onRetry={() => void handleLogout()} />
+          <StatusAlert
+            id="buyerLogoutAlert"
+            message={logoutError}
+            onRetry={() => void handleLogout()}
+          />
         </div>
       )}
       <main className="main-viewport" id="mainViewport">

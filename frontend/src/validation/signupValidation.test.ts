@@ -27,9 +27,7 @@ describe("signupValidation", () => {
     });
 
     it("5자 미만 또는 20자 초과이면 형식 오류를 반환한다", () => {
-      expect(validateLoginId("abc")).toBe(
-        "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
-      );
+      expect(validateLoginId("abc")).toBe("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
       expect(validateLoginId("a".repeat(21))).toBe(
         "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
       );

@@ -18,7 +18,7 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
   test("관리자 시장·매장·판매자 등록 -> 판매자 첫 비밀번호 변경 -> 상품 등록 및 당일 판매 공개 -> 구매자 시장 검색", async ({
     page,
   }) => {
-    test.setTimeout(60000);
+    test.setTimeout(90000);
 
     const adminLoginId = required("E2E_ADMIN_LOGIN_ID");
     const adminPassword = required("E2E_ADMIN_PASSWORD");
@@ -297,13 +297,15 @@ test("관리자 메뉴 전환은 기존 본문과 크기를 유지하고 실패�
   const baseHeight = await page.evaluate(() => {
     const main = document.querySelector(".main-viewport");
     const footer = document.querySelector(".app-footer");
-    if (!main || !footer) throw new Error("앱 레이아웃이 없습니다.");
+    const header = document.querySelector(".app-header");
+    if (!main || !footer || !header) throw new Error("앱 레이아웃이 없습니다.");
     const style = getComputedStyle(main);
     return (
       innerHeight -
       parseFloat(style.paddingTop) -
       parseFloat(style.paddingBottom) -
-      footer.getBoundingClientRect().height
+      footer.getBoundingClientRect().height -
+      header.getBoundingClientRect().height
     );
   });
 

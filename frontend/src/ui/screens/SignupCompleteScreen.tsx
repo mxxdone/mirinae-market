@@ -8,9 +8,7 @@ interface SignupCompleteScreenProps {
  * 가입 완료 화면
  * 가입 완료를 알리고 로그인 화면으로 이동한다.
  */
-export function SignupCompleteScreen({
-  onNavigateLogin,
-}: SignupCompleteScreenProps): ReactElement {
+export function SignupCompleteScreen({ onNavigateLogin }: SignupCompleteScreenProps): ReactElement {
   return (
     <section
       id="screen-signup-complete"

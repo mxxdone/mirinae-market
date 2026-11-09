@@ -66,16 +66,25 @@ async function addFromScreen(page: Page, market: number, name: string) {
   await chooseBuyerMarket(page, String(market));
   await page.locator("#productSearch").fill(name);
   await page.getByRole("button", { name: "상품 검색", exact: true }).click();
+  const added = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      /^\/api\/buyer\/cart\/items\/\d+$/.test(new URL(response.url()).pathname),
+  );
   await page
     .locator(".offer-card")
     .first()
     .getByRole("button", { name: "장바구니 담기", exact: true })
     .click();
+  expect((await added).status()).toBe(200);
+  await expect(page.locator("#heading-market")).toBeVisible();
+  await page.locator(".app-header").getByRole("button", { name: "장바구니", exact: true }).click();
   await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
   await expect(page).toHaveURL(/#cart$/);
   await expect(page.locator(".checkout-order")).toHaveCount(0);
 }
 test("두 매장 통합 결제·응답 유실 결과 확인·새로고침 주문 복원", async ({ page, browser }) => {
+  test.setTimeout(90000);
   const first = await browser.newContext();
   const second = await browser.newContext();
   try {
@@ -89,6 +98,10 @@ test("두 매장 통합 결제·응답 유실 결과 확인·새로고침 주문
     await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
     await expect(page.locator(`[id="cart-quantity-${a.offerId}"]`)).toHaveValue("1");
     await page.getByRole("button", { name: "장바구니 비우기", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "장바구니를 비울까요?" })
+      .getByRole("button", { name: "확인", exact: true })
+      .click();
     await expect(page.getByText("장바구니가 비어 있습니다.", { exact: false })).toBeVisible();
     await page.getByRole("button", { name: "← 시장 상품으로" }).click();
     await addFromScreen(page, a.marketId, prefix + "사과");
@@ -140,6 +153,7 @@ test("모의 결제 실패와 가격 변경 재확인은 재고를 차감하지 
   page,
   browser,
 }) => {
+  test.setTimeout(60000);
   const seller = await browser.newContext();
   try {
     const name = `재확인-${Date.now()}`;

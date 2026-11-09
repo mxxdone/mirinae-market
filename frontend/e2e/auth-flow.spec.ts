@@ -43,12 +43,30 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#heading-signup")).toBeVisible();
 
     // 4필드 입력 (임의 trim 없음)
+    let availabilityRequests = 0;
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/accounts/login-id-availability")
+        availabilityRequests += 1;
+    });
     await page.locator("#signupUserId").fill(testLoginId);
+    expect(availabilityRequests).toBe(0);
     await page.getByRole("button", { name: "중복 확인", exact: true }).click();
     await expect(page.locator("#signupUserIdHelp")).toHaveText("사용 가능한 아이디입니다.");
+    await expect(page.getByRole("button", { name: "중복 확인", exact: true })).toBeDisabled();
+    await page.locator("#signupUserId").fill(`${testLoginId}a`);
+    await expect(page.getByRole("button", { name: "중복 확인", exact: true })).toBeEnabled();
+    await expect(page.getByText("사용 가능한 아이디입니다.", { exact: true })).toHaveCount(0);
+    expect(availabilityRequests).toBe(1);
+    await page.locator("#signupUserId").fill(testLoginId);
+    await page.getByRole("button", { name: "중복 확인", exact: true }).click();
+    await expect(page.getByRole("button", { name: "중복 확인", exact: true })).toBeDisabled();
     await page.locator("#signupEmail").fill(testEmail);
     await page.locator("#signupName").fill(testName);
     await page.locator("#signupPassword").fill(testPassword);
+    await page.locator("#signupPasswordConfirmation").fill("Different1234!");
+    await expect(page.locator("#signupPasswordConfirmationError")).toHaveCount(0);
+    await page.locator("#btnSignupSubmit").click();
+    await expect(page.locator("#signupPasswordConfirmationError")).toBeVisible();
     await page.locator("#signupPasswordConfirmation").fill(testPassword);
     expect(svgErrors).toEqual([]);
 
@@ -75,6 +93,17 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#heading-market")).toBeVisible();
     await expect(page.locator("#heading-buyer-summary")).toHaveCount(0);
     await expect(page.locator("#buyerSelectProvince")).toBeVisible();
+    const header = page.locator(".app-header");
+    await expect(header.getByRole("button", { name: "미리내마켓 홈" })).toBeVisible();
+    await expect(header.getByRole("navigation", { name: "구매자 메뉴" })).toBeVisible();
+    await expect(header.getByRole("button", { name: "장바구니", exact: true })).toHaveCount(1);
+    await expect(page.locator(".main-viewport .buyer-utility-nav")).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(header.getByRole("button", { name: "로그아웃", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.reload();
     await expect(page.locator("#buyerSelectProvince")).toBeVisible();
     await page.getByRole("button", { name: "내 계정", exact: true }).click();

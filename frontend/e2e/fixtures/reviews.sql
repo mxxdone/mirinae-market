@@ -30,8 +30,8 @@ JOIN accounts a ON a.id=s.owner_account_id WHERE a.login_id='review_seller' ON C
 INSERT INTO checkouts(buyer_id,request_key,cart_version,mode,status,total_won,due_at,created_at,confirmed_at)
 SELECT a.id,'review-picked-up',100,'SUCCESS','CONFIRMED',2000,'2026-10-12T03:00:00Z','2026-10-12T03:00:00Z','2026-10-12T03:00:00Z'
 FROM accounts a WHERE a.login_id='review_buyer' ON CONFLICT DO NOTHING;
-INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,order_deadline,start_time,end_time,pickup_code,picked_up_at)
-SELECT c.id,s.id,s.market_id,s.name,'2026-10-12','13:00','14:00','18:00','975310','2026-10-12T05:00:00Z'
+INSERT INTO store_orders(checkout_id,store_id,market_id,market_name,store_name,pickup_date,order_deadline,start_time,end_time,pickup_code,picked_up_at)
+SELECT c.id,s.id,s.market_id,(SELECT name FROM markets WHERE id=s.market_id),s.name,'2026-10-12','13:00','14:00','18:00','975310','2026-10-12T05:00:00Z'
 FROM checkouts c JOIN accounts a ON a.id=c.buyer_id CROSS JOIN stores s JOIN accounts owner ON owner.id=s.owner_account_id
 WHERE a.login_id='review_buyer' AND c.request_key='review-picked-up' AND owner.login_id='review_seller' ON CONFLICT DO NOTHING;
 INSERT INTO order_items(store_order_id,offer_id,product_name,unit_type,unit_amount,price_won,quantity)

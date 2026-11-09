@@ -258,6 +258,30 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     await expect(page.locator("#reportNoticeBox")).toContainText("접수");
     await oldReports.release();
     await expect(page.getByRole("dialog").getByRole("alert")).toHaveCount(0);
+    const ownReport = page.locator(".own-report-item");
+    await ownReport.getByRole("button", { name: /제보 수정$/ }).click();
+    await page.locator("#reportDescriptionInput").fill("매장 입구 위치를 다시 확인해 주세요.");
+    await page.getByRole("button", { name: "수정 저장", exact: true }).click();
+    await expect(ownReport).toContainText("매장 입구 위치를 다시 확인해 주세요.");
+    let deletionRequests = 0;
+    page.on("request", (request) => {
+      if (request.method() === "DELETE" && new URL(request.url()).pathname.includes("/reports/"))
+        deletionRequests += 1;
+    });
+    await ownReport.getByRole("button", { name: /제보 삭제$/ }).click();
+    const deleteDialog = page.getByRole("dialog", { name: "제보를 삭제할까요?" });
+    await deleteDialog.getByRole("button", { name: "취소", exact: true }).click();
+    await expect(deleteDialog).not.toBeVisible();
+    expect(deletionRequests).toBe(0);
+    await expect(ownReport).toHaveCount(1);
+    await ownReport.getByRole("button", { name: /제보 삭제$/ }).click();
+    await deleteDialog.getByRole("button", { name: "삭제", exact: true }).click();
+    await expect(ownReport).toHaveCount(0);
+    expect(deletionRequests).toBe(1);
+    await page.locator("#reportTypeSelect").selectOption("LOCATION_ERROR");
+    await page.locator("#reportDescriptionInput").fill("표시된 위치가 실제 매장 위치와 다릅니다.");
+    await page.locator("#btnSubmitStoreReport").click();
+    await expect(ownReport).toHaveCount(1);
     const response = await page.request.get(`/api/buyer/stores/${order.storeId}/reports`);
     const reports = (await response.json()) as { id: number; status: string }[];
     expect(reports).toHaveLength(1);

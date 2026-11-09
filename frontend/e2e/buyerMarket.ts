@@ -1,11 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 export async function openBuyerProducts(page: Page) {
-  await expect(page.locator("#heading-market")).toBeVisible();
-  if (await page.locator("#marketResults").isVisible()) {
-    await page.locator("#marketResults button").first().click();
-  }
-  await expect(page.locator("#productSearch")).toBeVisible();
+  await chooseBuyerMarket(page, { label: "미리내시장 (위치 미등록)" });
 }
 
 export async function chooseBuyerMarket(page: Page, market: string | { label: string }) {

@@ -46,8 +46,8 @@ INSERT INTO checkouts(buyer_id, request_key, cart_version, mode, status, total_w
 SELECT a.id, 'phase6-waiting', 201, 'SUCCESS', 'CONFIRMED', 4000, '2026-10-13T00:10:00Z', '2026-10-13T00:10:00Z', '2026-10-13T00:10:00Z'
 FROM accounts a WHERE a.login_id = 'dashboard_buyer_a' ON CONFLICT DO NOTHING;
 
-INSERT INTO store_orders(checkout_id, store_id, market_id, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code)
-SELECT c.id, s.id, s.market_id, s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '111111'
+INSERT INTO store_orders(checkout_id, store_id, market_id, market_name, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code)
+SELECT c.id, s.id, s.market_id, (SELECT name FROM markets WHERE id=s.market_id), s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '111111'
 FROM checkouts c JOIN accounts a ON a.login_id = 'dashboard_seller'
 JOIN stores s ON s.owner_account_id = a.id
 JOIN pickup_windows w ON w.store_id = s.id AND w.pickup_date = '2026-10-13'
@@ -65,8 +65,8 @@ INSERT INTO checkouts(buyer_id, request_key, cart_version, mode, status, total_w
 SELECT a.id, 'phase6-partial', 202, 'SUCCESS', 'CONFIRMED', 4000, '2026-10-13T00:20:00Z', '2026-10-13T00:20:00Z', '2026-10-13T00:20:00Z'
 FROM accounts a WHERE a.login_id = 'dashboard_buyer_a' ON CONFLICT DO NOTHING;
 
-INSERT INTO store_orders(checkout_id, store_id, market_id, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code)
-SELECT c.id, s.id, s.market_id, s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '222222'
+INSERT INTO store_orders(checkout_id, store_id, market_id, market_name, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code)
+SELECT c.id, s.id, s.market_id, (SELECT name FROM markets WHERE id=s.market_id), s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '222222'
 FROM checkouts c JOIN accounts a ON a.login_id = 'dashboard_seller'
 JOIN stores s ON s.owner_account_id = a.id
 JOIN pickup_windows w ON w.store_id = s.id AND w.pickup_date = '2026-10-13'
@@ -97,8 +97,8 @@ INSERT INTO checkouts(buyer_id, request_key, cart_version, mode, status, total_w
 SELECT a.id, 'phase6-picked', 203, 'SUCCESS', 'CONFIRMED', 1000, '2026-10-13T00:15:00Z', '2026-10-13T00:15:00Z', '2026-10-13T00:15:00Z'
 FROM accounts a WHERE a.login_id = 'dashboard_buyer_b' ON CONFLICT DO NOTHING;
 
-INSERT INTO store_orders(checkout_id, store_id, market_id, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code, picked_up_at)
-SELECT c.id, s.id, s.market_id, s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '333333', '2026-10-13T02:00:00Z'
+INSERT INTO store_orders(checkout_id, store_id, market_id, market_name, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code, picked_up_at)
+SELECT c.id, s.id, s.market_id, (SELECT name FROM markets WHERE id=s.market_id), s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '333333', '2026-10-13T02:00:00Z'
 FROM checkouts c JOIN accounts a ON a.login_id = 'dashboard_seller'
 JOIN stores s ON s.owner_account_id = a.id
 JOIN pickup_windows w ON w.store_id = s.id AND w.pickup_date = '2026-10-13'
@@ -116,8 +116,8 @@ INSERT INTO checkouts(buyer_id, request_key, cart_version, mode, status, total_w
 SELECT a.id, 'phase6-cancelled', 204, 'SUCCESS', 'CONFIRMED', 1000, '2026-10-13T00:25:00Z', '2026-10-13T00:25:00Z', '2026-10-13T00:25:00Z'
 FROM accounts a WHERE a.login_id = 'dashboard_buyer_c' ON CONFLICT DO NOTHING;
 
-INSERT INTO store_orders(checkout_id, store_id, market_id, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code)
-SELECT c.id, s.id, s.market_id, s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '444444'
+INSERT INTO store_orders(checkout_id, store_id, market_id, market_name, store_name, pickup_date, order_deadline, start_time, end_time, pickup_code)
+SELECT c.id, s.id, s.market_id, (SELECT name FROM markets WHERE id=s.market_id), s.name, w.pickup_date, w.order_deadline, w.start_time, w.end_time, '444444'
 FROM checkouts c JOIN accounts a ON a.login_id = 'dashboard_seller'
 JOIN stores s ON s.owner_account_id = a.id
 JOIN pickup_windows w ON w.store_id = s.id AND w.pickup_date = '2026-10-13'

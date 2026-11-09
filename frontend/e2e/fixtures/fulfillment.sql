@@ -36,8 +36,8 @@ INSERT INTO checkouts(buyer_id,request_key,cart_version,mode,status,total_won,du
 SELECT a.id,x.key,x.version,'SUCCESS','CONFIRMED',2000,'2026-10-13T00:00:00Z','2026-10-13T00:00:00Z','2026-10-13T00:00:00Z'
 FROM accounts a CROSS JOIN (VALUES ('phase5-general',100),('phase5-collection',101),('phase5-failure',102)) x(key,version)
 WHERE a.login_id='fulfill_buyer' ON CONFLICT DO NOTHING;
-INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,order_deadline,start_time,end_time,pickup_code)
-SELECT c.id,s.id,s.market_id,s.name,w.pickup_date,w.order_deadline,w.start_time,w.end_time,CASE WHEN c.request_key='phase5-failure' THEN '135790' ELSE '246810' END
+INSERT INTO store_orders(checkout_id,store_id,market_id,market_name,store_name,pickup_date,order_deadline,start_time,end_time,pickup_code)
+SELECT c.id,s.id,s.market_id,(SELECT name FROM markets WHERE id=s.market_id),s.name,w.pickup_date,w.order_deadline,w.start_time,w.end_time,CASE WHEN c.request_key='phase5-failure' THEN '135790' ELSE '246810' END
 FROM checkouts c JOIN (VALUES ('phase5-general','fulfill_seller_gen'),
  ('phase5-collection','fulfill_seller_ready'),('phase5-collection','fulfill_seller_miss'),
  ('phase5-failure','fulfill_seller_ready')) x(key,seller) ON c.request_key=x.key
@@ -55,8 +55,8 @@ AND (c.request_key='phase5-failure' OR p.name='검증 사과') ON CONFLICT DO NO
 INSERT INTO checkouts(buyer_id,request_key,cart_version,mode,status,total_won,due_at,created_at,confirmed_at)
 SELECT id,'phase5-attention',103,'SUCCESS','CONFIRMED',1000,'2026-10-13T00:00:00Z','2026-10-13T00:00:00Z','2026-10-13T00:00:00Z'
 FROM accounts WHERE login_id='fulfill_buyer' ON CONFLICT DO NOTHING;
-INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,order_deadline,start_time,end_time,pickup_code)
-SELECT c.id,s.id,s.market_id,s.name,w.pickup_date,w.order_deadline,w.start_time,w.end_time,'987654'
+INSERT INTO store_orders(checkout_id,store_id,market_id,market_name,store_name,pickup_date,order_deadline,start_time,end_time,pickup_code)
+SELECT c.id,s.id,s.market_id,(SELECT name FROM markets WHERE id=s.market_id),s.name,w.pickup_date,w.order_deadline,w.start_time,w.end_time,'987654'
 FROM checkouts c JOIN accounts a ON a.login_id='fulfill_seller_gen'
 JOIN stores s ON s.owner_account_id=a.id JOIN pickup_windows w ON w.store_id=s.id AND w.pickup_date='2026-10-13'
 WHERE c.request_key='phase5-attention' ON CONFLICT DO NOTHING;

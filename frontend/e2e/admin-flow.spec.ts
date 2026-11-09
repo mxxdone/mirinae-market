@@ -144,9 +144,11 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await expect(page.locator("#heading-market")).toBeVisible();
 
     // 새로 등록된 시장 선택 후 상품 검색
-    const marketOption = page.locator("#marketSelect option").filter({ hasText: marketName });
-    const marketOptionValue = await marketOption.getAttribute("value");
-    await chooseBuyerMarket(page, marketOptionValue!);
+    await page.locator("#buyerInputMarketName").fill(marketName);
+    await page.locator("#btnSearchMarketName").click();
+    const marketChoice = page.getByRole("button", { name: new RegExp(marketName) });
+    const marketValue = await marketChoice.getAttribute("data-market-id");
+    await chooseBuyerMarket(page, marketValue!);
     await page.locator("#productSearch").fill(productName);
     await page.getByRole("button", { name: "상품 검색", exact: true }).click();
 

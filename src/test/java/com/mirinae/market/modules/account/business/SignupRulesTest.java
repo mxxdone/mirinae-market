@@ -1,6 +1,7 @@
 package com.mirinae.market.modules.account.business;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.util.stream.Stream;
@@ -29,6 +30,35 @@ class SignupRulesTest {
         .isEqualTo(email);
     assertThatIllegalArgumentException()
         .isThrownBy(() -> SignupRules.validate("a1234", "Pass123!", "가나", email + "c"));
+  }
+
+  @Test
+  void publicLoginIdAllowsOnlyLowercaseLettersAndDigits() {
+    assertThatCode(() -> SignupRules.publicLoginId("a1234")).doesNotThrowAnyException();
+    assertThatCode(() -> SignupRules.publicLoginId("a".repeat(20))).doesNotThrowAnyException();
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> SignupRules.publicLoginId("demo_buyer"))
+        .withMessage("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> SignupRules.publicLoginId("demo-seller"))
+        .withMessage("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> SignupRules.publicLoginId("ABCDE"))
+        .withMessage("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> SignupRules.publicLoginId("a".repeat(21)))
+        .withMessage("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> SignupRules.publicLoginId(null))
+        .withMessage("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+  }
+
+  @Test
+  void legacyRuleStillAcceptsExistingInternalIdentifiers() {
+    assertThat(SignupRules.validate("demo_buyer", "Pass123!", "가나", "a@example.com"))
+        .isEqualTo("a@example.com");
+    assertThat(SignupRules.validate("demo-seller", "Pass123!", "가나", "a@example.com"))
+        .isEqualTo("a@example.com");
   }
 
   @ParameterizedTest

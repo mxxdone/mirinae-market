@@ -28,6 +28,10 @@ public class CheckoutService {
     return transactions.put(loginId, marketId, offerId, quantity);
   }
 
+  public CartView add(String loginId, long marketId, long offerId, Integer quantity) {
+    return transactions.add(loginId, marketId, offerId, quantity);
+  }
+
   public CartView remove(String loginId, long offerId) {
     return transactions.remove(loginId, offerId);
   }
@@ -37,7 +41,17 @@ public class CheckoutService {
   }
 
   public CheckoutAttempt start(String loginId, String key, Long version, String mode) {
-    var prepared = transactions.prepare(loginId, key, version, mode);
+    return start(loginId, key, version, mode, null, null);
+  }
+
+  public CheckoutAttempt start(
+      String loginId,
+      String key,
+      Long version,
+      String mode,
+      List<Long> offerIds,
+      DirectPurchaseItem direct) {
+    var prepared = transactions.prepare(loginId, key, version, mode, offerIds, direct);
     var result = transactions.finish(transactions.buyerId(loginId), key);
     return new CheckoutAttempt(
         result, prepared.loseResponse() && result.status().equals("CONFIRMED"));

@@ -4,7 +4,9 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 final class SignupRules {
-  private static final Pattern LOGIN_ID = Pattern.compile("[a-z0-9_-]{5,20}");
+  // 내부 계정 생성·데모 초기화는 기존 식별자(demo_buyer 등)를 보존하기 위해 기존 규칙을 유지한다.
+  private static final Pattern LEGACY_LOGIN_ID = Pattern.compile("[a-z0-9_-]{5,20}");
+  private static final Pattern PUBLIC_LOGIN_ID = Pattern.compile("[a-z0-9]{5,20}");
   private static final Pattern DISPLAY_NAME = Pattern.compile("[가-힣A-Za-z0-9]{2,10}");
   private static final Pattern PASSWORD = Pattern.compile("[!-~]{8,32}");
   private static final Pattern LETTER = Pattern.compile("[A-Za-z]");
@@ -18,9 +20,15 @@ final class SignupRules {
 
   private SignupRules() {}
 
+  static void publicLoginId(String loginId) {
+    require(
+        loginId != null && PUBLIC_LOGIN_ID.matcher(loginId).matches(),
+        "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+  }
+
   static String validate(String loginId, String password, String displayName, String email) {
     require(
-        loginId != null && LOGIN_ID.matcher(loginId).matches(),
+        loginId != null && LEGACY_LOGIN_ID.matcher(loginId).matches(),
         "ID는 5~20자의 영문 소문자·숫자·밑줄·하이픈이어야 합니다.");
     require(
         displayName != null && DISPLAY_NAME.matcher(displayName).matches(),

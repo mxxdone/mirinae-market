@@ -64,6 +64,15 @@ class PickupCodeMigrationIntegrationTest {
           .migrate();
       assertThat(
               jdbc.queryForObject(
+                  "SELECT count(*) FROM checkouts WHERE source='CART' AND request_fingerprint='ALL'",
+                  Long.class))
+          .isEqualTo(3);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM store_orders WHERE market_name='마이그레이션시장'", Long.class))
+          .isEqualTo(3);
+      assertThat(
+              jdbc.queryForObject(
                   "SELECT pickup_code FROM store_orders WHERE id=?", String.class, orders[0]))
           .isEqualTo("111111");
       assertThat(

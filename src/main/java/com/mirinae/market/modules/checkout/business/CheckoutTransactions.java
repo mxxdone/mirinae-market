@@ -56,6 +56,12 @@ public class CheckoutTransactions {
   }
 
   private CartView cartView(long buyer) {
+    var marketNames =
+        stores.markets().stream()
+            .collect(
+                java.util.stream.Collectors.toMap(
+                    com.mirinae.market.modules.store.business.MarketView::id,
+                    com.mirinae.market.modules.store.business.MarketView::name));
     var items =
         data.cart(buyer).stream()
             .map(
@@ -66,11 +72,12 @@ public class CheckoutTransactions {
                       offer,
                       line.quantity(),
                       line.expectedPrice(),
-                      item.available(),
+                      item.available() && offer.onlineQuantity() >= line.quantity(),
                       offer.priceWon() != line.expectedPrice()
                           || !offer.startTime().equals(line.startTime())
                           || !offer.endTime().equals(line.endTime())
-                          || !offer.orderDeadline().equals(line.orderDeadline()));
+                          || !offer.orderDeadline().equals(line.orderDeadline()),
+                      marketNames.get(offer.marketId()));
                 })
             .toList();
     return new CartView(data.version(buyer), items);
@@ -94,13 +101,8 @@ public class CheckoutTransactions {
     var item = inventory.describe(offerId);
     var offer = item.offer();
     if (!item.available() || offer.marketId() != marketId)
-      throw new CheckoutConflictException("OFFER_UNAVAILABLE", "오늘 판매 중인 같은 시장의 상품만 담을 수 있습니다.");
+      throw new CheckoutConflictException("OFFER_UNAVAILABLE", "오늘 판매 중인 해당 시장의 상품만 담을 수 있습니다.");
     var existing = data.cart(buyer);
-    for (var line : existing) {
-      var previous = inventory.describe(line.offerId()).offer();
-      if (previous.marketId() != marketId || !previous.pickupDate().equals(offer.pickupDate()))
-        throw new CheckoutConflictException("CART_SCOPE", "다른 시장·수령일 상품을 담으려면 기존 장바구니를 먼저 비워 주세요.");
-    }
     if (existing.size() >= 100 && existing.stream().noneMatch(line -> line.offerId() == offerId))
       throw new IllegalArgumentException("장바구니는 상품 100개까지 담을 수 있습니다.");
     data.cartItem(
@@ -114,6 +116,20 @@ public class CheckoutTransactions {
             offer.orderDeadline()));
     data.advance(buyer);
     return cartView(buyer);
+  }
+
+  @Transactional
+  public CartView add(String loginId, long marketId, long offerId, Integer quantity) {
+    long buyer = buyer(loginId);
+    data.lockBuyer(buyer);
+    editable(buyer);
+    int previous =
+        data.cart(buyer).stream()
+            .filter(line -> line.offerId() == offerId)
+            .mapToInt(LineRow::quantity)
+            .findFirst()
+            .orElse(0);
+    return put(loginId, marketId, offerId, CheckoutRules.addedQuantity(previous, quantity));
   }
 
   @Transactional
@@ -137,15 +153,31 @@ public class CheckoutTransactions {
 
   @Transactional
   public CheckoutAttempt prepare(String loginId, String key, Long version, String mode) {
+    return prepare(loginId, key, version, mode, null, null);
+  }
+
+  @Transactional
+  public CheckoutAttempt prepare(
+      String loginId,
+      String key,
+      Long version,
+      String mode,
+      List<Long> offerIds,
+      DirectPurchaseItem direct) {
     CheckoutRules.key(key);
     CheckoutRules.mode(mode);
+    String fingerprint = CheckoutRules.fingerprint(offerIds, direct);
+    String source = direct == null ? "CART" : "DIRECT";
     if (version == null || version < 0) throw new IllegalArgumentException("장바구니 버전을 확인해 주세요.");
     long buyer = buyer(loginId);
     data.lockBuyer(buyer);
     var previous = data.find(buyer, key);
     if (previous.isPresent()) {
       var row = previous.orElseThrow();
-      if (row.cartVersion() != version || !row.mode().equals(mode))
+      if (row.cartVersion() != version
+          || !row.mode().equals(mode)
+          || !row.source().equals(source)
+          || !row.requestFingerprint().equals(fingerprint))
         throw new CheckoutConflictException(
             "REQUEST_KEY_CONFLICT", "같은 결제 요청 키에 다른 내용을 사용할 수 없습니다.");
       return new CheckoutAttempt(view(row), false);
@@ -154,12 +186,31 @@ public class CheckoutTransactions {
       throw new CheckoutConflictException("CART_CHANGED", "장바구니가 변경되었습니다. 다시 확인해 주세요.");
     if (data.atVersion(buyer, version).isPresent())
       throw new CheckoutConflictException("CHECKOUT_PENDING", "같은 장바구니의 결제 결과를 먼저 확인해 주세요.");
-    var lines = data.cart(buyer);
+    List<LineRow> lines;
+    if (direct != null) {
+      lines =
+          List.of(
+              new LineRow(
+                  direct.offerId(),
+                  direct.quantity(),
+                  direct.expectedPrice(),
+                  direct.startTime(),
+                  direct.endTime(),
+                  direct.orderDeadline()));
+    } else {
+      var cart = data.cart(buyer);
+      lines =
+          offerIds == null
+              ? cart
+              : cart.stream().filter(line -> offerIds.contains(line.offerId())).toList();
+      if (offerIds != null && lines.size() != offerIds.size())
+        throw new CheckoutConflictException("CART_CHANGED", "선택한 상품이 장바구니에 없습니다. 다시 확인해 주세요.");
+    }
     CheckoutRules.items(lines.stream().map(LineRow::offerId).toList());
     CheckoutRules.amount(
         lines.stream().map(LineRow::expectedPrice).toList(),
         lines.stream().map(LineRow::quantity).toList());
-    var row = data.prepare(buyer, key, version, mode, clock.instant(), lines);
+    var row = data.prepare(buyer, key, version, mode, clock.instant(), lines, source, fingerprint);
     return new CheckoutAttempt(view(row), mode.equals("LOST_RESPONSE"));
   }
 
@@ -239,7 +290,10 @@ public class CheckoutTransactions {
           lines.get(i).quantity());
     }
     data.confirmed(row.id(), total, clock.instant());
-    data.clear(buyer);
+    if (row.source().equals("CART")) {
+      for (var line : lines) data.remove(buyer, line.offerId());
+    }
+    data.advance(buyer);
     return view(data.find(buyer, key).orElseThrow());
   }
 

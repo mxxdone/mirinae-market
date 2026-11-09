@@ -67,6 +67,30 @@ public class StoreOperationData {
         Timestamp.from(now));
   }
 
+  public boolean otherUnfinishedReport(long store, long buyer, String type, long id) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM store_reports WHERE store_id=? AND buyer_id=? AND type=? AND status<>'RESOLVED' AND id<>?)",
+            Boolean.class,
+            store,
+            buyer,
+            type,
+            id));
+  }
+
+  public void updateReport(long id, String type, String description, Instant now) {
+    jdbc.update(
+        "UPDATE store_reports SET type=?,description=?,updated_at=? WHERE id=?",
+        type,
+        description,
+        Timestamp.from(now),
+        id);
+  }
+
+  public void deleteReport(long id) {
+    jdbc.update("DELETE FROM store_reports WHERE id=?", id);
+  }
+
   public void lockReport(long id) {
     jdbc.queryForObject("SELECT id FROM store_reports WHERE id=? FOR UPDATE", Long.class, id);
   }

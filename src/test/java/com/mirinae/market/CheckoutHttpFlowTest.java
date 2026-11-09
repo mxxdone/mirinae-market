@@ -112,6 +112,297 @@ class CheckoutHttpFlowTest {
   }
 
   @Test
+  void selectedCheckoutLeavesUnselectedCartItems() throws Exception {
+    try (var client = session(buyer)) {
+      add(client, offer, 2);
+      long version = add(client, otherOffer, 1);
+      String body =
+          new tools.jackson.databind.json.JsonMapper()
+              .writeValueAsString(
+                  java.util.Map.of(
+                      "requestKey",
+                      "selected",
+                      "cartVersion",
+                      version,
+                      "mode",
+                      "SUCCESS",
+                      "offerIds",
+                      List.of(offer)));
+      var result = client.json(client.post("/api/buyer/checkouts", body, "application/json", true));
+      assertThat(result.get("status").asString()).isEqualTo("CONFIRMED");
+      assertThat(result.get("totalWon").asLong()).isEqualTo(2000);
+      var cart = client.json(client.get("/api/buyer/cart"));
+      assertThat(cart.get("items").size()).isEqualTo(1);
+      assertThat(cart.get("items").get(0).get("offer").get("id").asLong()).isEqualTo(otherOffer);
+      assertThat(stock(otherOffer)).isEqualTo(5);
+    }
+  }
+
+  private JsonNode requestPayment(
+      HttpSessionClient client,
+      String key,
+      long version,
+      List<Long> ids,
+      java.util.Map<String, Object> direct,
+      String mode)
+      throws Exception {
+    var input = new java.util.HashMap<String, Object>();
+    input.put("requestKey", key);
+    input.put("cartVersion", version);
+    input.put("mode", mode);
+    if (ids != null) input.put("offerIds", ids);
+    if (direct != null) input.put("directItem", direct);
+    var response =
+        client.post(
+            "/api/buyer/checkouts",
+            new tools.jackson.databind.json.JsonMapper().writeValueAsString(input),
+            "application/json",
+            true);
+    assertThat(response.statusCode()).isEqualTo(200);
+    return client.json(response);
+  }
+
+  private java.util.Map<String, Object> direct(int quantity, int price) {
+    return java.util.Map.of(
+        "offerId",
+        offer,
+        "quantity",
+        quantity,
+        "expectedPrice",
+        price,
+        "startTime",
+        "14:00",
+        "endTime",
+        "18:00",
+        "orderDeadline",
+        "13:00");
+  }
+
+  @Test
+  void multipleMarketsSelectedConfirmTogetherAndNamesAreSnapshots() throws Exception {
+    var foreign = stores.createMarket("다중시장" + buyer);
+    jdbc.update("UPDATE stores SET market_id=? WHERE id=?", foreign.id(), otherStore);
+    try (var client = session(buyer)) {
+      add(client, offer, 2);
+      var added =
+          client.put(
+              "/api/buyer/cart/items/" + otherOffer,
+              "{\"marketId\":" + foreign.id() + ",\"quantity\":1}",
+              true);
+      assertThat(added.statusCode()).isEqualTo(200);
+      var cart = client.json(added);
+      assertThat(cart.get("items").get(1).get("marketName").asString()).isEqualTo(foreign.name());
+      long version = cart.get("version").asLong();
+      var result =
+          requestPayment(client, "markets", version, List.of(otherOffer, offer), null, "SUCCESS");
+      assertThat(result.get("status").asString()).isEqualTo("CONFIRMED");
+      assertThat(result.get("storeOrders").size()).isEqualTo(2);
+      assertThat(result.get("totalWon").asLong()).isEqualTo(4000);
+      assertThat(stock(offer)).isEqualTo(8);
+      assertThat(stock(otherOffer)).isEqualTo(4);
+      jdbc.update("UPDATE markets SET name='새 시장명' WHERE id=?", foreign.id());
+      var duplicate =
+          requestPayment(client, "markets", version, List.of(offer, otherOffer), null, "SUCCESS");
+      assertThat(duplicate.get("id").asLong()).isEqualTo(result.get("id").asLong());
+      assertThat(duplicate.get("storeOrders").get(1).get("marketName").asString())
+          .isEqualTo(foreign.name());
+      assertThat(duplicate.get("storeOrders").get(1).get("marketId").asLong())
+          .isEqualTo(foreign.id());
+    }
+  }
+
+  @Test
+  void unselectedUnavailableItemDoesNotBlockSelectedCheckout() throws Exception {
+    try (var client = session(buyer)) {
+      add(client, offer, 1);
+      long version = add(client, otherOffer, 1);
+      jdbc.update("UPDATE daily_offers SET active=false WHERE id=?", otherOffer);
+      var result = requestPayment(client, "valid-only", version, List.of(offer), null, "SUCCESS");
+      assertThat(result.get("status").asString()).isEqualTo("CONFIRMED");
+      var remaining = client.json(client.get("/api/buyer/cart")).get("items");
+      assertThat(remaining.size()).isEqualTo(1);
+      assertThat(remaining.get(0).get("available").asBoolean()).isFalse();
+    }
+  }
+
+  @Test
+  void selectedStockFailureDoesNotConsumeOtherMarketAndPreservesCart() throws Exception {
+    var foreign = stores.createMarket("재고시장" + buyer);
+    jdbc.update("UPDATE stores SET market_id=? WHERE id=?", foreign.id(), otherStore);
+    try (var client = session(buyer)) {
+      add(client, offer, 2);
+      var adding =
+          client.put(
+              "/api/buyer/cart/items/" + otherOffer,
+              "{\"marketId\":" + foreign.id() + ",\"quantity\":1}",
+              true);
+      long version = client.json(adding).get("version").asLong();
+      jdbc.update("UPDATE daily_offers SET online_quantity=0 WHERE id=?", otherOffer);
+      var result =
+          requestPayment(
+              client, "stock-multi", version, List.of(offer, otherOffer), null, "SUCCESS");
+      assertThat(result.get("status").asString()).isEqualTo("FAILED");
+      assertThat(result.get("errorCode").asString()).isEqualTo("OUT_OF_STOCK");
+      assertThat(stock(offer)).isEqualTo(10);
+      assertThat(result.get("storeOrders").size()).isZero();
+      assertThat(client.json(client.get("/api/buyer/cart")).get("items").size()).isEqualTo(2);
+    }
+  }
+
+  @Test
+  void directPurchasePreservesEvenSameCartItemAndRejectsDifferentRetry() throws Exception {
+    try (var client = session(buyer)) {
+      add(client, offer, 2);
+      long version = add(client, otherOffer, 1);
+      var result = requestPayment(client, "direct", version, null, direct(3, 1000), "SUCCESS");
+      assertThat(result.get("status").asString()).isEqualTo("CONFIRMED");
+      assertThat(result.get("totalWon").asLong()).isEqualTo(3000);
+      assertThat(stock(offer)).isEqualTo(7);
+      var cart = client.json(client.get("/api/buyer/cart"));
+      assertThat(cart.get("items").size()).isEqualTo(2);
+      assertThat(cart.get("items").get(0).get("quantity").asInt()).isEqualTo(2);
+      assertThat(
+              requestPayment(client, "direct", version, null, direct(3, 1000), "SUCCESS")
+                  .get("id")
+                  .asLong())
+          .isEqualTo(result.get("id").asLong());
+      var mismatch =
+          client.post(
+              "/api/buyer/checkouts",
+              new tools.jackson.databind.json.JsonMapper()
+                  .writeValueAsString(
+                      java.util.Map.of(
+                          "requestKey",
+                          "direct",
+                          "cartVersion",
+                          version,
+                          "mode",
+                          "SUCCESS",
+                          "directItem",
+                          direct(4, 1000))),
+              "application/json",
+              true);
+      assertThat(mismatch.statusCode()).isEqualTo(409);
+      assertThat(client.json(mismatch).get("code").asString()).isEqualTo("REQUEST_KEY_CONFLICT");
+    }
+  }
+
+  @Test
+  void invalidSelectionAndMixedInputNeverPreparePayment() throws Exception {
+    try (var client = session(buyer)) {
+      long version = add(client, offer, 1);
+      for (var ids :
+          List.of(List.<Long>of(), List.of(offer, offer), List.of(0L), List.of(otherOffer))) {
+        var response =
+            client.post(
+                "/api/buyer/checkouts",
+                new tools.jackson.databind.json.JsonMapper()
+                    .writeValueAsString(
+                        java.util.Map.of(
+                            "requestKey",
+                            "invalid-" + UUID.randomUUID(),
+                            "cartVersion",
+                            version,
+                            "mode",
+                            "SUCCESS",
+                            "offerIds",
+                            ids)),
+                "application/json",
+                true);
+        assertThat(response.statusCode()).isIn(400, 409);
+      }
+      var mixed =
+          client.post(
+              "/api/buyer/checkouts",
+              new tools.jackson.databind.json.JsonMapper()
+                  .writeValueAsString(
+                      java.util.Map.of(
+                          "requestKey",
+                          "mixed",
+                          "cartVersion",
+                          version,
+                          "mode",
+                          "SUCCESS",
+                          "offerIds",
+                          List.of(offer),
+                          "directItem",
+                          direct(1, 1000))),
+              "application/json",
+              true);
+      assertThat(mixed.statusCode()).isEqualTo(400);
+      assertThat(stock(offer)).isEqualTo(10);
+      assertThat(client.json(client.get("/api/buyer/cart")).get("version").asLong())
+          .isEqualTo(version);
+    }
+  }
+
+  @Test
+  void directConditionFailurePreservesCartAndLostResponseIsNotRepeated() throws Exception {
+    try (var client = session(buyer)) {
+      long version = add(client, otherOffer, 1);
+      var failed = requestPayment(client, "direct-price", version, null, direct(1, 999), "SUCCESS");
+      assertThat(failed.get("status").asString()).isEqualTo("FAILED");
+      assertThat(failed.get("errorCode").asString()).isEqualTo("CONDITIONS_CHANGED");
+      var cart = client.json(client.get("/api/buyer/cart"));
+      assertThat(cart.get("items").size()).isEqualTo(1);
+      long nextVersion = cart.get("version").asLong();
+      String body =
+          new tools.jackson.databind.json.JsonMapper()
+              .writeValueAsString(
+                  java.util.Map.of(
+                      "requestKey",
+                      "direct-lost",
+                      "cartVersion",
+                      nextVersion,
+                      "mode",
+                      "LOST_RESPONSE",
+                      "directItem",
+                      direct(1, 1000)));
+      assertThat(client.post("/api/buyer/checkouts", body, "application/json", true).statusCode())
+          .isEqualTo(503);
+      assertThat(
+              client.json(client.get("/api/buyer/checkouts/direct-lost")).get("status").asString())
+          .isEqualTo("CONFIRMED");
+      assertThat(client.post("/api/buyer/checkouts", body, "application/json", true).statusCode())
+          .isEqualTo(200);
+      assertThat(stock(offer)).isEqualTo(9);
+      assertThat(client.json(client.get("/api/buyer/cart")).get("items").size()).isEqualTo(1);
+    }
+  }
+
+  @Test
+  void simultaneousAdditionsAccumulateAndOverflowIsRejected() throws Exception {
+    try (var client = session(buyer)) {
+      String path = "/api/buyer/cart/items/" + offer;
+      var first = client.postAsync(path, "{\"marketId\":" + market + ",\"quantity\":2}");
+      var second = client.postAsync(path, "{\"marketId\":" + market + ",\"quantity\":3}");
+      assertThat(first.get().statusCode()).isEqualTo(200);
+      assertThat(second.get().statusCode()).isEqualTo(200);
+      var cart = client.json(client.get("/api/buyer/cart"));
+      assertThat(cart.get("items").size()).isEqualTo(1);
+      assertThat(cart.get("items").get(0).get("quantity").asInt()).isEqualTo(5);
+      add(client, offer, Integer.MAX_VALUE);
+      assertThat(
+              client
+                  .post(
+                      path,
+                      "{\"marketId\":" + market + ",\"quantity\":1}",
+                      "application/json",
+                      true)
+                  .statusCode())
+          .isEqualTo(400);
+      assertThat(
+              client
+                  .json(client.get("/api/buyer/cart"))
+                  .get("items")
+                  .get(0)
+                  .get("quantity")
+                  .asInt())
+          .isEqualTo(Integer.MAX_VALUE);
+    }
+  }
+
+  @Test
   void multipleStoresConfirmAtomicallyAndDuplicateRequestsReturnSameSnapshot() throws Exception {
     try (var client = session(buyer)) {
       add(client, offer, 2);

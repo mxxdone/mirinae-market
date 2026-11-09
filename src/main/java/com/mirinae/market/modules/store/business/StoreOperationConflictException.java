@@ -6,4 +6,8 @@ public final class StoreOperationConflictException extends RuntimeException {
   public StoreOperationConflictException() {
     super("허용되지 않은 제보 상태 변경입니다.");
   }
+
+  public StoreOperationConflictException(String message) {
+    super(message);
+  }
 }

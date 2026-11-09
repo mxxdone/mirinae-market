@@ -18,7 +18,14 @@ public class AccountService {
   }
 
   public AccountView signup(String loginId, String password, String displayName, String email) {
+    SignupRules.publicLoginId(loginId);
     return create(loginId, password, displayName, email, "BUYER");
+  }
+
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
+  public boolean loginIdAvailable(String loginId) {
+    SignupRules.publicLoginId(loginId);
+    return !data.loginIdExists(loginId);
   }
 
   private AccountView create(

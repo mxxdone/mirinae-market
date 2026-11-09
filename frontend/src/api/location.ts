@@ -1,6 +1,7 @@
 import { apiGet, apiPostJson, apiPutJson } from "./client";
 import type {
   LocatedMarketView,
+  MapBounds,
   MarketCandidateView,
   MarketCreateInput,
   MarketFilterParams,
@@ -13,6 +14,24 @@ import type {
  */
 export function getMarketRegions(signal?: AbortSignal): Promise<RegionView[]> {
   return apiGet<RegionView[]>("/api/market-regions", signal);
+}
+
+/** 현재 지도 경계 안의 등록 시장만 제공하며 위치 미등록 시장은 제외합니다. */
+export async function getMarketsInBounds(
+  bounds: MapBounds,
+  signal?: AbortSignal,
+): Promise<LocatedMarketView[]> {
+  const markets = await getLocatedMarkets(undefined, signal);
+  return markets.filter(
+    (market) =>
+      market.latitude != null &&
+      market.longitude != null &&
+      market.latitude >= bounds.south &&
+      market.latitude <= bounds.north &&
+      (bounds.west <= bounds.east
+        ? market.longitude >= bounds.west && market.longitude <= bounds.east
+        : market.longitude >= bounds.west || market.longitude <= bounds.east),
+  );
 }
 
 /**

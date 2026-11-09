@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -13,8 +14,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 class CheckoutRestartIntegrationTest {
-  @Test
-  void confirmedAndPendingResultsSurviveActualServerRestart() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void confirmedAndPendingResultsSurviveActualServerRestart(boolean direct) throws Exception {
     try (var database = new PostgreSQLContainer("postgres:17.10")) {
       database.start();
       long offerId = 0;
@@ -81,7 +83,7 @@ class CheckoutRestartIntegrationTest {
                   client.json(
                       client.post(
                           "/api/buyer/checkouts",
-                          body("restart-delay", delayedVersion, "DELAY"),
+                          body("restart-delay", delayedVersion, "DELAY", direct ? offerId : null),
                           "application/json",
                           true));
               assertThat(pending.get("status").asString()).isEqualTo("PENDING");
@@ -105,7 +107,7 @@ class CheckoutRestartIntegrationTest {
                   client.json(
                       client.post(
                           "/api/buyer/checkouts",
-                          body("restart-delay", delayedVersion, "DELAY"),
+                          body("restart-delay", delayedVersion, "DELAY", direct ? offerId : null),
                           "application/json",
                           true));
               assertThat(retried.get("status").asString()).isEqualTo("CONFIRMED");
@@ -114,7 +116,10 @@ class CheckoutRestartIntegrationTest {
                           "SELECT online_quantity FROM daily_offers WHERE id=?",
                           Integer.class,
                           offerId))
-                  .isEqualTo(6);
+                  .isEqualTo(direct ? 5 : 6);
+              var remaining = client.json(client.get("/api/buyer/cart")).get("items");
+              assertThat(remaining.size()).isEqualTo(direct ? 1 : 0);
+              if (direct) assertThat(remaining.get(0).get("quantity").asInt()).isEqualTo(2);
               assertThat(
                       jdbc.queryForObject(
                           "SELECT count(*) FROM checkouts WHERE status='CONFIRMED'", Long.class))
@@ -136,5 +141,32 @@ class CheckoutRestartIntegrationTest {
     return new tools.jackson.databind.json.JsonMapper()
         .writeValueAsString(
             java.util.Map.of("requestKey", key, "cartVersion", version, "mode", mode));
+  }
+
+  private static String body(String key, long version, String mode, Long directOffer) {
+    if (directOffer == null) return body(key, version, mode);
+    return new tools.jackson.databind.json.JsonMapper()
+        .writeValueAsString(
+            java.util.Map.of(
+                "requestKey",
+                key,
+                "cartVersion",
+                version,
+                "mode",
+                mode,
+                "directItem",
+                java.util.Map.of(
+                    "offerId",
+                    directOffer,
+                    "quantity",
+                    3,
+                    "expectedPrice",
+                    1000,
+                    "startTime",
+                    "14:00",
+                    "endTime",
+                    "18:00",
+                    "orderDeadline",
+                    "13:00")));
   }
 }

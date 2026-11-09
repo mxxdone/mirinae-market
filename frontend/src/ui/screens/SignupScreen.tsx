@@ -1,11 +1,12 @@
-import { useState, type FormEvent, type ReactElement } from "react";
-import { signup } from "../../api/accounts";
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
+import { isLoginIdAvailable, signup } from "../../api/accounts";
 import { ApiError } from "../../api/types";
 import {
   validateDisplayName,
   validateEmail,
   validateLoginId,
   validatePassword,
+  validatePasswordConfirmation,
 } from "../../validation/signupValidation";
 import { BrandIntroPanel } from "../components/BrandIntroPanel";
 import { StatusAlert } from "../components/StatusAlert";
@@ -15,8 +16,13 @@ interface SignupScreenProps {
   onNavigateLogin: () => void;
 }
 
+interface LoginIdCheck {
+  value: string;
+  status: "checking" | "available" | "taken" | "failed";
+}
+
 /**
- * 구매자 회원가입 화면 (4필드: 아이디, 이메일, 표시이름, 비밀번호)
+ * 구매자 회원가입 화면. 비밀번호 확인은 서버로 전송하지 않는다.
  * 임의의 trim/정규화 금지 원칙 준수
  */
 export function SignupScreen({
@@ -27,14 +33,61 @@ export function SignupScreen({
   const [email, setEmail] = useState<string>("");
   const [displayName, setDisplayName] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const [idError, setIdError] = useState<string | null>(null);
+  const [idCheck, setIdCheck] = useState<LoginIdCheck | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmationError, setConfirmationError] = useState<string | null>(null);
   const [serverAlert, setServerAlert] = useState<string | null>(null);
+  const idCheckRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => () => idCheckRequest.current?.abort(), []);
+
+  async function checkLoginId(): Promise<void> {
+    const formatError = validateLoginId(loginId);
+    setIdError(formatError);
+    if (formatError || isLoading) return;
+    idCheckRequest.current?.abort();
+    const controller = new AbortController();
+    idCheckRequest.current = controller;
+    setIdCheck({ value: loginId, status: "checking" });
+    try {
+      const available = await isLoginIdAvailable(loginId, controller.signal);
+      if (!controller.signal.aborted && idCheckRequest.current === controller) {
+        setIdError(null);
+        setIdCheck({ value: loginId, status: available ? "available" : "taken" });
+      }
+    } catch {
+      if (!controller.signal.aborted && idCheckRequest.current === controller) {
+        setIdCheck({ value: loginId, status: "failed" });
+      }
+    } finally {
+      if (idCheckRequest.current === controller) idCheckRequest.current = null;
+    }
+  }
+
+  const currentIdCheck = idCheck?.value === loginId ? idCheck : null;
+  const idUnavailable = currentIdCheck?.status === "taken";
+  const idCheckFailed = currentIdCheck?.status === "failed";
+  const idHint =
+    idError ??
+    (idUnavailable
+      ? "이미 사용 중인 아이디입니다."
+      : idCheckFailed
+        ? "아이디 중복 확인에 실패했습니다. 다시 시도해 주세요."
+        : currentIdCheck?.status === "checking"
+          ? "아이디 중복을 확인하고 있습니다."
+          : currentIdCheck?.status === "available"
+            ? "사용 가능한 아이디입니다."
+            : !loginId
+              ? "영문 소문자와 숫자 5~20자"
+              : null);
+  const idHintId = idError || idUnavailable ? "signupUserIdError" : "signupUserIdHelp";
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -45,13 +98,19 @@ export function SignupScreen({
     const errEmail = validateEmail(email);
     const errName = validateDisplayName(displayName);
     const errPw = validatePassword(password);
+    const errConfirmation = validatePasswordConfirmation(password, passwordConfirmation);
 
     setIdError(errId);
     setEmailError(errEmail);
     setNameError(errName);
     setPasswordError(errPw);
+    setConfirmationError(errConfirmation);
 
-    if (errId || errEmail || errName || errPw) {
+    if (errId || idUnavailable || errEmail || errName || errPw || errConfirmation) {
+      return;
+    }
+    if (currentIdCheck?.status !== "available") {
+      setIdError("아이디 중복 확인을 해 주세요.");
       return;
     }
 
@@ -68,6 +127,7 @@ export function SignupScreen({
 
       // 가입 성공: 비밀번호는 즉시 비우고 완료 화면으로 이동 (자동 로그인 없음)
       setPassword("");
+      setPasswordConfirmation("");
       onSignupSuccess(loginId);
     } catch (err: unknown) {
       if (err instanceof ApiError) {
@@ -92,20 +152,20 @@ export function SignupScreen({
     <section id="screen-signup" className="screen-panel active" aria-labelledby="heading-signup">
       <div className="hybrid-card split-card">
         <BrandIntroPanel
-          servicePill="단골 손님 등록"
-          sealText="단골등록"
-          headline="매일 찾는 동네 시장, 든든한 단골손님이 되어보세요"
-          subtext="복잡한 절차 없이 꼭 필요한 4가지 정보로 편리한 예약 방문 수령을 시작합니다."
+          servicePill="회원가입"
+          sealText="미리내"
+          headline="동네 시장 장보기, 미리내에서 시작하세요"
+          subtext="장보기에 사용할 계정을 만들어 주세요."
           steps={[
             {
               number: "✓",
-              title: "최소한의 필수 정보만 수집",
-              desc: "예약 식별과 매장 호칭에 필요한 4가지 항목만 입력합니다.",
+              title: "시장 상품 둘러보기",
+              desc: "가까운 시장과 매장의 오늘 판매 상품을 확인하세요.",
             },
             {
               number: "✓",
-              title: "안전한 계정 관리 원칙",
-              desc: "가입 완료 후에도 자동 로그인 없이 직접 로그인하여 안전합니다.",
+              title: "주문하고 매장에서 수령하기",
+              desc: "상품을 주문하고 안내된 시간에 매장에서 받아 가세요.",
             },
           ]}
           footerNote="동네 이웃과 시장 상인의 신뢰를 잇는 장보기"
@@ -115,11 +175,8 @@ export function SignupScreen({
         <div className="form-card-panel">
           <div className="form-header-area">
             <h2 id="heading-signup" className="form-title-heading">
-              구매자 회원가입
+              회원가입
             </h2>
-            <p className="form-desc-text">
-              오늘 수령할 시장 상품 예약을 위해 기본 정보를 입력해 주세요.
-            </p>
           </div>
 
           <StatusAlert id="signupAlertBox" message={serverAlert} />
@@ -138,45 +195,55 @@ export function SignupScreen({
                   *
                 </span>
               </label>
-              <input
-                type="text"
-                id="signupUserId"
-                className="input-box"
-                placeholder="아이디 입력"
-                autoComplete="username"
-                value={loginId}
-                aria-invalid={idError ? "true" : "false"}
-                aria-describedby={
-                  idError ? "signupUserIdHelp signupUserIdError" : "signupUserIdHelp"
-                }
-                disabled={isLoading}
-                onChange={(e) => {
-                  setLoginId(e.target.value);
-                  setIdError(null);
-                  setServerAlert(null);
-                }}
-                required
-              />
-              <p id="signupUserIdHelp" className="field-help-text">
-                영문 소문자·숫자·_·- 5~20자
-              </p>
-              {idError && (
-                <div id="signupUserIdError" className="field-error-msg" role="alert">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{idError}</span>
-                </div>
+              <div className="signup-id-input-wrap">
+                <input
+                  type="text"
+                  id="signupUserId"
+                  className="input-box"
+                  placeholder="아이디 입력"
+                  autoComplete="username"
+                  value={loginId}
+                  aria-invalid={idError || idUnavailable ? "true" : "false"}
+                  aria-describedby={idHint ? idHintId : undefined}
+                  disabled={isLoading}
+                  onChange={(e) => {
+                    idCheckRequest.current?.abort();
+                    idCheckRequest.current = null;
+                    setLoginId(e.target.value);
+                    setIdError(validateLoginId(e.target.value));
+                    setIdCheck(null);
+                    setServerAlert(null);
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  className="signup-id-check-button"
+                  disabled={
+                    isLoading ||
+                    currentIdCheck?.status === "checking" ||
+                    currentIdCheck?.status === "available"
+                  }
+                  aria-busy={currentIdCheck?.status === "checking"}
+                  onClick={() => void checkLoginId()}
+                >
+                  {currentIdCheck?.status === "checking" ? "확인 중…" : "중복 확인"}
+                </button>
+              </div>
+              {idHint && (
+                <p
+                  id={idHintId}
+                  className={
+                    idError || idUnavailable || idCheckFailed
+                      ? "field-error-msg"
+                      : currentIdCheck?.status === "available"
+                        ? "field-help-text signup-id-available"
+                        : "field-help-text"
+                  }
+                  aria-live="polite"
+                >
+                  {idHint}
+                </p>
               )}
             </div>
 
@@ -196,40 +263,32 @@ export function SignupScreen({
                 autoComplete="email"
                 value={email}
                 aria-invalid={emailError ? "true" : "false"}
-                aria-describedby={emailError ? "signupEmailError" : undefined}
+                aria-describedby={
+                  emailError ? "signupEmailError" : !email ? "signupEmailHelp" : undefined
+                }
                 disabled={isLoading}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  setEmailError(null);
+                  setEmailError(validateEmail(e.target.value));
                   setServerAlert(null);
                 }}
                 required
               />
-              {emailError && (
-                <div id="signupEmailError" className="field-error-msg" role="alert">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{emailError}</span>
-                </div>
-              )}
-              <p className="field-help-text">계정에 연결할 이메일 주소를 입력해 주세요.</p>
+              {emailError ? (
+                <p id="signupEmailError" className="field-error-msg" role="alert">
+                  {emailError}
+                </p>
+              ) : !email ? (
+                <p id="signupEmailHelp" className="field-help-text">
+                  계정에 연결할 이메일 주소를 입력해 주세요.
+                </p>
+              ) : null}
             </div>
 
             {/* 3. 표시 이름 */}
             <div className="field-group">
               <label htmlFor="signupName" className="field-label">
-                표시 이름 (수령 시 호칭){" "}
+                이름 또는 닉네임{" "}
                 <span className="field-required" aria-hidden="true">
                   *
                 </span>
@@ -238,40 +297,30 @@ export function SignupScreen({
                 type="text"
                 id="signupName"
                 className="input-box"
-                placeholder="매장에서 불릴 이름"
+                placeholder="이름 또는 닉네임 입력"
                 autoComplete="nickname"
                 value={displayName}
                 aria-invalid={nameError ? "true" : "false"}
-                aria-describedby={nameError ? "signupNameError" : undefined}
+                aria-describedby={
+                  nameError ? "signupNameError" : !displayName ? "signupNameHelp" : undefined
+                }
                 disabled={isLoading}
                 onChange={(e) => {
                   setDisplayName(e.target.value);
-                  setNameError(null);
+                  setNameError(validateDisplayName(e.target.value));
                   setServerAlert(null);
                 }}
                 required
               />
-              {nameError && (
-                <div id="signupNameError" className="field-error-msg" role="alert">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{nameError}</span>
-                </div>
-              )}
-              <p className="field-help-text">
-                매장 방문 수령 시 상인분께서 확인하실 친근한 호칭입니다.
-              </p>
+              {nameError ? (
+                <p id="signupNameError" className="field-error-msg" role="alert">
+                  {nameError}
+                </p>
+              ) : !displayName ? (
+                <p id="signupNameHelp" className="field-help-text">
+                  수령할 때 사용할 이름 또는 닉네임입니다.
+                </p>
+              ) : null}
             </div>
 
             {/* 4. 비밀번호 */}
@@ -292,12 +341,17 @@ export function SignupScreen({
                   value={password}
                   aria-invalid={passwordError ? "true" : "false"}
                   aria-describedby={
-                    passwordError ? "signupPasswordHelp signupPasswordError" : "signupPasswordHelp"
+                    passwordError
+                      ? "signupPasswordError"
+                      : !password
+                        ? "signupPasswordHelp"
+                        : undefined
                   }
                   disabled={isLoading}
                   onChange={(e) => {
                     setPassword(e.target.value);
-                    setPasswordError(null);
+                    setPasswordError(validatePassword(e.target.value));
+                    setConfirmationError(null);
                     setServerAlert(null);
                   }}
                   required
@@ -340,25 +394,44 @@ export function SignupScreen({
                   )}
                 </button>
               </div>
-              <p id="signupPasswordHelp" className="field-help-text">
-                영문·숫자·특수문자를 포함한 8~32자
-              </p>
-              {passwordError && (
-                <div id="signupPasswordError" className="field-error-msg" role="alert">
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{passwordError}</span>
+              {passwordError ? (
+                <p id="signupPasswordError" className="field-error-msg" role="alert">
+                  {passwordError}
+                </p>
+              ) : !password ? (
+                <p id="signupPasswordHelp" className="field-help-text">
+                  영문·숫자·특수문자를 포함한 8~32자
+                </p>
+              ) : null}
+            </div>
+
+            <div className="field-group">
+              <label htmlFor="signupPasswordConfirmation" className="field-label">
+                비밀번호 확인{" "}
+                <span className="field-required" aria-hidden="true">
+                  *
+                </span>
+              </label>
+              <input
+                type={showPassword ? "text" : "password"}
+                id="signupPasswordConfirmation"
+                className="input-box"
+                placeholder="비밀번호를 한 번 더 입력"
+                autoComplete="new-password"
+                value={passwordConfirmation}
+                aria-invalid={confirmationError ? "true" : "false"}
+                aria-describedby={confirmationError ? "signupPasswordConfirmationError" : undefined}
+                disabled={isLoading}
+                onChange={(event) => {
+                  setPasswordConfirmation(event.target.value);
+                  setConfirmationError(null);
+                  setServerAlert(null);
+                }}
+                required
+              />
+              {confirmationError && (
+                <div id="signupPasswordConfirmationError" className="field-error-msg" role="alert">
+                  {confirmationError}
                 </div>
               )}
             </div>
@@ -367,12 +440,10 @@ export function SignupScreen({
               type="submit"
               id="btnSignupSubmit"
               className={`btn-submit-primary ${isLoading ? "is-loading" : ""}`}
-              disabled={isLoading}
+              disabled={isLoading || currentIdCheck?.status === "checking"}
             >
               {isLoading && <span className="spinner-icon" aria-hidden="true" />}
-              <span className="btn-text">
-                {isLoading ? "등록 처리 중..." : "동네 단골손님 등록하기"}
-              </span>
+              <span className="btn-text">{isLoading ? "가입 처리 중..." : "회원가입"}</span>
             </button>
           </form>
 

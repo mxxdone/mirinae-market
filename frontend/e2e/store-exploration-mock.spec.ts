@@ -112,17 +112,102 @@ async function mockMarket(page: Page) {
   return calls;
 }
 
-test("시장 상품은 카드형·목록형 모두 상세 방문 없이 담고 장바구니로 이동한다", async ({ page }) => {
+test("상세의 다른 상품은 본 상품을 제외한 네 개이며 상세 전환·매장 전체 보기로 이어진다", async ({
+  page,
+}) => {
   await mockMarket(page);
-  await page.route("**/api/buyer/cart**", (route) =>
-    route.fulfill({ json: { version: 1, items: [] } }),
-  );
+  await page.goto("/#market?market=1&offer=101");
+  const others = page.getByRole("region", { name: "이 매장의 다른 상품" });
+  await expect(others.locator(".offer-card")).toHaveCount(4);
+  await expect(others.locator(".offer-product-name")).toHaveText([
+    "사과 2",
+    "사과 3",
+    "사과 4",
+    "사과 5",
+  ]);
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await others.getByRole("button", { name: "사과 2", exact: true }).click();
+  await expect(page.locator(".product-detail-info h2")).toHaveText("사과 2");
+  await expect(others.locator(".offer-product-name")).toHaveText([
+    "사과 1",
+    "사과 3",
+    "사과 4",
+    "사과 5",
+  ]);
+  await others.getByRole("button", { name: "매장 상품 전체 보기" }).click();
+  await expect(page.locator("#heading-store-page")).toHaveText("효자동 청과");
+  await expect(page.locator(".offer-card")).toHaveCount(20);
+});
+
+test("다른 상품 조회 실패는 상세를 유지하고 재시도하며 다른 상품이 없으면 영역을 숨긴다", async ({
+  page,
+}) => {
+  await mockMarket(page);
+  let failed = true;
+  await page.route("**/api/markets/1/stores/10/offers?**", async (route) => {
+    if (failed) {
+      await route.fulfill({ status: 503, json: { message: "조회 실패" } });
+    } else
+      await route.fulfill({
+        json: { items: [], page: 0, size: 20, totalItems: 0, hasNext: false },
+      });
+  });
+  await page.goto("/#market?market=1&offer=101");
+  await expect(page.locator(".product-detail-info h2")).toHaveText("사과 1");
+  const others = page.getByRole("region", { name: "이 매장의 다른 상품" });
+  await expect(others).toContainText("다른 상품을 불러오지 못했습니다.");
+  failed = false;
+  await others.getByRole("button", { name: "다른 상품 다시 조회" }).click();
+  await expect(others).toHaveCount(0);
+  await expect(page.locator(".product-detail-info h2")).toHaveText("사과 1");
+});
+
+test("시장 상품은 카드형·목록형 모두 담은 뒤 목록과 종류 수를 유지하고 직접 장바구니를 연다", async ({
+  page,
+}) => {
+  await mockMarket(page);
+  let version = 0;
+  let quantity = 0;
+  let offer: OfferView | null = null;
+  await page.route("**/api/buyer/cart**", async (route) => {
+    if (route.request().method() === "POST") {
+      quantity += (route.request().postDataJSON() as { quantity: number }).quantity;
+      version++;
+    }
+    await route.fulfill({
+      json: {
+        version,
+        items:
+          offer && quantity > 0
+            ? [
+                {
+                  offer,
+                  quantity,
+                  marketName: "통인시장",
+                  expectedPrice: offer.priceWon,
+                  available: true,
+                  changed: false,
+                },
+              ]
+            : [],
+      },
+    });
+  });
   for (const view of ["카드형", "리스트형"]) {
+    const response = page.waitForResponse(
+      (value) => new URL(value.url()).pathname === "/api/markets/1/offers",
+    );
     await page.goto("/#market?market=1");
+    offer = ((await (await response).json()) as { items: OfferView[] }).items[0]!;
     await expect(page.locator(".offer-card")).toHaveCount(20);
     await page.getByRole("button", { name: view, exact: true }).click();
     const request = page.waitForRequest(
-      (value) => value.method() === "PUT" && value.url().endsWith("/api/buyer/cart/items/101"),
+      (value) => value.method() === "POST" && value.url().endsWith("/api/buyer/cart/items/101"),
     );
     await page
       .locator(".offer-card")
@@ -130,6 +215,10 @@ test("시장 상품은 카드형·목록형 모두 상세 방문 없이 담고 �
       .getByRole("button", { name: "장바구니 담기" })
       .click();
     expect((await request).postDataJSON()).toEqual({ marketId: 1, quantity: 1 });
+    await expect(page.locator(".offer-card")).toHaveCount(20);
+    await expect(page.getByTestId("cart-count")).toHaveText("1");
+    await expect(page).not.toHaveURL(/#cart$/);
+    await page.getByRole("button", { name: "장바구니", exact: true }).click();
     await expect(page).toHaveURL(/#cart$/);
     await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
   }
@@ -196,8 +285,7 @@ test("탭별 검색을 새로고침 후 복원하고 시장 변경 시 이전 �
   await expect(page.locator("#storeSearch")).toHaveValue("효자동");
   await expect(page.locator(".store-card")).toHaveCount(1);
   await page.locator("#btnChangeBuyerMarket").click();
-  await page.locator("#marketSelect").selectOption("2");
-  await page.locator("#btnConfirmBuyerMarket").click();
+  await page.locator('button[data-market-id="2"]').click();
   await page.locator("#tabMarketStores").click();
   await expect(page.locator("#storeSearch")).toHaveValue("");
   await expect(page.locator(".store-card")).toHaveCount(1);
@@ -278,19 +366,23 @@ test("상품 보기 전환은 재조회 없이 같은 상품을 배치하고 매
   ]) {
     await page.setViewportSize({ width: width!, height: 1000 });
     const edges = await page
-      .locator(
-        ".market-nav-tabs, #panelMarketOffers > .market-search-bar, .offer-view-controls, .offer-grid",
-      )
+      .locator(".market-nav-tabs, .buyer-offer-toolbar, .offer-grid")
       .evaluateAll((elements) =>
         elements.map((element) => {
           const box = element.getBoundingClientRect();
           return { x: box.x, width: box.width };
         }),
       );
-    expect(edges).toHaveLength(4);
+    expect(edges).toHaveLength(3);
     for (const edge of edges) {
       expect(Math.abs(edge.x - edges[0]!.x)).toBeLessThan(2);
       expect(Math.abs(edge.width - edges[0]!.width)).toBeLessThan(2);
+    }
+    const toolbar = (await page.locator(".buyer-offer-toolbar").boundingBox())!;
+    for (const control of [".market-search-bar", ".offer-view-controls"]) {
+      const box = (await page.locator(`.buyer-offer-toolbar ${control}`).boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(toolbar.x - 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(toolbar.x + toolbar.width + 1);
     }
     expect(
       await page

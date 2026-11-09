@@ -1,4 +1,4 @@
-import { apiGet, apiPatchJson, apiPostJson, apiPutJson } from "./client";
+import { apiDeleteEmpty, apiGet, apiPatchJson, apiPostJson, apiPutJson } from "./client";
 import type { UnitType } from "./types";
 
 export type StoreOrderStatus = "WAITING" | "PICKED_UP" | "NO_SHOW" | "CANCELLED";
@@ -32,6 +32,8 @@ export interface RefundView {
 }
 
 export interface StoreOrderView {
+  marketId?: number;
+  marketName?: string;
   id: number;
   storeId: number;
   storeName: string;
@@ -169,6 +171,18 @@ export function reportStore(
 
 export function getStoreReports(storeId: number, signal?: AbortSignal): Promise<StoreReportView[]> {
   return apiGet(`/api/buyer/stores/${storeId}/reports`, signal);
+}
+
+export function updateStoreReport(
+  storeId: number,
+  reportId: number,
+  input: { type: ReportType; description: string },
+): Promise<StoreReportView> {
+  return apiPutJson(`/api/buyer/stores/${storeId}/reports/${reportId}`, input);
+}
+
+export function deleteStoreReport(storeId: number, reportId: number): Promise<void> {
+  return apiDeleteEmpty(`/api/buyer/stores/${storeId}/reports/${reportId}`);
 }
 
 // ----------------------------------------------------

@@ -105,6 +105,60 @@ class AccountHttpFlowTest {
   }
 
   @Test
+  void loginIdAvailabilityIsPublicAndDoesNotCache() throws Exception {
+    String loginId = uniqueId();
+    try (HttpSessionClient session = new HttpSessionClient(port)) {
+      HttpResponse<String> available =
+          session.get("/api/accounts/login-id-availability?loginId=" + loginId);
+      assertThat(available.statusCode()).isEqualTo(200);
+      assertThat(session.json(available).get("available").asBoolean()).isTrue();
+      assertThat(available.headers().allValues("Cache-Control")).containsExactly("no-store");
+
+      session.refreshCsrf();
+      assertThat(session.signup(loginId, loginId + "@example.com").statusCode()).isEqualTo(201);
+      try (HttpSessionClient anonymous = new HttpSessionClient(port)) {
+        HttpResponse<String> taken =
+            anonymous.get("/api/accounts/login-id-availability?loginId=" + loginId);
+        assertThat(taken.statusCode()).isEqualTo(200);
+        assertThat(anonymous.json(taken).get("available").asBoolean()).isFalse();
+      }
+
+      List<String> invalidIds =
+          List.of("abcd", "a".repeat(21), "ABCDE", "demo_buyer", "demo-seller", "abc d");
+      for (String invalid : invalidIds) {
+        HttpResponse<String> rejected =
+            session.get(
+                "/api/accounts/login-id-availability?loginId="
+                    + java.net.URLEncoder.encode(invalid, java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(rejected.statusCode()).isEqualTo(400);
+        assertThat(session.json(rejected).get("code").asString()).isEqualTo("INVALID_INPUT");
+      }
+    }
+  }
+
+  @Test
+  void publicSignupRejectsLegacyIdentifierCharacters() throws Exception {
+    try (HttpSessionClient session = new HttpSessionClient(port)) {
+      session.refreshCsrf();
+      List<String> invalidIds = List.of("demo_buyer", "demo-seller", "buyer!01");
+      for (String invalid : invalidIds) {
+        HttpResponse<String> response = session.signup(invalid, uniqueId() + "@example.com");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(session.json(response).get("message").asString())
+            .isEqualTo("영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
+      }
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM accounts WHERE login_id IN (?,?,?)",
+                  Long.class,
+                  "demo_buyer",
+                  "demo-seller",
+                  "buyer!01"))
+          .isZero();
+    }
+  }
+
+  @Test
   void csrfInvalidInputAndDuplicateAccountsAreRejectedWithoutWrites() throws Exception {
     String loginId = uniqueId();
     try (HttpSessionClient session = new HttpSessionClient(port)) {

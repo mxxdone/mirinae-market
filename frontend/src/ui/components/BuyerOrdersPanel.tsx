@@ -16,7 +16,6 @@ import { BuyerReviewEditor } from "./BuyerReviewEditor";
 interface Props {
   completedOrder: Checkout | null;
   onBack: () => void;
-  onCart: () => void;
   onSessionExpired: () => void;
 }
 
@@ -30,7 +29,6 @@ interface FailedCancellation {
 export function BuyerOrdersPanel({
   completedOrder,
   onBack,
-  onCart,
   onSessionExpired,
 }: Props): ReactElement {
   const [orders, setOrders] = useState<Checkout[]>([]);
@@ -158,9 +156,6 @@ export function BuyerOrdersPanel({
           <button className="text-action-link" onClick={onBack} disabled={isCancelling}>
             ← 시장 상품으로
           </button>
-          <button className="text-action-link" onClick={onCart} disabled={isCancelling}>
-            장바구니
-          </button>
         </nav>
         <h1 id="orders-heading">주문 내역</h1>
         <p>구매한 상품과 매장별 수령 코드, 취소 및 환불 상태를 확인하세요.</p>
@@ -250,6 +245,7 @@ export function BuyerOrdersPanel({
               <section key={store.id} className="store-order-card" data-store-order-id={store.id}>
                 <div className="store-order-header">
                   <h3>
+                    {store.marketName && `${store.marketName} · `}
                     {store.storeName} · 매장 주문 {store.id}
                   </h3>
                   <div className="store-order-tags">

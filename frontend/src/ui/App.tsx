@@ -2,10 +2,15 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from "rea
 import { getMe, logout } from "../api/auth";
 import { ApiError, type UserMe } from "../api/types";
 import type { Checkout } from "../api/checkout";
+import type { OfferView } from "../api/types";
+import { useCartSummary } from "./useCartSummary";
+import { readDirectPurchaseLocation } from "./purchaseLocation";
 import { BuyerCheckoutPanel } from "./components/BuyerCheckoutPanel";
 import { BuyerOrdersPanel } from "./components/BuyerOrdersPanel";
-import { HealthBadge } from "./components/HealthBadge";
 import { Toast } from "./components/Toast";
+import { BrandHeader } from "./components/BrandHeader";
+import { CartButton } from "./components/CartButton";
+import { StatusAlert } from "./components/StatusAlert";
 import { BuyerSummaryScreen } from "./screens/BuyerSummaryScreen";
 import { BuyerMarketContainer } from "./screens/BuyerMarketContainer";
 import { LoginScreen } from "./screens/LoginScreen";
@@ -32,9 +37,11 @@ export type ScreenId =
   | "seller-store"
   | "buyer-market"
   | "buyer-cart"
+  | "buyer-direct"
   | "buyer-orders";
 
 function buyerScreenFromLocation(): ScreenId {
+  if (readDirectPurchaseLocation()) return "buyer-direct";
   if (window.location.hash === "#cart") return "buyer-cart";
   if (window.location.hash === "#orders") return "buyer-orders";
   if (window.location.hash === "#account") return "buyer-summary";
@@ -133,7 +140,7 @@ export function App(): ReactElement {
         } else {
           const state = window.history.state as { mirinaeReturnMarket?: unknown } | null;
           if (
-            window.location.hash === "#account" &&
+            (window.location.hash === "#account" || readDirectPurchaseLocation() !== null) &&
             typeof state?.mirinaeReturnMarket === "string"
           ) {
             lastMarketLocation.current = readMarketLocation(state.mirinaeReturnMarket);
@@ -178,6 +185,7 @@ export function App(): ReactElement {
       if (
         isMarketLocation() ||
         isSellerLocation() ||
+        window.location.hash.startsWith("#buy") ||
         window.location.hash.startsWith("#admin") ||
         ["#cart", "#orders", "#account"].includes(window.location.hash)
       ) {
@@ -255,13 +263,15 @@ export function App(): ReactElement {
     showToast("세션이 만료되어 로그인 화면으로 이동합니다.");
   }, [showToast]);
 
+  const { cartCount, onCartChanged } = useCartSummary(currentUser, handleSessionExpired);
+
   /**
    * 회원가입 성공 처리 (자동 로그인 없음, 로그인 아이디 인계 가능)
    */
   function handleSignupSuccess(newLoginId: string): void {
     setRegisteredLoginId(newLoginId);
     setCurrentScreen("signup-complete");
-    showToast("단골손님 등록이 완료되었습니다.");
+    showToast("회원가입이 완료되었습니다.");
   }
 
   /**
@@ -283,42 +293,119 @@ export function App(): ReactElement {
     setCurrentScreen(screen);
   }
 
+  function buyNow(offer: OfferView, quantity: number): void {
+    lastMarketLocation.current = readMarketLocation();
+    setCompletedOrder(null);
+    const returnMarket = window.location.hash;
+    window.history.pushState(
+      { mirinaeReturnMarket: returnMarket },
+      "",
+      `#buy?market=${offer.marketId}&offer=${offer.id}&quantity=${quantity}`,
+    );
+    setCurrentScreen("buyer-direct");
+  }
+
   function browseMarket(): void {
     setCompletedOrder(null);
     writeMarketLocation(lastMarketLocation.current, true);
     setCurrentScreen("buyer-market");
   }
 
+  function navigateAccount(): void {
+    if (isMarketLocation()) lastMarketLocation.current = readMarketLocation();
+    window.history.pushState({ mirinaeReturnMarket: window.location.hash }, "", "#account");
+    setCurrentScreen("buyer-summary");
+  }
+
+  function navigateHome(): void {
+    if (isRestoringSession) return;
+    setCompletedOrder(null);
+    if (!currentUser) {
+      leaveMarketLocation(true);
+      setCurrentScreen("login");
+      return;
+    }
+    if (currentUser.role === "BUYER") {
+      const location: MarketLocation = { marketId: null, query: "", page: 0, offerId: null };
+      lastMarketLocation.current = location;
+      writeMarketLocation(location, true);
+      setCurrentScreen("buyer-market");
+    } else {
+      const hash = currentUser.role === "ADMIN" ? "#admin/markets" : "#seller";
+      window.history.pushState(null, "", hash);
+      setCurrentScreen(currentUser.role === "ADMIN" ? "admin" : "seller-store");
+    }
+    // 같은 화면 안의 시장·매장 상세도 기존 방문 기록 복원 경로로 초기화한다.
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+
   if (isRestoringSession) {
     return (
-      <div
-        className="app-container"
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
-          <span
-            className="spinner-icon"
-            style={{
-              display: "inline-block",
-              width: "24px",
-              height: "24px",
-              borderColor: "var(--color-primary) transparent var(--color-primary) transparent",
-            }}
-            aria-hidden="true"
-          />
-          <p style={{ marginTop: "12px", fontSize: "14px", fontWeight: 600 }}>세션 확인 중...</p>
-        </div>
+      <div className="app-container">
+        <BrandHeader onHome={navigateHome} disabled />
+        <main className="main-viewport" style={{ alignItems: "center" }}>
+          <div style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
+            <span
+              className="spinner-icon"
+              style={{
+                display: "inline-block",
+                width: "24px",
+                height: "24px",
+                borderColor: "var(--color-primary) transparent var(--color-primary) transparent",
+              }}
+              aria-hidden="true"
+            />
+            <p style={{ marginTop: "12px", fontSize: "14px", fontWeight: 600 }}>세션 확인 중...</p>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
     <div className="app-container">
+      <BrandHeader onHome={navigateHome}>
+        {currentUser?.role === "BUYER" && (
+          <nav className="buyer-utility-nav" aria-label="구매자 메뉴">
+            <CartButton
+              count={cartCount}
+              onClick={() => navigatePurchase("buyer-cart")}
+              disabled={isLoggingOut}
+            />
+            <button
+              type="button"
+              className="text-action-link"
+              onClick={() => navigatePurchase("buyer-orders")}
+              disabled={isLoggingOut}
+              aria-current={currentScreen === "buyer-orders" ? "page" : undefined}
+            >
+              주문 내역
+            </button>
+            <button
+              type="button"
+              className="text-action-link"
+              onClick={navigateAccount}
+              disabled={isLoggingOut}
+              aria-current={currentScreen === "buyer-summary" ? "page" : undefined}
+            >
+              내 계정
+            </button>
+            <button
+              type="button"
+              className="buyer-logout-button"
+              onClick={() => void handleLogout()}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? "로그아웃 중…" : "로그아웃"}
+            </button>
+          </nav>
+        )}
+      </BrandHeader>
+      {currentUser?.role === "BUYER" && logoutError && (
+        <div className="buyer-header-alert">
+          <StatusAlert message={logoutError} onRetry={() => void handleLogout()} />
+        </div>
+      )}
       <main className="main-viewport" id="mainViewport">
         <div className="screen-container" data-screen={currentScreen}>
           {currentScreen === "login" && (
@@ -352,7 +439,6 @@ export function App(): ReactElement {
 
           {currentScreen === "signup-complete" && (
             <SignupCompleteScreen
-              loginId={registeredLoginId}
               onNavigateLogin={() => {
                 setCompletedOrder(null);
                 setCurrentScreen("login");
@@ -361,54 +447,43 @@ export function App(): ReactElement {
           )}
 
           {currentScreen === "buyer-summary" && currentUser && (
-            <BuyerSummaryScreen
-              onBrowse={browseMarket}
-              onCart={() => navigatePurchase("buyer-cart")}
-              onOrders={() => navigatePurchase("buyer-orders")}
-              user={currentUser}
-              isLoggingOut={isLoggingOut}
-              logoutError={logoutError}
-              onLogout={() => void handleLogout()}
-            />
+            <BuyerSummaryScreen onBrowse={browseMarket} user={currentUser} />
           )}
 
           {currentScreen === "buyer-market" && currentUser && (
             <BuyerMarketContainer
+              onCartChanged={onCartChanged}
+              onBuyNow={buyNow}
               key={currentUser.id}
               onCart={() => navigatePurchase("buyer-cart")}
-              onOrders={() => navigatePurchase("buyer-orders")}
-              onAccount={() => {
-                if (isMarketLocation()) lastMarketLocation.current = readMarketLocation();
-                window.history.pushState(
-                  { mirinaeReturnMarket: window.location.hash },
-                  "",
-                  "#account",
-                );
-                setCurrentScreen("buyer-summary");
-              }}
               onSessionExpired={handleSessionExpired}
             />
           )}
 
-          {currentScreen === "buyer-cart" && currentUser?.role === "BUYER" && (
-            <BuyerCheckoutPanel
-              key={currentUser.id}
-              onBack={browseMarket}
-              onOrders={() => navigatePurchase("buyer-orders")}
-              onConfirmed={(order) => {
-                navigatePurchase("buyer-orders");
-                setCompletedOrder(order);
-              }}
-              onSessionExpired={handleSessionExpired}
-            />
-          )}
+          {(currentScreen === "buyer-cart" || currentScreen === "buyer-direct") &&
+            currentUser?.role === "BUYER" && (
+              <BuyerCheckoutPanel
+                key={`${currentUser.id}:${currentScreen}:${readDirectPurchaseLocation()?.offerId ?? "cart"}`}
+                directPurchase={
+                  currentScreen === "buyer-direct"
+                    ? (readDirectPurchaseLocation() ?? undefined)
+                    : undefined
+                }
+                onCartChanged={onCartChanged}
+                onBack={browseMarket}
+                onConfirmed={(order) => {
+                  navigatePurchase("buyer-orders");
+                  setCompletedOrder(order);
+                }}
+                onSessionExpired={handleSessionExpired}
+              />
+            )}
 
           {currentScreen === "buyer-orders" && currentUser?.role === "BUYER" && (
             <BuyerOrdersPanel
               key={currentUser.id}
               completedOrder={completedOrder}
               onBack={browseMarket}
-              onCart={() => navigatePurchase("buyer-cart")}
               onSessionExpired={handleSessionExpired}
             />
           )}
@@ -449,7 +524,6 @@ export function App(): ReactElement {
       </main>
 
       <footer className="app-footer">
-        <HealthBadge />
         <span>미리내 마켓 · 동네 시장 예약 방문 수령</span>
       </footer>
 

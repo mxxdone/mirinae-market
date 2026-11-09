@@ -28,6 +28,10 @@ public class SecurityConfig {
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/media/products/**")
                     .permitAll()
                     .requestMatchers(
+                        org.springframework.http.HttpMethod.GET,
+                        "/api/accounts/login-id-availability")
+                    .permitAll()
+                    .requestMatchers(
                         "/actuator/health",
                         "/v3/api-docs/**",
                         "/swagger-ui/**",

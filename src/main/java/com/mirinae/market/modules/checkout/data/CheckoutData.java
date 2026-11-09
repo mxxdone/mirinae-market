@@ -141,23 +141,39 @@ public class CheckoutData {
                 rs.getString("error_code"),
                 rs.getString("message"),
                 rs.getLong("total_won"),
-                rs.getTimestamp("due_at").toInstant()),
+                rs.getTimestamp("due_at").toInstant(),
+                rs.getString("source"),
+                rs.getString("request_fingerprint")),
         args);
   }
 
   public CheckoutRow prepare(
       long buyerId, String key, long version, String mode, Instant now, List<LineRow> lines) {
+    return prepare(buyerId, key, version, mode, now, lines, "CART", "ALL");
+  }
+
+  public CheckoutRow prepare(
+      long buyerId,
+      String key,
+      long version,
+      String mode,
+      Instant now,
+      List<LineRow> lines,
+      String source,
+      String fingerprint) {
     Instant due = now.plusSeconds(mode.equals("DELAY") ? 3 : 0);
     long id =
         jdbc.queryForObject(
-            "INSERT INTO checkouts(buyer_id,request_key,cart_version,mode,status,due_at,created_at) VALUES (?,?,?,?,'PENDING',?,?) RETURNING id",
+            "INSERT INTO checkouts(buyer_id,request_key,cart_version,mode,status,due_at,created_at,source,request_fingerprint) VALUES (?,?,?,?,'PENDING',?,?,?,?) RETURNING id",
             Long.class,
             buyerId,
             key,
             version,
             mode,
             Timestamp.from(due),
-            Timestamp.from(now));
+            Timestamp.from(now),
+            source,
+            fingerprint);
     for (LineRow line : lines)
       jdbc.update(
           "INSERT INTO checkout_items(checkout_id,offer_id,quantity,expected_price,start_time,end_time,order_deadline) VALUES (?,?,?,?,?,?,?)",
@@ -221,7 +237,7 @@ public class CheckoutData {
       LocalTime deadline,
       String pickupCode) {
     return jdbc.queryForObject(
-        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline,pickup_code) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(checkout_id,store_id) DO UPDATE SET store_id=EXCLUDED.store_id RETURNING id",
+        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline,pickup_code,market_name) VALUES (?,?,?,?,?,?,?,?,?,(SELECT name FROM markets WHERE id=?)) ON CONFLICT(checkout_id,store_id) DO UPDATE SET store_id=EXCLUDED.store_id RETURNING id",
         Long.class,
         checkoutId,
         storeId,
@@ -231,7 +247,8 @@ public class CheckoutData {
         start,
         end,
         deadline,
-        pickupCode);
+        pickupCode,
+        marketId);
   }
 
   public void orderItem(

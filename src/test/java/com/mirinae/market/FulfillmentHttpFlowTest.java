@@ -664,6 +664,76 @@ class FulfillmentHttpFlowTest {
   }
 
   @Test
+  void buyerEditsAndDeletesOnlyOwnOpenReports() throws Exception {
+    String path = "/api/buyer/stores/" + store + "/reports";
+    String closure = json(Map.of("type", "CLOSURE_SUSPECTED", "description", "영업 여부 확인 요청"));
+    String inactive = json(Map.of("type", "INACTIVE", "description", "장기 미운영 확인 요청"));
+    try (var customer = session(buyer);
+        var admin = session("fulfillment_admin")) {
+      long first =
+          customer.json(customer.post(path, closure, "application/json", true)).get("id").asLong();
+      long second =
+          customer.json(customer.post(path, inactive, "application/json", true)).get("id").asLong();
+      String firstPath = path + "/" + first, secondPath = path + "/" + second;
+
+      var edited =
+          customer.put(
+              secondPath,
+              json(Map.of("type", "LOCATION_ERROR", "description", "위치가 잘못 표시됩니다")),
+              true);
+      assertThat(edited.statusCode()).isEqualTo(200);
+      assertThat(customer.json(edited).get("type").asString()).isEqualTo("LOCATION_ERROR");
+      assertThat(customer.json(edited).get("description").asString()).contains("위치");
+
+      assertThat(
+              customer
+                  .put(
+                      secondPath,
+                      json(Map.of("type", "CLOSURE_SUSPECTED", "description", "중복 유형")),
+                      true)
+                  .statusCode())
+          .isEqualTo(409);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT type FROM store_reports WHERE id=?", String.class, second))
+          .isEqualTo("LOCATION_ERROR");
+
+      assertThat(customer.put(path + "/999999", closure, true).statusCode()).isEqualTo(404);
+      assertThat(
+              admin
+                  .patch(
+                      "/api/admin/store-reports/" + first,
+                      json(Map.of("status", "REVIEWING")),
+                      true)
+                  .statusCode())
+          .isEqualTo(204);
+      assertThat(customer.put(firstPath, closure, true).statusCode()).isEqualTo(409);
+      assertThat(customer.delete(firstPath, true).statusCode()).isEqualTo(409);
+
+      assertThat(customer.delete(secondPath, true).statusCode()).isEqualTo(204);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM store_reports WHERE id=?", Long.class, second))
+          .isZero();
+      var afterDelete =
+          customer.post(
+              path,
+              json(Map.of("type", "LOCATION_ERROR", "description", "재접수")),
+              "application/json",
+              true);
+      assertThat(customer.json(afterDelete).get("id").asLong()).isNotEqualTo(second);
+
+      String outsider = "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+      accounts.ensureDemoAccount(
+          outsider, "Pass1234!", "타인", outsider + "@example.com", "BUYER");
+      try (var otherClient = session(outsider)) {
+        assertThat(otherClient.put(secondPath, closure, true).statusCode()).isEqualTo(404);
+        assertThat(otherClient.delete(secondPath, true).statusCode()).isEqualTo(404);
+      }
+    }
+  }
+
+  @Test
   void suspensionHidesLastStoreMarketAndBlocksPendingPurchaseWhileKeepingExistingOrder()
       throws Exception {
     var existing = order();

@@ -4,6 +4,7 @@ import type { OrderItemView, StoreOrderView } from "./operations";
 
 export interface CartItem {
   offer: OfferView;
+  marketName: string;
   quantity: number;
   expectedPrice: number;
   available: boolean;
@@ -30,6 +31,15 @@ export interface PaymentInput {
   requestKey: string;
   cartVersion: number;
   mode: PaymentMode;
+  offerIds?: number[];
+  directItem?: {
+    offerId: number;
+    quantity: number;
+    expectedPrice: number;
+    startTime: string;
+    endTime: string;
+    orderDeadline: string;
+  };
 }
 export function getCart(): Promise<Cart> {
   return apiGet("/api/buyer/cart");
@@ -39,6 +49,12 @@ export function putCartItem(
   quantity: number,
 ): Promise<Cart> {
   return apiPutJson(`/api/buyer/cart/items/${offer.id}`, { marketId: offer.marketId, quantity });
+}
+export function addCartItem(
+  offer: Pick<OfferView, "id" | "marketId">,
+  quantity: number,
+): Promise<Cart> {
+  return apiPostJson(`/api/buyer/cart/items/${offer.id}`, { marketId: offer.marketId, quantity });
 }
 export async function removeCartItem(id: number): Promise<Cart> {
   await apiDeleteEmpty(`/api/buyer/cart/items/${id}`);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { putCartItem } from "../../api/checkout";
-import { getMarketRegions } from "../../api/location";
+import { addCartItem, type Cart } from "../../api/checkout";
+import { getMarketRegions, getMarketsInBounds } from "../../api/location";
 import type { Coordinates } from "../../api/mapSdk";
 import { getMarkets, getOffer, searchOffers } from "../../api/products";
 import { getMarketStore, getStoreOffers, searchStores } from "../../api/store";
@@ -8,6 +8,7 @@ import {
   ApiError,
   type LocatedMarketView,
   type MarketFilterParams,
+  type MapBounds,
   type OfferView,
   type RegionView,
   type StoreView,
@@ -24,14 +25,14 @@ import { BuyerMarketScreen } from "./BuyerMarketScreen";
 import { useStoreRatings } from "../useStoreRatings";
 
 export function BuyerMarketContainer({
-  onAccount,
   onCart,
-  onOrders,
+  onCartChanged,
+  onBuyNow,
   onSessionExpired,
 }: {
-  onAccount: () => void;
   onCart: () => void;
-  onOrders: () => void;
+  onCartChanged: (cart: Cart) => void;
+  onBuyNow: (offer: OfferView, quantity: number) => void;
   onSessionExpired: () => void;
 }) {
   const initialLocation = readMarketLocation();
@@ -44,6 +45,7 @@ export function BuyerMarketContainer({
   const [marketNameQuery, setMarketNameQuery] = useState("");
   const [userCoords, setUserCoords] = useState<Coordinates | null>(null);
   const [nearbyActive, setNearbyActive] = useState(false);
+  const [mapSearchBounds, setMapSearchBounds] = useState<MapBounds | null>(null);
   const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -81,6 +83,7 @@ export function BuyerMarketContainer({
   const marketReqController = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const marketRequest = useRef(0);
+  const appliedMarketFilters = useRef<{ params: MarketFilterParams | undefined } | null>(null);
   const geoRequest = useRef(0);
 
   const marketStateRef = useRef({
@@ -287,7 +290,8 @@ export function BuyerMarketContainer({
   );
 
   const fetchMarkets = useCallback(
-    async (params?: MarketFilterParams) => {
+    async (params?: MarketFilterParams, bounds?: MapBounds): Promise<boolean> => {
+      appliedMarketFilters.current = { params };
       const current = ++marketRequest.current;
       ++request.current;
       controller.current?.abort();
@@ -303,8 +307,10 @@ export function BuyerMarketContainer({
       marketReqController.current?.abort();
       marketReqController.current = new AbortController();
       try {
-        const result = await getMarkets(params, marketReqController.current.signal);
-        if (!mounted.current || current !== marketRequest.current) return;
+        const result = bounds
+          ? await getMarketsInBounds(bounds, marketReqController.current.signal)
+          : await getMarkets(params, marketReqController.current.signal);
+        if (!mounted.current || current !== marketRequest.current) return false;
         setMarkets(result);
 
         if (params?.latitude !== undefined && params?.longitude !== undefined) {
@@ -340,11 +346,13 @@ export function BuyerMarketContainer({
             }
           }
         }
+        return true;
       } catch (failure) {
         if (mounted.current && current === marketRequest.current) {
           handleError(failure);
           setLoading(false);
         }
+        return false;
       }
     },
     [loadStores, loadOffers, handleError],
@@ -472,42 +480,42 @@ export function BuyerMarketContainer({
     ++geoRequest.current;
     setSelectedProvince(code);
     setSelectedDistrict("");
-    setNearbyActive(false);
-    setUserCoords(null);
-    setLocationNotice(null);
-    setLocationError(null);
-    void fetchMarkets({
-      provinceCode: code || undefined,
-      query: marketNameQuery.trim() || undefined,
-    });
   }
 
   function handleDistrictChange(code: string) {
     ++geoRequest.current;
     setSelectedDistrict(code);
+  }
+
+  function handleSearchMarketName() {
+    setMapSearchBounds(null);
+    ++geoRequest.current;
     setNearbyActive(false);
     setUserCoords(null);
     setLocationNotice(null);
     setLocationError(null);
     void fetchMarkets({
       provinceCode: selectedProvince || undefined,
-      regionCode: code || undefined,
+      regionCode: selectedDistrict || undefined,
       query: marketNameQuery.trim() || undefined,
     });
   }
 
-  function handleSearchMarketName() {
+  function handleSearchMap(bounds: MapBounds): Promise<boolean> {
     ++geoRequest.current;
-    void fetchMarkets({
-      provinceCode: selectedProvince || undefined,
-      regionCode: selectedDistrict || undefined,
-      query: marketNameQuery.trim() || undefined,
-      latitude: nearbyActive ? userCoords?.latitude : undefined,
-      longitude: nearbyActive ? userCoords?.longitude : undefined,
-    });
+    setMapSearchBounds(bounds);
+    setNearbyActive(false);
+    setUserCoords(null);
+    setSelectedProvince("");
+    setSelectedDistrict("");
+    setMarketNameQuery("");
+    setLocationError(null);
+    setLocationNotice("지도에 보이는 범위의 등록 시장입니다.");
+    return fetchMarkets(undefined, bounds);
   }
 
   function handleNearbyClick() {
+    setMapSearchBounds(null);
     const current = ++geoRequest.current;
     if (!navigator.geolocation) {
       setLocationError(
@@ -550,15 +558,6 @@ export function BuyerMarketContainer({
       },
       { timeout: 10000, enableHighAccuracy: false },
     );
-  }
-
-  function handleSelectMarket(id: number) {
-    if (id === marketId) return;
-    if (tab === "stores") {
-      void loadStores(id, "", 0, !choosingMarket);
-    } else {
-      void loadOffers(id, "", 0, !choosingMarket);
-    }
   }
 
   function handleTabChange(nextTab: MarketTab) {
@@ -635,12 +634,13 @@ export function BuyerMarketContainer({
     }
   }
 
-  function handleStoreOfferAdd(offer: OfferView) {
+  function handleStoreOfferAdd(offer: OfferView, quantity = 1) {
     if (adding) return;
     const generation = request.current;
     setAdding(true);
-    void putCartItem(offer, 1)
-      .then(() => {
+    void addCartItem(offer, quantity)
+      .then((cart) => {
+        if (mounted.current) onCartChanged(cart);
         if (mounted.current && generation === request.current) {
           setStoreCartNotice({ offerName: offer.productName });
         }
@@ -675,9 +675,9 @@ export function BuyerMarketContainer({
       onRetryRatings={retryRatings}
       choosingMarket={choosingMarket}
       onChangeMarket={() => setChoosingMarket(true)}
-      onConfirmMarket={() => {
-        if (marketId === null) return;
+      onConfirmMarket={(id) => {
         const reload =
+          id !== marketId ||
           selected !== null ||
           selectedStore !== null ||
           tab !== "offers" ||
@@ -685,7 +685,7 @@ export function BuyerMarketContainer({
           page !== 0;
         writeMarketLocation(
           {
-            marketId,
+            marketId: id,
             tab: "offers",
             query: "",
             page: 0,
@@ -701,23 +701,12 @@ export function BuyerMarketContainer({
         setTab("offers");
         setStoreQuery("");
         setStorePage(0);
-        if (reload) void loadOffers(marketId, "", 0, false);
+        if (reload) void loadOffers(id, "", 0, false);
       }}
       onCheckout={onCart}
-      onOrders={onOrders}
       adding={adding}
-      onAdd={(offer) => {
-        if (adding) return;
-        setAdding(true);
-        void putCartItem(offer, 1)
-          .then(() => {
-            if (mounted.current) onCart();
-          })
-          .catch(handleError)
-          .finally(() => {
-            if (mounted.current) setAdding(false);
-          });
-      }}
+      onAdd={handleStoreOfferAdd}
+      onBuyNow={onBuyNow}
       markets={markets}
       offers={offers}
       selected={selected}
@@ -737,8 +726,12 @@ export function BuyerMarketContainer({
       }}
       onOpen={(offer) => void openOffer(offer)}
       onBack={handleBack}
-      onAccount={onAccount}
       onRetry={() => {
+        if (choosingMarket) {
+          if (appliedMarketFilters.current === null) void initialize();
+          else void fetchMarkets(appliedMarketFilters.current.params, mapSearchBounds ?? undefined);
+          return;
+        }
         const location = readMarketLocation();
         if (marketId === null) void initialize();
         else if (typeof location.offerId === "number")
@@ -758,11 +751,12 @@ export function BuyerMarketContainer({
       onMarketNameQueryChange={setMarketNameQuery}
       onSearchMarketName={handleSearchMarketName}
       onNearbyClick={handleNearbyClick}
+      mapSearchActive={mapSearchBounds !== null}
+      onSearchMap={handleSearchMap}
       nearbyActive={nearbyActive}
       userCoords={userCoords}
       locationNotice={locationNotice}
       locationError={locationError}
-      onSelectMarket={handleSelectMarket}
       onSessionExpired={onSessionExpired}
       // 매장 탭 및 매장 페이지 props
       tab={tab}

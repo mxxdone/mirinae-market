@@ -48,6 +48,37 @@ public class StoreOperationService {
     return data.ownReports(store, buyer(actor)).stream().map(StoreOperationService::view).toList();
   }
 
+  @Transactional
+  public StoreReportView edit(
+      String actor, long store, long id, String type, String description) {
+    long buyer = buyer(actor);
+    String validType = StoreReportRules.type(type),
+        validDescription = StoreReportRules.text(description);
+    if (!data.exists(store)) throw new StoreNotFoundException();
+    stores.lockStore(store);
+    ownedOpen(store, id, buyer);
+    if (data.otherUnfinishedReport(store, buyer, validType, id))
+      throw new StoreOperationConflictException("같은 유형의 미완료 제보가 이미 있습니다.");
+    data.updateReport(id, validType, validDescription, clock.instant());
+    return view(data.report(id).orElseThrow(StoreNotFoundException::new));
+  }
+
+  @Transactional
+  public void delete(String actor, long store, long id) {
+    long buyer = buyer(actor);
+    if (!data.exists(store)) throw new StoreNotFoundException();
+    stores.lockStore(store);
+    ownedOpen(store, id, buyer);
+    data.deleteReport(id);
+  }
+
+  private void ownedOpen(long store, long id, long buyer) {
+    var row = data.report(id).orElseThrow(StoreNotFoundException::new);
+    if (row.storeId() != store || row.buyerId() != buyer) throw new StoreNotFoundException();
+    if (!row.status().equals("OPEN"))
+      throw new StoreOperationConflictException("접수 상태의 제보만 수정·삭제할 수 있습니다.");
+  }
+
   public List<ManagedStoreReportView> managed(String actor, String status, int page) {
     accounts.requireAdministrator(actor);
     if (!Set.of("", "OPEN", "REVIEWING", "RESOLVED").contains(status))
@@ -71,6 +102,7 @@ public class StoreOperationService {
     accounts.requireAdministrator(actor);
     var before = data.report(id).orElseThrow(StoreNotFoundException::new);
     stores.lockStore(before.storeId());
+    data.report(id).orElseThrow(StoreNotFoundException::new);
     data.lockReport(id);
     var row = data.report(id).orElseThrow();
     if (row.status().equals(status)) return null;

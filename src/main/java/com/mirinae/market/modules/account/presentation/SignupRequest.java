@@ -4,11 +4,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 public record SignupRequest(
     @Schema(
-            description = "5~20자의 영문 소문자·숫자·밑줄·하이픈",
+            description = "5~20자의 영문 소문자·숫자",
             example = "buyer01",
             minLength = 5,
             maxLength = 20,
-            pattern = "^[a-z0-9_-]{5,20}$",
+            pattern = "^[a-z0-9]{5,20}$",
             requiredMode = Schema.RequiredMode.REQUIRED)
         String loginId,
     @Schema(

@@ -89,7 +89,12 @@ test("지도 SDK가 늦게 준비돼도 최신 시장을 표시하고 지역 전
   await page.locator("#btnAdminLogout").click();
   await expect(page.locator("#loginUserId")).toBeVisible();
   await page.evaluate(async () => {
-    const modulePath = "/src/api/mapSdk.ts";
+    const modulePath =
+      performance
+        .getEntriesByType("resource")
+        .map((entry) => entry.name)
+        .filter((url) => new URL(url).pathname === "/src/api/mapSdk.ts")
+        .at(-1) ?? "/src/api/mapSdk.ts";
     const sdk = (await import(modulePath)) as typeof import("../src/api/mapSdk");
     const state = window as unknown as {
       releaseMap: () => void;
@@ -133,8 +138,7 @@ test("지도 SDK가 늦게 준비돼도 최신 시장을 표시하고 지역 전
   await page.locator("#loginPassword").fill(required("E2E_DEMO_PASSWORD"));
   await page.locator("#btnLoginSubmit").click();
 
-  await expect(page.locator("#marketSelect")).toContainText(`지도시장_${suffix}`);
-  await page.locator("#btnToggleBuyerMap").click();
+  await expect(page.locator("#marketResults")).toContainText(`지도시장_${suffix}`);
   await page.evaluate(() => (window as unknown as { releaseMap: () => void }).releaseMap());
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { mapMarketIds: number[] }).mapMarketIds))
@@ -145,7 +149,9 @@ test("지도 SDK가 늦게 준비돼도 최신 시장을 표시하고 지역 전
     (window as unknown as { releasePosition: () => void }).releasePosition(),
   );
   await expect(page.locator("#buyerSelectProvince")).toHaveValue("26");
-  await expect(page.locator("#marketSelect")).not.toContainText(`지도시장_${suffix}`);
+  await expect(page.locator("#marketResults")).toContainText(`지도시장_${suffix}`);
+  await page.locator("#btnSearchMarketName").click();
+  await expect(page.locator("#marketResults")).not.toContainText(`지도시장_${suffix}`);
 });
 
 test("주소 없이 지역만 고르면 시장이 나오고 좌표 입력 없이 등록한다", async ({ page }) => {
@@ -228,7 +234,12 @@ test("지역 시장 목록 조회 실패 후 재시도하면 주소 없이 복�
 test("목록에 없는 시장은 별도 주소 검색과 지도 지정으로 등록한다", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(async () => {
-    const modulePath = "/src/api/mapSdk.ts";
+    const modulePath =
+      performance
+        .getEntriesByType("resource")
+        .map((entry) => entry.name)
+        .filter((url) => new URL(url).pathname === "/src/api/mapSdk.ts")
+        .at(-1) ?? "/src/api/mapSdk.ts";
     const sdk = (await import(modulePath)) as typeof import("../src/api/mapSdk");
     sdk.setMapSdkProvider({
       loadSdk: () => Promise.resolve(),
@@ -333,10 +344,9 @@ test("구매자는 시장 선택과 상품 탐색을 나누고 검색 조건을 
   await expect(page.locator("#productSearch")).toBeHidden();
   await page.locator("#buyerInputMarketName").fill("미리내");
   await page.locator("#btnSearchMarketName").click();
-  await expect(page.locator("#marketSelect")).toContainText("미리내시장");
-  await page.locator("#btnToggleBuyerMap").click();
+  await expect(page.locator("#marketResults")).toContainText("미리내시장");
   await expect(page.locator(".buyer-market-map-section")).toBeVisible();
-  await page.locator("#btnConfirmBuyerMarket").click();
+  await page.locator("#marketResults button").first().click();
   await expect(page.locator(".buyer-market-map-section")).toHaveCount(0);
   await expect(page.locator("#productSearch")).toBeVisible();
   await expect(page.locator("#buyerSelectProvince")).toBeHidden();
@@ -359,13 +369,13 @@ test("로그인 후 장보기로 진입하고 내 계정은 직접 열 때만 �
   await expect(page.locator("#heading-market")).toBeVisible();
   await expect(page.locator("#heading-buyer-summary")).toHaveCount(0);
   await expect(page.locator("#buyerSelectProvince")).toBeVisible();
-  await expect(page.locator("#btnConfirmBuyerMarket")).toBeEnabled();
+  await expect(page.locator("#marketResults button").first()).toBeEnabled();
   await page.reload();
   await expect(page.locator("#buyerSelectProvince")).toBeVisible();
   await expect(page.locator("#productSearch")).toBeHidden();
-  await expect(page.locator("#btnConfirmBuyerMarket")).toBeEnabled();
+  await expect(page.locator("#marketResults button").first()).toBeEnabled();
   await page.screenshot({ path: "../output/playwright/buyer-home-mobile.png", fullPage: true });
-  await page.locator("#btnConfirmBuyerMarket").click();
+  await page.locator("#marketResults button").first().click();
   await expect(page.locator("#productSearch")).toBeVisible();
   const marketUrl = page.url();
   await page.getByRole("button", { name: "내 계정", exact: true }).click();

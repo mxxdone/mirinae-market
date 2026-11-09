@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.security.Principal;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,6 +24,29 @@ public class StoreReportController {
   }
 
   public record ReportInput(String type, String description) {}
+
+  @Operation(
+      summary = "본인 접수 제보의 유형·내용 수정",
+      description = "본인의 해당 매장 OPEN 제보만 수정합니다. 같은 구매자·매장·유형의 다른 미완료 제보가 있으면 409입니다.")
+  @SecurityRequirement(name = "csrfToken")
+  @PutMapping("/{reportId}")
+  public StoreReportView edit(
+      Principal actor,
+      @PathVariable long storeId,
+      @PathVariable long reportId,
+      @RequestBody ReportInput input) {
+    return service.edit(actor.getName(), storeId, reportId, input.type(), input.description());
+  }
+
+  @Operation(
+      summary = "본인 접수 제보 삭제",
+      description = "본인의 해당 매장 OPEN 제보만 삭제합니다. 확인 중·처리 완료 제보는 409입니다.")
+  @SecurityRequirement(name = "csrfToken")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  @DeleteMapping("/{reportId}")
+  public void delete(Principal actor, @PathVariable long storeId, @PathVariable long reportId) {
+    service.delete(actor.getName(), storeId, reportId);
+  }
 
   @Operation(
       summary = "매장 정보 제보",

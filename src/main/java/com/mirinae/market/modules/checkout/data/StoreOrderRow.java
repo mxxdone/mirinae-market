@@ -15,4 +15,6 @@ public record StoreOrderRow(
     LocalTime endTime,
     LocalTime orderDeadline,
     String pickupCode,
-    Instant pickedUpAt) {}
+    Instant pickedUpAt,
+    long marketId,
+    String marketName) {}

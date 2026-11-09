@@ -20,4 +20,6 @@ public record StoreOrderView(
     boolean canCancelRemaining,
     String cancelledWon,
     String refundedWon,
-    List<RefundView> refunds) {}
+    List<RefundView> refunds,
+    long marketId,
+    String marketName) {}

@@ -39,7 +39,19 @@ class CheckoutCodeCapacityTest {
     var end = LocalTime.of(18, 0);
     var deadline = LocalTime.of(13, 0);
     var pending =
-        new CheckoutRow(7, 9, "capacity", 0, "SUCCESS", "PENDING", null, null, 0, clock.instant());
+        new CheckoutRow(
+            7,
+            9,
+            "capacity",
+            0,
+            "SUCCESS",
+            "PENDING",
+            null,
+            null,
+            0,
+            clock.instant(),
+            "CART",
+            "ALL");
     var failed =
         new CheckoutRow(
             7,
@@ -51,7 +63,9 @@ class CheckoutCodeCapacityTest {
             "PICKUP_CODE_EXHAUSTED",
             "코드 공간 소진",
             0,
-            clock.instant());
+            clock.instant(),
+            "CART",
+            "ALL");
     when(data.find(9, "capacity")).thenReturn(Optional.of(pending)).thenReturn(Optional.of(failed));
     when(data.items(7))
         .thenReturn(

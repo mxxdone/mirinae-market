@@ -5,6 +5,7 @@ import {
   getAdminMarketCandidates,
   getAdminMarkets,
   getLocatedMarkets,
+  getMarketsInBounds,
   getMarketRegions,
   updateAdminMarket,
 } from "./location";
@@ -13,6 +14,35 @@ import type { LocatedMarketView, MarketCandidateView, RegionView } from "./types
 describe("location API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("지도 경계의 안쪽·경계점만 반환하고 위치 미등록 시장을 제외한다", async () => {
+    const base = {
+      id: 1,
+      name: "지도시장",
+      regionCode: null,
+      provinceCode: null,
+      regionLabel: null,
+      address: null,
+      distanceKm: null,
+    };
+    vi.spyOn(client, "apiGet").mockResolvedValue([
+      { ...base, id: 1, latitude: 37.4, longitude: 126.95 },
+      { ...base, id: 2, latitude: 37.3, longitude: 126.9 },
+      { ...base, id: 3, latitude: 37.5, longitude: 127 },
+      { ...base, id: 4, latitude: 37.6, longitude: 126.95 },
+      { ...base, id: 5, latitude: 37.4, longitude: 127.1 },
+      { ...base, id: 6, latitude: null, longitude: null },
+    ]);
+    const result = await getMarketsInBounds({ south: 37.3, west: 126.9, north: 37.5, east: 127 });
+    expect(result.map((m) => m.id)).toEqual([1, 2, 3]);
+  });
+
+  it("지도 범위 조회 실패를 빈 검색 결과로 바꾸지 않는다", async () => {
+    vi.spyOn(client, "apiGet").mockRejectedValue(new Error("조회 실패"));
+    await expect(
+      getMarketsInBounds({ south: 37, west: 126, north: 38, east: 127 }),
+    ).rejects.toThrow("조회 실패");
   });
 
   describe("getAdminMarkets", () => {

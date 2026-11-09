@@ -70,3 +70,66 @@ it("취소된 화면은 SDK가 준비돼도 지도 객체를 만들지 않는다
     sdk.setMapSdkProvider(null);
   }
 });
+
+it("시장 세 곳과 내 위치를 함께 표시해도 내 위치는 이름 있는 별도 아이콘이며 시장 클릭만 선택한다", async () => {
+  const markers: Array<{ options: Record<string, unknown>; setMap: ReturnType<typeof vi.fn> }> = [];
+  const addListener = vi.fn(() => ({}));
+  vi.stubGlobal("window", {
+    naver: {
+      maps: {
+        Map: class {
+          panTo = vi.fn();
+        },
+        LatLng: class {},
+        Point: class {},
+        Marker: class {
+          setMap = vi.fn();
+          constructor(public options: Record<string, unknown>) {
+            markers.push(this);
+          }
+        },
+        Service: {},
+        Event: { addListener, removeListener: vi.fn() },
+      },
+    },
+  });
+  const sdk = await import("./mapSdk");
+  const markets = [1, 2, 3].map((id) => ({
+    id,
+    name: `시장${id}`,
+    regionCode: null,
+    provinceCode: null,
+    regionLabel: null,
+    address: null,
+    latitude: 37.4,
+    longitude: 126.9 + id / 100,
+    distanceKm: null,
+  }));
+  const onSelectMarket = vi.fn();
+  const controller = await sdk.mountBuyerOverviewMap({ innerHTML: "" } as HTMLElement, {
+    markets,
+    selectedMarketId: null,
+    userCoords: { latitude: 37.38, longitude: 126.95 },
+    onSelectMarket,
+  });
+  expect(markers).toHaveLength(4);
+  expect(markers[0]!.options).toMatchObject({
+    title: "내 위치",
+    clickable: false,
+    icon: { content: expect.stringContaining("내 위치") },
+  });
+  expect(markers.slice(1).map((marker) => marker.options.title)).toEqual([
+    "시장1",
+    "시장2",
+    "시장3",
+  ]);
+  const clicks = addListener.mock.calls as unknown as Array<[unknown, string, () => void]>;
+  expect(clicks.filter(([, event]) => event === "click")).toHaveLength(3);
+  expect(clicks.some(([target, event]) => target === markers[0] && event === "click")).toBe(false);
+  clicks.find(([target, event]) => target === markers[1] && event === "click")![2]();
+  expect(onSelectMarket).toHaveBeenCalledExactlyOnceWith(1);
+  controller.update(markets, null, null);
+  expect(markers[0]!.setMap).toHaveBeenCalledWith(null);
+  expect(markers.slice(4)).toHaveLength(3);
+  controller.destroy();
+});

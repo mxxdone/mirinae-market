@@ -299,6 +299,8 @@ public class FulfillmentService {
                 .filter(r -> r.status().equals("COMPLETED"))
                 .mapToLong(r -> r.amountWon())
                 .sum()),
-        refunds.stream().map(RefundService::view).toList());
+        refunds.stream().map(RefundService::view).toList(),
+        row.marketId(),
+        row.marketName());
   }
 }

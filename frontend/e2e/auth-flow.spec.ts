@@ -24,7 +24,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
   }) => {
     // 매 실행 고유한 ID 및 이메일 생성
     const uniqueSuffix = Date.now().toString().slice(-6);
-    const testLoginId = `buyer_${uniqueSuffix}`;
+    const testLoginId = `buyer${uniqueSuffix}`;
     const testEmail = `buyer_${uniqueSuffix}@market.local`;
     const testName = `구매자${uniqueSuffix.slice(-3)}`;
     const testPassword = "Password1234!";
@@ -44,17 +44,20 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
 
     // 4필드 입력 (임의 trim 없음)
     await page.locator("#signupUserId").fill(testLoginId);
+    await page.getByRole("button", { name: "중복 확인", exact: true }).click();
+    await expect(page.locator("#signupUserIdHelp")).toHaveText("사용 가능한 아이디입니다.");
     await page.locator("#signupEmail").fill(testEmail);
     await page.locator("#signupName").fill(testName);
     await page.locator("#signupPassword").fill(testPassword);
+    await page.locator("#signupPasswordConfirmation").fill(testPassword);
     expect(svgErrors).toEqual([]);
 
     // 가입 제출
     await page.locator("#btnSignupSubmit").click();
 
-    // 가입 완료 화면 확인 (자동 로그인 없음 명시)
-    await expect(page.locator("#heading-complete")).toBeVisible();
-    await expect(page.locator("text=자동 로그인은 지원하지 않습니다")).toBeVisible();
+    // 간소화된 완료 화면과 자동 로그인 없는 실제 세션 상태를 확인한다.
+    await expect(page.locator("#heading-complete")).toHaveText("회원가입이 완료되었습니다.");
+    expect((await page.request.get("/api/auth/me")).status()).toBe(401);
 
     // 가입 완료 화면에서 로그인 화면으로 이동
     await page.locator("#btnGoToLogin").click();
@@ -91,33 +94,53 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#heading-login")).toBeVisible();
   });
 
-  test("2. 중복 아이디 또는 이메일 가입 실패 (409 DUPLICATE_ACCOUNT)", async ({ page }) => {
-    const existingBuyerId = requireEnv("E2E_BUYER_LOGIN_ID");
+  test("2. 아이디 사전 중복 안내와 최종 가입의 중복 거절을 유지한다", async ({ page }) => {
+    const existingBuyerId = `taken${Date.now().toString().slice(-10)}`;
     const demoPassword = requireEnv("E2E_DEMO_PASSWORD");
 
     await page.goto("/");
+    const csrf = (await (await page.request.get("/api/auth/csrf")).json()) as {
+      headerName: string;
+      token: string;
+    };
+    const account = {
+      loginId: existingBuyerId,
+      password: demoPassword,
+      displayName: "중복테스트",
+      email: `${existingBuyerId}@market.local`,
+    };
+    const created = await page.request.post("/api/accounts", {
+      headers: { [csrf.headerName]: csrf.token },
+      data: account,
+    });
+    expect(created.status()).toBe(201);
     await page.locator('button:has-text("구매자 회원가입하기")').click();
     await expect(page.locator("#heading-signup")).toBeVisible();
 
     // 이미 존재하는 계정 아이디로 가입 시도
     await page.locator("#signupUserId").fill(existingBuyerId);
+    await page.getByRole("button", { name: "중복 확인", exact: true }).click();
     await page.locator("#signupEmail").fill(`new_${Date.now()}@market.local`);
     await page.locator("#signupName").fill("중복테스트");
     await page.locator("#signupPassword").fill(demoPassword);
+    await page.locator("#signupPasswordConfirmation").fill(demoPassword);
 
-    const duplicateResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/accounts") && response.request().method() === "POST",
-    );
+    await expect(page.locator("#signupUserIdError")).toHaveText("이미 사용 중인 아이디입니다.");
+    let signupRequests = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/accounts")
+        signupRequests += 1;
+    });
     await page.locator("#btnSignupSubmit").click();
-    const response = await duplicateResponse;
+    expect(signupRequests).toBe(0);
+
+    // 사전 조회를 건너뛰어도 최종 서버 가입은 중복을 거절한다.
+    const response = await page.request.post("/api/accounts", {
+      headers: { [csrf.headerName]: csrf.token },
+      data: { ...account, email: `other_${Date.now()}@market.local` },
+    });
     expect(response.status()).toBe(409);
     expect(await response.json()).toMatchObject({ code: "DUPLICATE_ACCOUNT" });
-
-    // 실제 서버 계약과 중복 오류 배너를 함께 확인합니다.
-    const alertBox = page.locator("#signupAlertBox");
-    await expect(alertBox).toBeVisible();
-    await expect(alertBox).toContainText("이미 사용 중인 ID 또는 이메일입니다.");
   });
 
   test("3. 잘못된 인증 자격증명으로 로그인 실패 (401 INVALID_CREDENTIALS)", async ({ page }) => {

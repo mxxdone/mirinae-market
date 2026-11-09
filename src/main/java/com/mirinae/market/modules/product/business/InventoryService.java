@@ -49,13 +49,11 @@ public class InventoryService {
     before.stream().map(OfferView::storeId).distinct().sorted().forEach(data::lockStore);
     Clock current = Clock.fixed(clock.instant(), clock.getZone());
     var offers = lines.stream().map(line -> describe(line.offerId())).toList();
-    long market = offers.getFirst().offer().marketId();
     for (int i = 0; i < lines.size(); i++) {
       var line = lines.get(i);
       var item = offers.get(i);
       var offer = item.offer();
       if (!item.available()
-          || offer.marketId() != market
           || !offer.pickupDate().equals(OfferRules.today(current))
           || !OfferRules.now(current).isBefore(offer.orderDeadline()))
         throw new ProductConflictException(

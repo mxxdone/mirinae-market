@@ -5,4 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface AccountJpaRepository extends JpaRepository<AccountEntity, Long> {
   Optional<AccountEntity> findByLoginId(String loginId);
+
+  boolean existsByLoginId(String loginId);
 }

@@ -8,9 +8,9 @@ import {
 
 describe("signupValidation", () => {
   describe("validateLoginId", () => {
-    it("정상 아이디를 허용한다 (5~20자 소문자, 숫자, _, -)", () => {
-      expect(validateLoginId("market_lover")).toBeNull();
-      expect(validateLoginId("user-01")).toBeNull();
+    it("정상 아이디를 허용한다 (5~20자 소문자, 숫자)", () => {
+      expect(validateLoginId("marketlover")).toBeNull();
+      expect(validateLoginId("user01")).toBeNull();
       expect(validateLoginId("buyer1234")).toBeNull();
     });
 
@@ -18,21 +18,29 @@ describe("signupValidation", () => {
       expect(validateLoginId("")).toBe("아이디를 입력해 주세요.");
     });
 
+    it("밑줄·하이픈·특수문자를 허용하지 않는다", () => {
+      for (const loginId of ["buyer_01", "buyer-01", "buyer!01"]) {
+        expect(validateLoginId(loginId)).toBe(
+          "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
+        );
+      }
+    });
+
     it("5자 미만 또는 20자 초과이면 형식 오류를 반환한다", () => {
       expect(validateLoginId("abc")).toBe(
-        "영문 소문자·숫자·_·-만 사용하여 5~20자로 입력해 주세요.",
+        "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
       );
       expect(validateLoginId("a".repeat(21))).toBe(
-        "영문 소문자·숫자·_·-만 사용하여 5~20자로 입력해 주세요.",
+        "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
       );
     });
 
     it("대문자나 공백이 포함되면 형식 오류를 반환한다 (임의 trim/정규화 금지)", () => {
       expect(validateLoginId("Market_lover")).toBe(
-        "영문 소문자·숫자·_·-만 사용하여 5~20자로 입력해 주세요.",
+        "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
       );
       expect(validateLoginId(" market_lover ")).toBe(
-        "영문 소문자·숫자·_·-만 사용하여 5~20자로 입력해 주세요.",
+        "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.",
       );
     });
   });
@@ -68,7 +76,7 @@ describe("signupValidation", () => {
     });
 
     it("빈 문자열이면 필수 오류를 반환한다", () => {
-      expect(validateDisplayName("")).toBe("표시 이름을 입력해 주세요.");
+      expect(validateDisplayName("")).toBe("표시할 이름 및 닉네임을 입력해 주세요.");
     });
 
     it("2자 미만 또는 10자 초과이면 형식 오류를 반환한다", () => {

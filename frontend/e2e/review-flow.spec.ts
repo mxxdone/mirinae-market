@@ -31,13 +31,13 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   test.setTimeout(120_000);
   await installTestClock(page);
   await login(page, "review_buyer");
+  await page.locator("#buyerInputMarketName").fill("리뷰검증시장");
+  await page.locator("#btnSearchMarketName").click();
   const market = await page
-    .locator("#marketSelect option")
-    .filter({ hasText: "리뷰검증시장" })
-    .getAttribute("value");
+    .getByRole("button", { name: /리뷰검증시장/ })
+    .getAttribute("data-market-id");
   if (!market) throw new Error("리뷰검증시장이 없습니다.");
-  await page.locator("#marketSelect").selectOption(market);
-  await page.locator("#btnConfirmBuyerMarket").click();
+  await page.locator(`button[data-market-id="${market}"]`).click();
   await page.locator("#tabMarketStores").click();
   await page.locator("#storeSearch").fill("리뷰검증");
   await page.locator("#btnSearchStore").click();

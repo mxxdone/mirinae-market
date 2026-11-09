@@ -3,10 +3,15 @@ package com.mirinae.market.modules.account.presentation;
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.account.business.AccountView;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,6 +21,22 @@ public class AccountController {
 
   public AccountController(AccountService accounts) {
     this.accounts = accounts;
+  }
+
+  @Operation(
+      summary = "로그인 아이디 사전 중복 확인",
+      description =
+          "가입 전 사용 가능 여부만 확인합니다. 영문 소문자와 숫자 5~20자가 아니면 400입니다. 조회 결과는 예약이 아니며 최종 가입 시 유일성이 다시 검사됩니다.")
+  @ApiResponse(responseCode = "200", description = "조회 완료: available=true는 사용 가능, false는 중복")
+  @ApiResponse(responseCode = "400", description = "아이디 형식 위반: INVALID_INPUT")
+  @GetMapping("/api/accounts/login-id-availability")
+  public ResponseEntity<Map<String, Boolean>> loginIdAvailability(
+      @Parameter(description = "확인할 로그인 아이디. 영문 소문자·숫자 5~20자", example = "buyer01")
+          @RequestParam
+          String loginId) {
+    return ResponseEntity.ok()
+        .header("Cache-Control", "no-store")
+        .body(Map.of("available", accounts.loginIdAvailable(loginId)));
   }
 
   @Operation(

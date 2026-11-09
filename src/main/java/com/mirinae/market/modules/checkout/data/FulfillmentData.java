@@ -33,7 +33,9 @@ public class FulfillmentData {
                     rs.getObject("end_time", LocalTime.class),
                     rs.getObject("order_deadline", LocalTime.class),
                     rs.getString("pickup_code"),
-                    instant(rs.getTimestamp("picked_up_at"))),
+                    instant(rs.getTimestamp("picked_up_at")),
+                    rs.getLong("market_id"),
+                    rs.getString("market_name")),
             id)
         .stream()
         .findFirst();

@@ -258,6 +258,7 @@ export function OrderStatementModal({
                   >
                     <div className="statement-store-header">
                       <h3>
+                        {store.marketName && `${store.marketName} · `}
                         {store.storeName} · 매장 주문 #{store.id}
                       </h3>
                       <span className={`badge-tag badge-${store.status.toLowerCase()}`}>

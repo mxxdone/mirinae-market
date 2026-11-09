@@ -78,6 +78,11 @@ public class AccountData {
     return repository.findByLoginId(loginId).map(AccountEntity::toRow);
   }
 
+  @Transactional(readOnly = true)
+  public boolean loginIdExists(String loginId) {
+    return repository.existsByLoginId(loginId);
+  }
+
   @Transactional
   public AccountRow create(
       String loginId, String hash, String displayName, String email, String role) {

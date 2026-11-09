@@ -504,7 +504,7 @@ class DashboardHttpFlowTest {
         && confirmedAt.startsWith("2026-10-31")
         && confirmedAt.endsWith("15:00:00Z")) date = "2026-11-01";
     return jdbc.queryForObject(
-        "INSERT INTO store_orders(checkout_id,store_id,market_id,store_name,pickup_date,start_time,end_time,order_deadline,pickup_code) VALUES (?,?,(SELECT market_id FROM stores WHERE id=?),'대시보드매장',?,'14:00','18:00','13:00',lpad((floor(random()*1000000))::text,6,'0')) RETURNING id",
+        "INSERT INTO store_orders(checkout_id,store_id,market_id,market_name,store_name,pickup_date,start_time,end_time,order_deadline,pickup_code) VALUES (?,?,(SELECT market_id FROM stores WHERE id=?),'대시보드시장','대시보드매장',?,'14:00','18:00','13:00',lpad((floor(random()*1000000))::text,6,'0')) RETURNING id",
         Long.class,
         checkout,
         storeId,

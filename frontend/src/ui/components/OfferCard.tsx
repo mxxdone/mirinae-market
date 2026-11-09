@@ -16,6 +16,7 @@ export function OfferCard({
   onAdd,
   adding = false,
   showStore = true,
+  compact = false,
 }: {
   offer: OfferView;
   image?: ProductImage;
@@ -28,6 +29,7 @@ export function OfferCard({
   onAdd?: () => void;
   adding?: boolean;
   showStore?: boolean;
+  compact?: boolean;
 }) {
   return (
     <article className="offer-card">
@@ -79,22 +81,26 @@ export function OfferCard({
             {offer.priceWon.toLocaleString()}
             <span>원 / 포장</span>
           </p>
-          <p className="comparison-price">
-            {offer.comparisonUnit}당{" "}
-            {offer.comparisonPriceWon.toLocaleString("ko-KR", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-            원
-          </p>
+          {!compact && (
+            <p className="comparison-price">
+              {offer.comparisonUnit}당{" "}
+              {offer.comparisonPriceWon.toLocaleString("ko-KR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+              원
+            </p>
+          )}
         </div>
-        <div className="offer-pickup">
-          <span>주문 {offer.orderDeadline.slice(0, 5)} 마감</span>
-          <span>
-            수령 {offer.startTime.slice(0, 5)}~{offer.endTime.slice(0, 5)}
-          </span>
-          <span>온라인 {offer.onlineQuantity.toLocaleString()}포장</span>
-        </div>
+        {!compact && (
+          <div className="offer-pickup">
+            <span>주문 {offer.orderDeadline.slice(0, 5)} 마감</span>
+            <span>
+              수령 {offer.startTime.slice(0, 5)}~{offer.endTime.slice(0, 5)}
+            </span>
+            <span>온라인 {offer.onlineQuantity.toLocaleString()}포장</span>
+          </div>
+        )}
         {onAdd && (
           <div className="offer-actions">
             <button

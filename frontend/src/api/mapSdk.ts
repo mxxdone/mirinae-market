@@ -1,4 +1,4 @@
-import type { LocatedMarketView } from "./types";
+import type { LocatedMarketView, MapBounds } from "./types";
 
 /**
  * 네이버 지도 Web SDK 캡슐화 래퍼
@@ -40,6 +40,7 @@ export interface BuyerMapOverviewOptions {
   selectedMarketId: number | null;
   userCoords?: Coordinates | null;
   onSelectMarket: (marketId: number) => void;
+  onViewportChange?: (bounds: MapBounds) => void;
 }
 
 export interface BuyerMapController {
@@ -77,6 +78,7 @@ interface NaverLatLng {
 interface NaverMapInstance {
   setCenter(latLng: unknown): void;
   panTo(latLng: unknown): void;
+  getBounds(): { getSW(): NaverLatLng; getNE(): NaverLatLng };
   destroy?(): void;
 }
 
@@ -97,6 +99,7 @@ interface NaverMapsGlobal {
     Map: new (element: HTMLElement, options: Record<string, unknown>) => NaverMapInstance;
     Marker: new (options: Record<string, unknown>) => NaverMarkerInstance;
     LatLng: new (lat: number, lng: number) => NaverLatLng;
+    Point: new (x: number, y: number) => unknown;
     Event: {
       addListener(
         target: unknown,
@@ -477,6 +480,29 @@ const defaultProvider: MapSdkProvider = {
       zoomControl: true,
     });
 
+    let viewportChanged = false;
+    const viewportHandles = [
+      maps.Event.addListener(map, "dragend", () => {
+        viewportChanged = true;
+      }),
+      maps.Event.addListener(map, "zoom_changed", () => {
+        viewportChanged = true;
+      }),
+      maps.Event.addListener(map, "idle", () => {
+        if (!viewportChanged) return;
+        viewportChanged = false;
+        const bounds = map.getBounds();
+        const sw = bounds.getSW();
+        const ne = bounds.getNE();
+        options.onViewportChange?.({
+          south: sw.lat(),
+          west: sw.lng(),
+          north: ne.lat(),
+          east: ne.lng(),
+        });
+      }),
+    ];
+
     let marketMarkers: Array<{
       id: number;
       marker: NaverMarkerInstance;
@@ -507,6 +533,13 @@ const defaultProvider: MapSdkProvider = {
           position: new maps!.LatLng(currentUserCoords.latitude, currentUserCoords.longitude),
           map,
           title: "내 위치",
+          clickable: false,
+          zIndex: 100,
+          icon: {
+            content:
+              '<div role="img" aria-label="내 위치" title="내 위치" style="width:16px;height:16px;border:3px solid white;border-radius:50%;background:#1769c2;box-shadow:0 0 0 5px rgba(23,105,194,.2);box-sizing:border-box"></div>',
+            anchor: new maps!.Point(8, 8),
+          },
         });
       }
 
@@ -539,6 +572,7 @@ const defaultProvider: MapSdkProvider = {
         renderMarkers(markets, selectedMarketId, userCoords);
       },
       destroy() {
+        for (const handle of viewportHandles) maps!.Event.removeListener(handle);
         for (const item of marketMarkers) {
           maps!.Event.removeListener(item.handle);
           item.marker.setMap(null);

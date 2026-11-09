@@ -12,4 +12,6 @@ public record CheckoutRow(
     String errorCode,
     String message,
     long totalWon,
-    Instant dueAt) {}
+    Instant dueAt,
+    String source,
+    String requestFingerprint) {}

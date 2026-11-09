@@ -3,6 +3,7 @@ package com.mirinae.market.modules.checkout.presentation;
 import com.mirinae.market.modules.checkout.business.CartView;
 import com.mirinae.market.modules.checkout.business.CheckoutService;
 import com.mirinae.market.modules.checkout.business.CheckoutView;
+import com.mirinae.market.modules.checkout.business.DirectPurchaseItem;
 import com.mirinae.market.modules.checkout.business.StatementView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -25,7 +26,20 @@ public class CheckoutController {
 
   public record CartRequest(Long marketId, Integer quantity) {}
 
-  public record PaymentRequest(String requestKey, Long cartVersion, String mode) {}
+  public record DirectItemRequest(
+      Long offerId,
+      Integer quantity,
+      Integer expectedPrice,
+      java.time.LocalTime startTime,
+      java.time.LocalTime endTime,
+      java.time.LocalTime orderDeadline) {}
+
+  public record PaymentRequest(
+      String requestKey,
+      Long cartVersion,
+      String mode,
+      List<Long> offerIds,
+      DirectItemRequest directItem) {}
 
   @Operation(
       summary = "본인 장바구니 조회",
@@ -37,13 +51,25 @@ public class CheckoutController {
 
   @Operation(
       summary = "장바구니 상품 담기·수량 수정·조건 재확인",
-      description = "같은 시장·수령일 상품을 최대 100개 담습니다. 양의 정수 수량과 현재 가격·수령 조건을 저장합니다.")
+      description = "여러 시장의 오늘 상품을 최대 100종류 보관합니다. 수량 절대값과 현재 가격·수령 조건을 저장하며 재고를 선점하지 않습니다.")
   @SecurityRequirement(name = "csrfToken")
   @PutMapping("/cart/items/{offerId}")
   public CartView put(
       Principal principal, @PathVariable long offerId, @RequestBody CartRequest request) {
     if (request.marketId() == null) throw new IllegalArgumentException("시장을 지정해 주세요.");
     return service.put(principal.getName(), request.marketId(), offerId, request.quantity());
+  }
+
+  @Operation(
+      summary = "장바구니에 수량 추가",
+      description =
+          "본인 장바구니의 같은 상품 수량에 quantity를 원자적으로 추가합니다. 신규 상품은 해당 수량으로 담고 최대100종류·정수 상한을 유지합니다. 재고를 선점하지 않습니다.")
+  @SecurityRequirement(name = "csrfToken")
+  @PostMapping("/cart/items/{offerId}")
+  public CartView add(
+      Principal principal, @PathVariable long offerId, @RequestBody CartRequest request) {
+    if (request.marketId() == null) throw new IllegalArgumentException("시장을 지정해 주세요.");
+    return service.add(principal.getName(), request.marketId(), offerId, request.quantity());
   }
 
   @Operation(summary = "장바구니 상품 제거")
@@ -63,7 +89,7 @@ public class CheckoutController {
   @Operation(
       summary = "통합 모의 결제",
       description =
-          "요청 키·장바구니 버전·모의 유형 SUCCESS/FAIL/DELAY/LOST_RESPONSE를 제출합니다. 품절·조건 변경·마감은 FAILED 결과와 원인 코드로 반환하며 전체 미적용합니다. DELAY는 3초 후 재검사하며 재고 선점은 없습니다. LOST_RESPONSE는 성공 저장 후 첫 응답만 503으로 유실을 재현합니다. 같은 키·같은 요청은 기존 결과이며 다른 내용은 409입니다.")
+          "요청 키·장바구니 버전·모의 유형 SUCCESS/FAIL/DELAY/LOST_RESPONSE를 제출합니다. offerIds는 본인 장바구니의 선택 상품이며 생략 시 전체, 빈 배열은 거절합니다. directItem은 현재 상품과 수량·확인한 가격/시간이며 장바구니를 변경하지 않습니다. 둘은 함께 요청할 수 없습니다. 여러 시장을 지원하고 CART 성공 시 선택 항목만 제거합니다. 품절·조건 변경·마감은 FAILED 결과와 원인 코드로 반환하며 전체 미적용합니다. DELAY는 3초 후 재검사하며 재고 선점은 없습니다. LOST_RESPONSE는 성공 저장 후 첫 응답만 503으로 유실을 재현합니다. 같은 키·같은 요청은 기존 결과이며 다른 내용은 409입니다.")
   @SecurityRequirement(name = "csrfToken")
   @ApiResponse(responseCode = "200", description = "PENDING/CONFIRMED/FAILED 결제 상태")
   @ApiResponse(
@@ -72,9 +98,23 @@ public class CheckoutController {
   @ApiResponse(responseCode = "503", description = "모의 응답 유실. 실패로 단정하지 말고 같은 요청 키로 결과 조회")
   @PostMapping("/checkouts")
   public ResponseEntity<?> start(Principal principal, @RequestBody PaymentRequest request) {
+    var direct = request.directItem();
     var attempt =
         service.start(
-            principal.getName(), request.requestKey(), request.cartVersion(), request.mode());
+            principal.getName(),
+            request.requestKey(),
+            request.cartVersion(),
+            request.mode(),
+            request.offerIds(),
+            direct == null
+                ? null
+                : new DirectPurchaseItem(
+                    direct.offerId(),
+                    direct.quantity(),
+                    direct.expectedPrice(),
+                    direct.startTime(),
+                    direct.endTime(),
+                    direct.orderDeadline()));
     if (attempt.loseResponse())
       return ResponseEntity.status(503)
           .body(

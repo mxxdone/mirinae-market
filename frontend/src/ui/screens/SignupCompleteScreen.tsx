@@ -1,16 +1,14 @@
 import type { ReactElement } from "react";
 
 interface SignupCompleteScreenProps {
-  loginId: string;
   onNavigateLogin: () => void;
 }
 
 /**
  * 가입 완료 화면
- * 개인정보 보호를 위한 자동 로그인 미지원 명확 안내 및 로그인 이동
+ * 가입 완료를 알리고 로그인 화면으로 이동한다.
  */
 export function SignupCompleteScreen({
-  loginId,
   onNavigateLogin,
 }: SignupCompleteScreenProps): ReactElement {
   return (
@@ -38,41 +36,8 @@ export function SignupCompleteScreen({
           </div>
 
           <h1 id="heading-complete" className="complete-title">
-            단골 등록이 완료되었습니다
+            회원가입이 완료되었습니다.
           </h1>
-          <p className="complete-subtext">
-            미리내 마켓의 단골손님이 되신 것을 환영합니다.
-            {loginId && (
-              <>
-                <br />
-                등록된 아이디: <strong>{loginId}</strong>
-              </>
-            )}
-            <br />
-            오늘부터 전통시장의 신선함을 예약 방문으로 편리하게 만나보세요.
-          </p>
-
-          <div className="complete-notice-box">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              style={{ flexShrink: 0, marginTop: "2px" }}
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <div>
-              <strong>안내 사항:</strong> 개인정보 보호 및 보안을 위해{" "}
-              <strong>자동 로그인은 지원하지 않습니다.</strong> 가입하신 아이디와 비밀번호로 직접
-              로그인해 주세요.
-            </div>
-          </div>
 
           <button
             type="button"

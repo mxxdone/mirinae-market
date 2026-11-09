@@ -118,6 +118,13 @@ export interface MarketUpdateInput {
   location?: MarketLocationInput | null;
 }
 
+export interface MapBounds {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+}
+
 export interface MarketFilterParams {
   provinceCode?: string;
   regionCode?: string;

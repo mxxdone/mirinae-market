@@ -31,8 +31,7 @@ public class AccountController {
   @ApiResponse(responseCode = "400", description = "아이디 형식 위반: INVALID_INPUT")
   @GetMapping("/api/accounts/login-id-availability")
   public ResponseEntity<Map<String, Boolean>> loginIdAvailability(
-      @Parameter(description = "확인할 로그인 아이디. 영문 소문자·숫자 5~20자", example = "buyer01")
-          @RequestParam
+      @Parameter(description = "확인할 로그인 아이디. 영문 소문자·숫자 5~20자", example = "buyer01") @RequestParam
           String loginId) {
     return ResponseEntity.ok()
         .header("Cache-Control", "no-store")

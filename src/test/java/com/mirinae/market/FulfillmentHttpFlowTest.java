@@ -724,8 +724,7 @@ class FulfillmentHttpFlowTest {
       assertThat(customer.json(afterDelete).get("id").asLong()).isNotEqualTo(second);
 
       String outsider = "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
-      accounts.ensureDemoAccount(
-          outsider, "Pass1234!", "타인", outsider + "@example.com", "BUYER");
+      accounts.ensureDemoAccount(outsider, "Pass1234!", "타인", outsider + "@example.com", "BUYER");
       try (var otherClient = session(outsider)) {
         assertThat(otherClient.put(secondPath, closure, true).statusCode()).isEqualTo(404);
         assertThat(otherClient.delete(secondPath, true).statusCode()).isEqualTo(404);

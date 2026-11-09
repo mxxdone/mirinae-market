@@ -49,8 +49,7 @@ public class StoreOperationService {
   }
 
   @Transactional
-  public StoreReportView edit(
-      String actor, long store, long id, String type, String description) {
+  public StoreReportView edit(String actor, long store, long id, String type, String description) {
     long buyer = buyer(actor);
     String validType = StoreReportRules.type(type),
         validDescription = StoreReportRules.text(description);

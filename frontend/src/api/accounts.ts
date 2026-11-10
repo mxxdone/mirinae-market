@@ -1,4 +1,4 @@
-import { apiGet, apiPostJson } from "./client";
+import { apiGet, apiPostJson, refreshCsrfSilently } from "./client";
 import type { AccountView, SignupRequest } from "./types";
 
 /**
@@ -17,4 +17,11 @@ export async function isLoginIdAvailable(loginId: string, signal?: AbortSignal):
     throw new Error("아이디 중복 확인 응답이 올바르지 않습니다.");
   }
   return result.available;
+}
+
+export async function withdrawBuyer(password: string): Promise<void> {
+  const result = await apiPostJson<unknown>("/api/buyer/withdrawal", { password });
+  if (result !== undefined)
+    throw new Error("탈퇴 처리 결과를 확인하지 못했습니다. 다시 로그인해 확인해 주세요.");
+  await refreshCsrfSilently();
 }

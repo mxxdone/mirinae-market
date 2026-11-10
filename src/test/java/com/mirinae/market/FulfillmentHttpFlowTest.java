@@ -384,7 +384,210 @@ class FulfillmentHttpFlowTest {
   void pickupCodesAreUniqueWithinStoreAndDate() {
     var first = order();
     var second = order();
-    assertThat(first.pickupCode()).matches("[0-9]{6}").isNotEqualTo(second.pickupCode());
+    assertThat(first.pickupCode()).matches("[0-9]{4}").isNotEqualTo(second.pickupCode());
+    assertThat(second.pickupCode()).matches("[0-9]{4}");
+  }
+
+  @Test
+  void withdrawalScrubsAccountAndCartButReservesIdAndRejectsAllSessions() throws Exception {
+    long buyerId = accounts.current(buyer).id();
+    checkout.put(buyer, market, offer, 1);
+    try (var first = session(buyer);
+        var other = session(buyer);
+        var anonymous = new HttpSessionClient(port);
+        var merchant = session(seller)) {
+      String path = "/api/buyer/withdrawal", body = json(Map.of("password", "Pass1234!"));
+      anonymous.refreshCsrf();
+      assertThat(anonymous.post(path, body, "application/json", true).statusCode()).isEqualTo(401);
+      assertThat(merchant.post(path, body, "application/json", true).statusCode()).isEqualTo(403);
+      assertThat(first.post(path, body, "application/json", false).statusCode()).isEqualTo(403);
+      assertThat(first.post(path, "{}", "application/json", true).statusCode()).isEqualTo(400);
+      assertThat(
+              first
+                  .post(path, json(Map.of("password", "wrong")), "application/json", true)
+                  .statusCode())
+          .isEqualTo(400);
+      assertThat(checkout.cart(buyer).items()).hasSize(1);
+      assertThat(accounts.isActive(buyer)).isTrue();
+      assertThat(first.post(path, body, "application/json", true).statusCode()).isEqualTo(204);
+      assertThat(first.get("/api/auth/me").statusCode()).isEqualTo(401);
+      assertThat(other.get("/api/auth/me").statusCode()).isEqualTo(401);
+      assertThat(other.get("/api/buyer/cart").statusCode()).isEqualTo(401);
+      anonymous.refreshCsrf();
+      assertThat(anonymous.login(buyer, "Pass1234!").statusCode()).isEqualTo(401);
+      assertThat(accounts.loginIdAvailable(buyer)).isFalse();
+      assertThat(accounts.credentials(buyer)).isEmpty();
+      var row = jdbc.queryForMap("SELECT * FROM accounts WHERE id=?", buyerId);
+      assertThat(row.get("login_id")).isEqualTo(buyer);
+      assertThat(row.get("display_name")).isEqualTo("탈퇴회원");
+      assertThat(row.get("email").toString()).endsWith("@example.invalid");
+      assertThat(row.get("withdrawn_at")).isNotNull();
+      assertThat(row.get("contact_name")).isNull();
+      assertThat(row.get("contact_phone")).isNull();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM cart_items WHERE buyer_id=?", Long.class, buyerId))
+          .isZero();
+      accounts.ensureDemoAccount(buyer, "Pass1234!", "구매자", buyer + "@example.com", "BUYER");
+      assertThat(accounts.isActive(buyer)).isFalse();
+    }
+  }
+
+  @Test
+  void withdrawalBlocksWaitingAndPendingRefundsAndPreservesCompletedTrade() throws Exception {
+    var existing = order();
+    try (var customer = session(buyer)) {
+      String path = "/api/buyer/withdrawal", body = json(Map.of("password", "Pass1234!"));
+      var waiting = customer.post(path, body, "application/json", true);
+      assertThat(waiting.statusCode()).isEqualTo(409);
+      assertThat(customer.json(waiting).get("code").asString()).isEqualTo("WITHDRAWAL_BLOCKED");
+      customer.post(
+          buyerPath(existing.id()) + "/cancellations",
+          cancel("before-withdrawal", "GENERAL"),
+          "application/json",
+          true);
+      long refund = refundId(existing.id());
+      for (String status : java.util.List.of("PENDING", "NEEDS_ATTENTION")) {
+        jdbc.update("UPDATE refunds SET status=? WHERE id=?", status, refund);
+        assertThat(customer.post(path, body, "application/json", true).statusCode()).isEqualTo(409);
+      }
+      jdbc.update(
+          "UPDATE refunds SET status='COMPLETED',completed_at=? WHERE id=?",
+          java.sql.Timestamp.from(clock.instant()),
+          refund);
+      assertThat(customer.post(path, body, "application/json", true).statusCode()).isEqualTo(204);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM store_orders WHERE id=?", Long.class, existing.id()))
+          .isEqualTo(1);
+      assertThat(jdbc.queryForObject("SELECT status FROM refunds WHERE id=?", String.class, refund))
+          .isEqualTo("COMPLETED");
+    }
+  }
+
+  @Test
+  void withdrawalBlocksPendingCheckoutAndAllowsNoShowAtExactEnd() throws Exception {
+    var cart = checkout.put(buyer, market, offer, 1);
+    checkout.start(buyer, "withdraw-pending", cart.version(), "DELAY");
+    try (var customer = session(buyer)) {
+      String path = "/api/buyer/withdrawal", body = json(Map.of("password", "Pass1234!"));
+      assertThat(customer.post(path, body, "application/json", true).statusCode()).isEqualTo(409);
+      clock.set(Instant.parse("2026-10-13T03:00:30Z"));
+      checkout.start(buyer, "withdraw-pending", cart.version(), "DELAY");
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT status FROM checkouts WHERE request_key=? AND buyer_id=?",
+                  String.class,
+                  "withdraw-pending",
+                  accounts.current(buyer).id()))
+          .isEqualTo("CONFIRMED");
+      clock.set(Instant.parse("2026-10-13T09:00:00Z"));
+      assertThat(customer.post(path, body, "application/json", true).statusCode()).isEqualTo(204);
+    }
+  }
+
+  @Test
+  void newAndLegacyPickupCodesRetainLeadingZeroAndRejectFiveDigits() throws Exception {
+    var fresh = order();
+    var legacy = order();
+    jdbc.update("UPDATE store_orders SET pickup_code='000042' WHERE id=?", legacy.id());
+    jdbc.update("UPDATE store_orders SET pickup_code='0042' WHERE id=?", fresh.id());
+    clock.set(Instant.parse("2026-10-13T05:00:00Z"));
+    try (var merchant = session(seller)) {
+      assertThat(
+              merchant
+                  .post(
+                      sellerPath(fresh.id()) + "/pickup",
+                      json(Map.of("code", "00042")),
+                      "application/json",
+                      true)
+                  .statusCode())
+          .isEqualTo(409);
+      assertThat(
+              merchant
+                  .post(
+                      sellerPath(fresh.id()) + "/pickup",
+                      json(Map.of("code", "0042")),
+                      "application/json",
+                      true)
+                  .statusCode())
+          .isEqualTo(200);
+      assertThat(
+              merchant
+                  .post(
+                      sellerPath(legacy.id()) + "/pickup",
+                      json(Map.of("code", "000042")),
+                      "application/json",
+                      true)
+                  .statusCode())
+          .isEqualTo(200);
+    }
+    try (var customer = session(buyer)) {
+      assertThat(
+              customer
+                  .post(
+                      "/api/buyer/withdrawal",
+                      json(Map.of("password", "Pass1234!")),
+                      "application/json",
+                      true)
+                  .statusCode())
+          .isEqualTo(204);
+    }
+  }
+
+  @Test
+  void concurrentWithdrawalAndCheckoutNeverLeaveTradeOnWithdrawnBuyer() throws Exception {
+    var cart = checkout.put(buyer, market, offer, 1);
+    long buyerId = accounts.current(buyer).id();
+    try (var first = session(buyer);
+        var second = session(buyer)) {
+      var withdrawing =
+          first.postAsync("/api/buyer/withdrawal", json(Map.of("password", "Pass1234!")));
+      var paying =
+          second.postAsync(
+              "/api/buyer/checkouts",
+              json(
+                  Map.of(
+                      "requestKey",
+                      "withdraw-race",
+                      "cartVersion",
+                      cart.version(),
+                      "mode",
+                      "SUCCESS")));
+      int withdrawalStatus = withdrawing.get(30, TimeUnit.SECONDS).statusCode();
+      int paymentStatus = paying.get(30, TimeUnit.SECONDS).statusCode();
+      if (withdrawalStatus == 204) {
+        assertThat(paymentStatus).isEqualTo(401);
+        assertThat(
+                jdbc.queryForObject(
+                    "SELECT count(*) FROM checkouts WHERE buyer_id=?", Long.class, buyerId))
+            .isZero();
+        assertThat(accounts.isActive(buyer)).isFalse();
+      } else {
+        assertThat(withdrawalStatus).isEqualTo(409);
+        assertThat(paymentStatus).isEqualTo(200);
+        assertThat(accounts.isActive(buyer)).isTrue();
+      }
+    }
+  }
+
+  @Test
+  void concurrentCartAdditionCannotRestoreWithdrawnBuyersCart() throws Exception {
+    long buyerId = accounts.current(buyer).id();
+    try (var first = session(buyer);
+        var second = session(buyer)) {
+      var withdrawing =
+          first.postAsync("/api/buyer/withdrawal", json(Map.of("password", "Pass1234!")));
+      var adding =
+          second.postAsync(
+              "/api/buyer/cart/items/" + offer, json(Map.of("marketId", market, "quantity", 1)));
+      assertThat(withdrawing.get(30, TimeUnit.SECONDS).statusCode()).isEqualTo(204);
+      assertThat(adding.get(30, TimeUnit.SECONDS).statusCode()).isIn(200, 401);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM cart_items WHERE buyer_id=?", Long.class, buyerId))
+          .isZero();
+    }
   }
 
   @Test

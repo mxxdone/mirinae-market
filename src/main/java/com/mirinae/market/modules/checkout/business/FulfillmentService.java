@@ -137,7 +137,7 @@ public class FulfillmentService {
     stores.ownedStore(actor, store);
     var row = locked(id);
     if (row.storeId() != store) throw new ProductNotFoundException();
-    if (code == null || !code.matches("[0-9]{6}") || !row.pickupCode().equals(code))
+    if (code == null || !code.matches("(?:[0-9]{4}|[0-9]{6})") || !row.pickupCode().equals(code))
       throw conflict("INVALID_PICKUP_CODE", "수령 코드가 일치하지 않습니다.");
     if (row.pickedUpAt() != null) return view(id, false);
     if (!hasRemaining(data.items(id))

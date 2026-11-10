@@ -296,16 +296,38 @@ test("구매자 메뉴를 우측에 모으고 로그아웃 실패 시 현재 화
   );
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "구매자 메뉴" });
-  await expect(nav.getByRole("button")).toHaveText([
-    "장바구니",
-    "주문 내역",
+  await expect(nav.getByRole("button")).toHaveCount(2);
+  const accountMenu = nav.getByRole("button", { name: "계정 메뉴", exact: true });
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
+  await accountMenu.click();
+  await expect(page.locator("#buyer-account-menu button")).toHaveText([
     "내 계정",
+    "주문 내역",
     "로그아웃",
   ]);
+  await page.keyboard.press("Escape");
+  await expect(accountMenu).toBeFocused();
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
+  await accountMenu.click();
+  await page.locator("#heading-market").click();
+  await expect(accountMenu).toHaveAttribute("aria-expanded", "false");
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    const brand = await page.getByRole("button", { name: "미리내마켓 홈" }).boundingBox();
+    const actions = await nav.boundingBox();
+    if (!brand || !actions) throw new Error("공통 헤더가 없습니다.");
+    expect(Math.abs(brand.y - actions.y)).toBeLessThan(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
   await expect(page.locator(".health-status-badge")).toHaveCount(0);
+  await accountMenu.click();
   await nav.getByRole("button", { name: "로그아웃", exact: true }).click();
   await expect(page.locator("#heading-market")).toBeVisible();
   await expect(page.getByRole("alert")).toBeVisible();
+  await expect(accountMenu).toBeEnabled();
+  await accountMenu.click();
   await expect(nav.getByRole("button", { name: "로그아웃", exact: true })).toBeEnabled();
 });
 
@@ -447,4 +469,32 @@ test("지도 안쪽 검색은 주변 조건을 대체하고 이동 중 조회·�
   expect(await page.evaluate(() => (window as unknown as { mapMounts: number }).mapMounts)).toBe(
     mounts,
   );
+});
+
+test("탈퇴 제한 응답은 계정 화면과 확인창을 유지하고 비밀번호를 비운다", async ({ page }) => {
+  await page.route("**/api/auth/csrf", (route) =>
+    route.fulfill({ json: { token: "test-csrf", headerName: "X-CSRF-TOKEN" } }),
+  );
+  await page.route("**/api/buyer/withdrawal", (route) =>
+    route.fulfill({
+      status: 409,
+      json: {
+        code: "WITHDRAWAL_BLOCKED",
+        message: "진행 중인 주문이나 환불을 먼저 확인해 주세요.",
+      },
+    }),
+  );
+  await page.goto("/#account");
+  await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+  await page.getByRole("button", { name: "회원 탈퇴", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "회원 탈퇴하시겠어요?" });
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await page.getByRole("button", { name: "회원 탈퇴", exact: true }).click();
+  await page.locator("#withdrawal-password").fill("TestPass1234!");
+  await dialog.getByRole("button", { name: "탈퇴하기", exact: true }).click();
+  await expect(page.locator("#withdrawal-error")).toContainText("진행 중인 주문이나 환불");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#withdrawal-password")).toHaveValue("");
+  await expect(page.locator("#userSummaryLoginId")).toHaveText("test_buyer");
 });

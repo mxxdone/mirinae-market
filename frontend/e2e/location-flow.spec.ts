@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import type { MapSdkProvider } from "../src/api/mapSdk";
 import { installTestClock } from "./fixedTime";
@@ -378,7 +379,7 @@ test("로그인 후 장보기로 진입하고 내 계정은 직접 열 때만 �
   await page.locator("#marketResults button").first().click();
   await expect(page.locator("#productSearch")).toBeVisible();
   const marketUrl = page.url();
-  await page.getByRole("button", { name: "내 계정", exact: true }).click();
+  await buyerHeaderAction(page, "내 계정");
   await expect(page).toHaveURL(/#account$/);
   await expect(page.locator("#heading-buyer-summary")).toHaveText("내 계정");
   await page.screenshot({ path: "../output/playwright/buyer-account-mobile.png", fullPage: true });
@@ -391,14 +392,14 @@ test("로그인 후 장보기로 진입하고 내 계정은 직접 열 때만 �
   await expect(page.locator("#productSearch")).toBeVisible();
   await page.reload();
   await expect(page.locator("#productSearch")).toBeVisible();
-  await page.getByRole("button", { name: "내 계정", exact: true }).click();
+  await buyerHeaderAction(page, "내 계정");
   await page.reload();
   await expect(page.locator("#heading-buyer-summary")).toHaveText("내 계정");
   await page.getByRole("button", { name: "장보기로 돌아가기", exact: true }).click();
   await expect(page).toHaveURL(marketUrl);
   await expect(page.locator("#productSearch")).toBeVisible();
-  await page.getByRole("button", { name: "내 계정", exact: true }).click();
-  await page.locator("#btnLogout").click();
+  await buyerHeaderAction(page, "내 계정");
+  await buyerHeaderAction(page, "로그아웃");
   await expect(page.locator("#heading-login")).toBeVisible();
   await page.goto("/#account");
   await expect(page.locator("#heading-login")).toBeVisible();

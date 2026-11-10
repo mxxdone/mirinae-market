@@ -14,6 +14,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(com.mirinae.market.modules.account.business.AccountInactiveException.class)
+  public ResponseEntity<Map<String, String>> inactiveAccount(RuntimeException exception) {
+    return ResponseEntity.status(401)
+        .body(Map.of("code", "UNAUTHENTICATED", "message", exception.getMessage()));
+  }
+
   @ExceptionHandler(
       com.mirinae.market.modules.product.business.ProductImageForbiddenException.class)
   public ResponseEntity<Map<String, String>> imageForbidden(RuntimeException exception) {

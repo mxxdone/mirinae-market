@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import type { Checkout } from "../src/api/checkout";
 import { installTestClock } from "./fixedTime";
@@ -14,7 +15,7 @@ async function login(page: Page, id = "dashboard_buyer_a") {
   const response = await page.request.get("/api/buyer/orders");
   expect(response.status()).toBe(200);
   const orders = (await response.json()) as Checkout[];
-  await page.getByRole("button", { name: "주문 내역", exact: true }).click();
+  await buyerHeaderAction(page, "주문 내역");
   await expect(page.locator("#orders-heading")).toBeVisible();
   return orders;
 }

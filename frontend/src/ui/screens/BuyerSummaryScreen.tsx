@@ -1,16 +1,24 @@
 import type { ReactElement } from "react";
 import type { UserMe } from "../../api/types";
+import { BuyerWithdrawalPanel } from "../components/BuyerWithdrawalPanel";
 
 interface BuyerSummaryScreenProps {
   user: UserMe;
   onBrowse: () => void;
+  onWithdrawn: () => void;
+  onSessionExpired: () => void;
 }
 
 /**
  * 구매자가 직접 여는 내 계정 화면
  * 실제 인증된 계정의 me 응답(표시이름, 로그인 아이디, 역할) 중심 렌더링
  */
-export function BuyerSummaryScreen({ user, onBrowse }: BuyerSummaryScreenProps): ReactElement {
+export function BuyerSummaryScreen({
+  user,
+  onBrowse,
+  onWithdrawn,
+  onSessionExpired,
+}: BuyerSummaryScreenProps): ReactElement {
   const roleText = user.role === "BUYER" ? "구매자" : "입점 상인";
 
   return (
@@ -66,6 +74,9 @@ export function BuyerSummaryScreen({ user, onBrowse }: BuyerSummaryScreenProps):
               </tbody>
             </table>
           </div>
+          {user.role === "BUYER" && (
+            <BuyerWithdrawalPanel onWithdrawn={onWithdrawn} onSessionExpired={onSessionExpired} />
+          )}
         </div>
       </div>
     </section>

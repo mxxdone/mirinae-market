@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { chooseBuyerMarket } from "./buyerMarket";
 import { expect, test } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
@@ -158,8 +159,8 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await expect(offerCard.locator(".offer-price")).toContainText("5,000");
 
     // 구매자 로그아웃
-    await page.getByRole("button", { name: "내 계정", exact: true }).click();
-    await page.locator("#btnLogout").click();
+    await buyerHeaderAction(page, "내 계정");
+    await buyerHeaderAction(page, "로그아웃");
     await expect(page.locator("#heading-login")).toBeVisible();
   });
 

@@ -9,7 +9,7 @@ import { BuyerCheckoutPanel } from "./components/BuyerCheckoutPanel";
 import { BuyerOrdersPanel } from "./components/BuyerOrdersPanel";
 import { Toast } from "./components/Toast";
 import { BrandHeader } from "./components/BrandHeader";
-import { CartButton } from "./components/CartButton";
+import { BuyerHeaderActions } from "./components/BuyerHeaderActions";
 import { StatusAlert } from "./components/StatusAlert";
 import { BuyerSummaryScreen } from "./screens/BuyerSummaryScreen";
 import { BuyerMarketContainer } from "./screens/BuyerMarketContainer";
@@ -265,6 +265,20 @@ export function App(): ReactElement {
 
   const { cartCount, onCartChanged } = useCartSummary(currentUser, handleSessionExpired);
 
+  function handleWithdrawn(): void {
+    ++requestIdRef.current;
+    setCurrentUser(null);
+    setRegisteredLoginId("");
+    setCompletedOrder(null);
+    setLogoutError(null);
+    setSessionExpiredMessage(null);
+    setSyncErrorMessage(null);
+    lastMarketLocation.current = { marketId: null, query: "", page: 0, offerId: null };
+    leaveMarketLocation(true);
+    setCurrentScreen("login");
+    showToast("회원 탈퇴가 완료되었습니다.");
+  }
+
   /**
    * 회원가입 성공 처리 (자동 로그인 없음, 로그인 아이디 인계 가능)
    */
@@ -366,40 +380,21 @@ export function App(): ReactElement {
     <div className="app-container">
       <BrandHeader onHome={navigateHome}>
         {currentUser?.role === "BUYER" && (
-          <nav className="buyer-utility-nav" aria-label="구매자 메뉴">
-            <CartButton
-              count={cartCount}
-              onClick={() => navigatePurchase("buyer-cart")}
-              disabled={isLoggingOut}
-            />
-            <button
-              type="button"
-              className="text-action-link"
-              onClick={() => navigatePurchase("buyer-orders")}
-              disabled={isLoggingOut}
-              aria-current={currentScreen === "buyer-orders" ? "page" : undefined}
-            >
-              주문 내역
-            </button>
-            <button
-              type="button"
-              className="text-action-link"
-              onClick={navigateAccount}
-              disabled={isLoggingOut}
-              aria-current={currentScreen === "buyer-summary" ? "page" : undefined}
-            >
-              내 계정
-            </button>
-            <button
-              type="button"
-              className="buyer-logout-button"
-              id="btnLogout"
-              onClick={() => void handleLogout()}
-              disabled={isLoggingOut}
-            >
-              {isLoggingOut ? "로그아웃 중…" : "로그아웃"}
-            </button>
-          </nav>
+          <BuyerHeaderActions
+            cartCount={cartCount}
+            isLoggingOut={isLoggingOut}
+            activePage={
+              currentScreen === "buyer-summary"
+                ? "account"
+                : currentScreen === "buyer-orders"
+                  ? "orders"
+                  : null
+            }
+            onCart={() => navigatePurchase("buyer-cart")}
+            onAccount={navigateAccount}
+            onOrders={() => navigatePurchase("buyer-orders")}
+            onLogout={() => void handleLogout()}
+          />
         )}
       </BrandHeader>
       {currentUser?.role === "BUYER" && logoutError && (
@@ -452,7 +447,13 @@ export function App(): ReactElement {
           )}
 
           {currentScreen === "buyer-summary" && currentUser && (
-            <BuyerSummaryScreen onBrowse={browseMarket} user={currentUser} />
+            <BuyerSummaryScreen
+              key={currentUser.id}
+              onBrowse={browseMarket}
+              user={currentUser}
+              onWithdrawn={handleWithdrawn}
+              onSessionExpired={handleSessionExpired}
+            />
           )}
 
           {currentScreen === "buyer-market" && currentUser && (

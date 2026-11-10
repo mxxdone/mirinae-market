@@ -1,0 +1,1 @@
+ALTER TABLE accounts ADD COLUMN withdrawn_at TIMESTAMP WITH TIME ZONE;

@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
 
@@ -27,12 +28,8 @@ async function login(page: Page, id: string, role: "buyer" | "seller" | "admin")
 }
 
 async function logout(page: Page, role: "buyer" | "seller" | "admin") {
-  if (role === "buyer") await page.goto("/#account");
-  await page
-    .locator(
-      role === "buyer" ? "#btnLogout" : role === "seller" ? "#btnLogoutSeller" : "#btnAdminLogout",
-    )
-    .click();
+  if (role === "buyer") await buyerHeaderAction(page, "로그아웃");
+  else await page.locator(role === "seller" ? "#btnLogoutSeller" : "#btnAdminLogout").click();
   await expect(page.locator("#heading-login")).toBeVisible();
 }
 

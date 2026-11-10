@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import type { Checkout } from "../src/api/checkout";
 import type { StoreOrderView } from "../src/api/operations";
@@ -32,12 +33,8 @@ async function login(page: Page, id: string, role: "buyer" | "seller" | "admin")
   ).toBeVisible();
 }
 async function logout(page: Page, role: "buyer" | "seller" | "admin") {
-  if (role === "buyer") await page.goto("/#account");
-  await page
-    .locator(
-      role === "buyer" ? "#btnLogout" : role === "seller" ? "#btnLogoutSeller" : "#btnAdminLogout",
-    )
-    .click();
+  if (role === "buyer") await buyerHeaderAction(page, "로그아웃");
+  else await page.locator(role === "seller" ? "#btnLogoutSeller" : "#btnAdminLogout").click();
   await expect(page.locator("#heading-login")).toBeVisible();
 }
 async function orders(page: Page): Promise<Checkout[]> {
@@ -51,7 +48,7 @@ async function fixture(page: Page, key: string): Promise<Checkout> {
   return result;
 }
 async function buyerOrders(page: Page) {
-  await page.getByRole("button", { name: "주문 내역", exact: true }).click();
+  await buyerHeaderAction(page, "주문 내역");
   await expect(page.locator("#orders-heading")).toBeVisible();
 }
 async function refundCompleted(page: Page, order: StoreOrderView, amount: string) {

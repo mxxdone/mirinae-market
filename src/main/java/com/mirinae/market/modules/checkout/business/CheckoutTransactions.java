@@ -48,10 +48,27 @@ public class CheckoutTransactions {
     return account.id();
   }
 
+  private void lockActiveBuyer(long buyer) {
+    data.lockBuyer(buyer);
+    accounts.requireActiveBuyer(buyer);
+  }
+
+  @Transactional(isolation = Isolation.READ_COMMITTED)
+  public void prepareBuyerWithdrawal(String loginId) {
+    long buyer = buyer(loginId);
+    lockActiveBuyer(buyer);
+    data.lockBuyerOrders(buyer);
+    var now = java.time.LocalDateTime.ofInstant(clock.instant(), java.time.ZoneId.of("Asia/Seoul"));
+    if (data.unfinishedBuyerTrade(buyer, now))
+      throw new CheckoutConflictException(
+          "WITHDRAWAL_BLOCKED", "진행 중인 결제·수령 대기 주문이나 환불을 먼저 확인해 주세요.");
+    data.clear(buyer);
+  }
+
   @Transactional
   public CartView cart(String loginId) {
     long buyer = buyer(loginId);
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     return cartView(buyer);
   }
 
@@ -96,7 +113,7 @@ public class CheckoutTransactions {
   public CartView put(String loginId, long marketId, long offerId, Integer quantity) {
     int count = CheckoutRules.quantity(quantity);
     long buyer = buyer(loginId);
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     editable(buyer);
     var item = inventory.describe(offerId);
     var offer = item.offer();
@@ -121,7 +138,7 @@ public class CheckoutTransactions {
   @Transactional
   public CartView add(String loginId, long marketId, long offerId, Integer quantity) {
     long buyer = buyer(loginId);
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     editable(buyer);
     int previous =
         data.cart(buyer).stream()
@@ -135,7 +152,7 @@ public class CheckoutTransactions {
   @Transactional
   public CartView remove(String loginId, long offerId) {
     long buyer = buyer(loginId);
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     editable(buyer);
     data.remove(buyer, offerId);
     data.advance(buyer);
@@ -145,7 +162,7 @@ public class CheckoutTransactions {
   @Transactional
   public CartView clear(String loginId) {
     long buyer = buyer(loginId);
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     editable(buyer);
     data.clear(buyer);
     return cartView(buyer);
@@ -170,7 +187,7 @@ public class CheckoutTransactions {
     String source = direct == null ? "CART" : "DIRECT";
     if (version == null || version < 0) throw new IllegalArgumentException("장바구니 버전을 확인해 주세요.");
     long buyer = buyer(loginId);
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     var previous = data.find(buyer, key);
     if (previous.isPresent()) {
       var row = previous.orElseThrow();
@@ -216,7 +233,7 @@ public class CheckoutTransactions {
 
   @Transactional
   public CheckoutView finish(long buyer, String key) {
-    data.lockBuyer(buyer);
+    lockActiveBuyer(buyer);
     var row = data.find(buyer, key).orElseThrow(ProductNotFoundException::new);
     if (!row.status().equals("PENDING") || clock.instant().isBefore(row.dueAt())) return view(row);
     if (row.mode().equals("FAIL")) {

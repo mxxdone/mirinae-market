@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { chooseBuyerMarket } from "./buyerMarket";
 import { test, expect, type Page, type BrowserContext } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
@@ -122,6 +123,10 @@ test("두 매장 통합 결제·응답 유실 결과 확인·새로고침 주문
     await expect(order).toContainText("3,000원");
     await expect(order).toContainText("결제검증 첫매장");
     await expect(order).toContainText("결제검증 둘째매장");
+    const pickupCodes = order.locator(".pickup-code-box strong");
+    await expect(pickupCodes).toHaveCount(2);
+    await expect(pickupCodes.nth(0)).toHaveText(/^[0-9]{4}$/);
+    await expect(pickupCodes.nth(1)).toHaveText(/^[0-9]{4}$/);
     await page.reload();
     await expect(page.getByRole("heading", { name: "주문 내역", exact: true })).toBeVisible();
     await expect(page.locator(".checkout-order").filter({ hasText: prefix })).toHaveCount(1);
@@ -201,18 +206,18 @@ test("시장과 계정 메뉴에서 장바구니·주문 내역에 독립적으�
   page,
 }) => {
   await loginBuyer(page);
-  await page.getByRole("button", { name: "주문 내역", exact: true }).click();
+  await buyerHeaderAction(page, "주문 내역");
   await expect(page.getByRole("heading", { name: "주문 내역", exact: true })).toBeVisible();
   await expect(page.locator("#payment-mode")).toHaveCount(0);
   await page.goBack();
   await expect(page.locator("#heading-market")).toBeVisible();
-  await page.getByRole("button", { name: "내 계정", exact: true }).click();
+  await buyerHeaderAction(page, "내 계정");
   await page.getByRole("button", { name: "장바구니", exact: true }).click();
   await expect(page.getByRole("heading", { name: "장바구니", exact: true })).toBeVisible();
   await expect(page.locator(".checkout-order")).toHaveCount(0);
   await page.goBack();
   await expect(page.locator("#heading-buyer-summary")).toBeVisible();
-  await page.getByRole("button", { name: "주문 내역", exact: true }).click();
+  await buyerHeaderAction(page, "주문 내역");
   await expect(page).toHaveURL(/#orders$/);
   await page.reload();
   await expect(page.getByRole("heading", { name: "주문 내역", exact: true })).toBeVisible();

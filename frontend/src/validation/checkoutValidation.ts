@@ -5,3 +5,7 @@ export function purchaseQuantity(input: string): number {
     throw new Error("구매 수량은 2,147,483,647 이하로 입력해 주세요.");
   return value;
 }
+
+export function isPickupCode(value: string): boolean {
+  return /^(?:[0-9]{4}|[0-9]{6})$/.test(value);
+}

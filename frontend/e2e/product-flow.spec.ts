@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { openBuyerProducts, chooseBuyerMarket } from "./buyerMarket";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
@@ -99,8 +100,8 @@ test("상품 상세의 브라우저 뒤로·앞으로·새로고침과 로그아
   await expect(page.locator("#heading-market")).toBeVisible();
   await page.goForward();
   await expect(page.locator(".offer-card").first()).toBeVisible();
-  await page.getByRole("button", { name: "내 계정", exact: true }).click();
-  await page.locator("#btnLogout").click();
+  await buyerHeaderAction(page, "내 계정");
+  await buyerHeaderAction(page, "로그아웃");
   await expect(page.locator("#heading-login")).toBeVisible();
   await page.goBack();
   await expect(page.locator("#heading-login")).toBeVisible();

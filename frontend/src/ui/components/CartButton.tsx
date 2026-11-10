@@ -10,16 +10,17 @@ export function CartButton({
   return (
     <button
       type="button"
-      className="text-action-link cart-button"
+      className="header-icon-button cart-button"
       aria-label="장바구니"
+      title="장바구니"
       aria-description={count === null ? undefined : `상품 ${count}종류`}
       onClick={onClick}
       disabled={disabled}
     >
       <svg
         aria-hidden="true"
-        width="20"
-        height="20"
+        width="24"
+        height="24"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -29,8 +30,7 @@ export function CartButton({
         <circle cx="10" cy="21" r="1" />
         <circle cx="18" cy="21" r="1" />
       </svg>
-      장바구니
-      {count !== null && (
+      {count !== null && count > 0 && (
         <span className="cart-count" aria-hidden="true" data-testid="cart-count">
           {count}
         </span>

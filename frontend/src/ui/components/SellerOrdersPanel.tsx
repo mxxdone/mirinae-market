@@ -9,6 +9,7 @@ import {
   type StoreOrderView,
 } from "../../api/operations";
 import { ApiError, type StoreView } from "../../api/types";
+import { isPickupCode } from "../../validation/checkoutValidation";
 import { StatusAlert } from "./StatusAlert";
 
 interface Props {
@@ -125,8 +126,8 @@ export function SellerOrdersPanel({ store, onSessionExpired }: Props): ReactElem
   async function handlePickup() {
     if (!selectedOrder) return;
     const code = pickupCodeInput.trim();
-    if (!/^\d{6}$/.test(code)) {
-      setError("수령 코드는 6자리 숫자여야 합니다.");
+    if (!isPickupCode(code)) {
+      setError("구매자가 제시한 수령 코드 전체를 입력해 주세요.");
       return;
     }
 
@@ -364,19 +365,18 @@ export function SellerOrdersPanel({ store, onSessionExpired }: Props): ReactElem
               <section className="seller-action-box pickup-box">
                 <h4>수령 완료 처리</h4>
                 <p className="field-help-text">
-                  구매자가 제시한 숫자 6자리 수령 코드를 입력하면 유효 상품 전체가 수령 완료
-                  처리됩니다.
+                  구매자가 제시한 수령 코드를 입력하면 유효 상품 전체가 수령 완료 처리됩니다.
                 </p>
                 <div className="pickup-form-inline">
                   <label htmlFor="sellerPickupCodeInput" className="field-label">
-                    수령 코드 (6자리)
+                    수령 코드
                   </label>
                   <input
                     id="sellerPickupCodeInput"
                     className="input-box"
                     maxLength={6}
-                    pattern="[0-9]{6}"
-                    placeholder="예: 246810"
+                    pattern="[0-9]{4}([0-9]{2})?"
+                    placeholder="예: 4821"
                     value={pickupCodeInput}
                     disabled={busy || loading}
                     onChange={(e) => setPickupCodeInput(e.target.value.replace(/\D/g, ""))}
@@ -385,7 +385,7 @@ export function SellerOrdersPanel({ store, onSessionExpired }: Props): ReactElem
                     type="button"
                     id="btnSubmitPickup"
                     className="btn-query-store"
-                    disabled={busy || loading || pickupCodeInput.length !== 6}
+                    disabled={busy || loading || !isPickupCode(pickupCodeInput)}
                     onClick={() => void handlePickup()}
                   >
                     {busy ? "처리 중..." : "수령 확인"}

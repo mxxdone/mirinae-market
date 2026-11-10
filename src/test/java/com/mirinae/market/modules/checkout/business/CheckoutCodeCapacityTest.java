@@ -95,7 +95,7 @@ class CheckoutCodeCapacityTest {
               BigDecimal.valueOf(1000));
       when(inventory.describe(id)).thenReturn(new InventoryOffer(offer, true));
     }
-    when(data.freePickupCode(1, date)).thenReturn(Optional.of("123456"));
+    when(data.freePickupCode(1, date)).thenReturn(Optional.of("1234"));
     when(data.freePickupCode(2, date)).thenReturn(Optional.empty());
     var service =
         new CheckoutTransactions(

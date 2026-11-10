@@ -1,3 +1,4 @@
+import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
 
@@ -99,14 +100,14 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(header.getByRole("button", { name: "장바구니", exact: true })).toHaveCount(1);
     await expect(page.locator(".main-viewport .buyer-utility-nav")).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(header.getByRole("button", { name: "로그아웃", exact: true })).toBeVisible();
+    await expect(header.getByRole("button", { name: "계정 메뉴", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.reload();
     await expect(page.locator("#buyerSelectProvince")).toBeVisible();
-    await page.getByRole("button", { name: "내 계정", exact: true }).click();
+    await buyerHeaderAction(page, "내 계정");
     await expect(page).toHaveURL(/#account$/);
     await expect(page.locator("#heading-buyer-summary")).toBeVisible();
     await expect(page.locator("#userSummaryDisplayName")).toHaveText(testName);
@@ -119,7 +120,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#userSummaryLoginId")).toHaveText(testLoginId);
 
     // 로그아웃 수행
-    await page.locator("#btnLogout").click();
+    await buyerHeaderAction(page, "로그아웃");
     await expect(page.locator("#heading-login")).toBeVisible();
   });
 
@@ -210,9 +211,9 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#heading-market")).toBeVisible();
     await expect(page.locator("#storeInfoId")).not.toBeVisible();
 
-    await page.getByRole("button", { name: "내 계정", exact: true }).click();
+    await buyerHeaderAction(page, "내 계정");
     // 로그아웃
-    await page.locator("#btnLogout").click();
+    await buyerHeaderAction(page, "로그아웃");
     await expect(page.locator("#heading-login")).toBeVisible();
   });
 
@@ -342,7 +343,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.locator("#btnLoginSubmit").click();
 
     await expect(page.locator("#heading-market")).toBeVisible();
-    await page.getByRole("button", { name: "내 계정", exact: true }).click();
+    await buyerHeaderAction(page, "내 계정");
     // 직접 연 내 계정에서 오프라인 로그아웃 확인
     await expect(page.locator("#heading-buyer-summary")).toBeVisible();
     await expect(page.locator("#userSummaryLoginId")).toHaveText(buyerId);
@@ -351,7 +352,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await context.setOffline(true);
 
     // 2) 로그아웃 클릭
-    await page.locator("#btnLogout").click();
+    await buyerHeaderAction(page, "로그아웃");
 
     // 3) 통신 실패 시 개인정보(표시이름, 아이디, 역할)가 화면에 그대로 유지되어야 함
     await expect(page.locator("#heading-buyer-summary")).toBeVisible();
@@ -366,10 +367,61 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await context.setOffline(false);
 
     // 6) 로그아웃 재시도
-    await page.locator("#btnLogout").click();
+    await buyerHeaderAction(page, "로그아웃");
 
     // 7) 정상 로그아웃되어 로그인 화면으로 전환 및 개인정보 폐기 확인
     await expect(page.locator("#heading-login")).toBeVisible();
     await expect(page.locator("#userSummaryLoginId")).not.toBeVisible();
   });
+});
+
+test("구매자 탈퇴는 취소 시 보존하고 비밀번호 실패 후 재시도하며 완료 시 개인 상태를 폐기한다", async ({
+  page,
+}) => {
+  const loginId = `retire${Date.now().toString().slice(-10)}`;
+  const password = requireEnv("E2E_DEMO_PASSWORD");
+  await page.goto("/");
+  const csrf = (await (await page.request.get("/api/auth/csrf")).json()) as {
+    headerName: string;
+    token: string;
+  };
+  const created = await page.request.post("/api/accounts", {
+    headers: { [csrf.headerName]: csrf.token },
+    data: { loginId, password, displayName: "탈퇴검증", email: `${loginId}@market.local` },
+  });
+  expect(created.status()).toBe(201);
+  await page.locator("#loginUserId").fill(loginId);
+  await page.locator("#loginPassword").fill(password);
+  await page.locator("#btnLoginSubmit").click();
+  await expect(page.locator("#heading-market")).toBeVisible();
+  await buyerHeaderAction(page, "내 계정");
+  let requests = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === "/api/buyer/withdrawal")
+      requests += 1;
+  });
+  await page.getByRole("button", { name: "회원 탈퇴", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "회원 탈퇴하시겠어요?" });
+  await dialog.getByRole("button", { name: "취소", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(requests).toBe(0);
+  await page.getByRole("button", { name: "회원 탈퇴", exact: true }).click();
+  await page.locator("#withdrawal-password").fill("WrongPassword1234!");
+  await dialog.getByRole("button", { name: "탈퇴하기", exact: true }).click();
+  await expect(page.locator("#withdrawal-error")).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await page.locator("#withdrawal-password").fill(password);
+  await dialog.getByRole("button", { name: "탈퇴하기", exact: true }).click();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await expect(page.locator("#userSummaryLoginId")).toHaveCount(0);
+  expect((await page.request.get("/api/auth/me")).status()).toBe(401);
+  const available = await page.request.get(
+    `/api/accounts/login-id-availability?loginId=${loginId}`,
+  );
+  expect(await available.json()).toEqual({ available: false });
+  await page.locator("#loginUserId").fill(loginId);
+  await page.locator("#loginPassword").fill(password);
+  await page.locator("#btnLoginSubmit").click();
+  await expect(page.locator("#loginAlertBox")).toBeVisible();
+  await expect(page.locator("#heading-login")).toBeVisible();
 });

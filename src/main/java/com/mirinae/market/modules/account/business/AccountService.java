@@ -45,6 +45,7 @@ public class AccountService {
 
   @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public MemberView profile(String loginId) {
+    requireActive(loginId);
     return memberView(data.member(loginId));
   }
 
@@ -118,11 +119,13 @@ public class AccountService {
   }
 
   public Optional<AccountCredentials> credentials(String loginId) {
+    if (!data.active(loginId)) return Optional.empty();
     return data.findByLoginId(loginId)
         .map(row -> new AccountCredentials(row.loginId(), row.passwordHash(), row.role()));
   }
 
   public AccountView current(String loginId) {
+    requireActive(loginId);
     return data.findByLoginId(loginId)
         .map(this::view)
         .orElseThrow(() -> new IllegalArgumentException("계정을 찾을 수 없습니다."));
@@ -133,6 +136,8 @@ public class AccountService {
     Optional<AccountRow> existing = data.findByLoginId(loginId);
     if (existing.isPresent()) {
       AccountRow row = existing.orElseThrow();
+      if (row.role().equals("BUYER") && role.equals("BUYER") && !data.active(loginId))
+        return view(row);
       if (!row.role().equals(role)
           || !row.email().equals(email)
           || !encoder.matches(password, row.passwordHash())) {
@@ -150,5 +155,36 @@ public class AccountService {
         row.displayName(),
         row.role(),
         data.member(row.loginId()).passwordChangeRequired());
+  }
+
+  public boolean isActive(String loginId) {
+    return data.active(loginId);
+  }
+
+  private void requireActive(String loginId) {
+    if (!data.active(loginId)) throw new AccountInactiveException();
+  }
+
+  public void requireActiveBuyer(long id) {
+    if (!data.activeBuyer(id)) throw new AccountInactiveException();
+  }
+
+  @org.springframework.transaction.annotation.Transactional
+  public void withdrawBuyer(String loginId, String password, java.time.Instant now) {
+    var account = current(loginId);
+    data.lockMember(account.id());
+    requireActive(loginId);
+    if (!account.role().equals("BUYER"))
+      throw new org.springframework.security.access.AccessDeniedException("구매자만 탈퇴할 수 있습니다.");
+    var credentials = data.findByLoginId(loginId).orElseThrow(AccountInactiveException::new);
+    if (password == null
+        || password.isEmpty()
+        || !encoder.matches(password, credentials.passwordHash()))
+      throw new IllegalArgumentException("현재 비밀번호가 올바르지 않습니다.");
+    data.withdraw(
+        account.id(),
+        encoder.encode(java.util.UUID.randomUUID().toString()),
+        java.util.UUID.randomUUID() + "@example.invalid",
+        now);
   }
 }

@@ -89,6 +89,19 @@ class PickupCodeMigrationIntegrationTest {
               () ->
                   jdbc.update("UPDATE store_orders SET pickup_code='111111' WHERE id=?", orders[1]))
           .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM accounts WHERE withdrawn_at IS NULL", Long.class))
+          .isEqualTo(2);
+      jdbc.update("UPDATE store_orders SET pickup_code='0042' WHERE id=?", orders[1]);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT pickup_code FROM store_orders WHERE id=?", String.class, orders[1]))
+          .isEqualTo("0042");
+      assertThatThrownBy(
+              () ->
+                  jdbc.update("UPDATE store_orders SET pickup_code='00042' WHERE id=?", orders[1]))
+          .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
   }
 }

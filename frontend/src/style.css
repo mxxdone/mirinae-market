@@ -112,6 +112,8 @@ textarea.input-box {
 }
 
 .app-header {
+  position: relative;
+  z-index: 20;
   flex: 0 0 auto;
   padding: 0 clamp(12px, 2.5vw, 64px);
   background: var(--color-surface);
@@ -122,8 +124,8 @@ textarea.input-box {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 24px;
+  flex-wrap: nowrap;
+  gap: 12px;
   min-height: 56px;
   max-width: 96rem;
   margin-inline: auto;
@@ -5281,8 +5283,9 @@ form.review-editor-panel,
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 16px;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  gap: 4px;
   margin-left: auto;
 }
 .buyer-logout-button {
@@ -5309,41 +5312,78 @@ form.review-editor-panel,
   .buyer-heading-row {
     align-items: flex-start;
   }
-  .buyer-utility-nav {
-    width: 100%;
-    gap: 8px 12px;
-  }
 }
 
-@media (max-width: 640px) {
-  .app-header-inner {
-    padding-block: 6px;
-  }
-  .app-header .buyer-utility-nav {
-    flex-basis: 100%;
-    width: 100%;
-    gap: 4px 12px;
-  }
-  .app-header .buyer-utility-nav .text-action-link {
-    font-size: 14px;
-  }
+.header-icon-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-main);
+  background: transparent;
+  cursor: pointer;
+}
+.header-icon-button:hover:not(:disabled) {
+  background: var(--color-primary-light);
+}
+.header-icon-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.buyer-account-actions {
+  display: flex;
+  position: relative;
+}
+.buyer-account-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1;
+  width: 184px;
+  max-width: calc(100vw - 24px);
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+.buyer-account-dropdown button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-main);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.buyer-account-dropdown button:hover:not(:disabled) {
+  background: var(--color-bg-subtle);
+}
+.buyer-account-dropdown button[aria-current="page"] {
+  color: var(--color-primary);
+}
+.buyer-account-dropdown .account-menu-logout {
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border-subtle);
+  border-radius: 0;
+  color: var(--color-error);
 }
 
 /* 선택 결제·바로 구매 확장 UI */
-.cart-button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  font: inherit;
-  color: inherit;
-  padding: 4px 8px;
-}
 .cart-count {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5351,7 +5391,7 @@ form.review-editor-panel,
   height: 20px;
   padding: 0 5px;
   border-radius: var(--radius-full);
-  background: var(--color-primary);
+  background: var(--color-error);
   color: var(--color-text-on-primary);
   font-size: 11px;
   font-weight: 700;
@@ -5519,4 +5559,50 @@ form.review-editor-panel,
 .checkout-market-header h2,
 .checkout-store-header h3 {
   overflow-wrap: anywhere;
+}
+
+.buyer-withdrawal-panel {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.buyer-withdrawal-panel h2 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.buyer-withdrawal-panel > p {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+.withdrawal-link {
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-error);
+  font-size: 14px;
+  cursor: pointer;
+}
+.withdrawal-form {
+  display: grid;
+  gap: 16px;
+}
+.withdrawal-form > p {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+.withdrawal-confirm-button {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  background: var(--color-error);
+  color: var(--color-text-on-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.withdrawal-confirm-button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

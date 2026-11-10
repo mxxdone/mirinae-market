@@ -75,7 +75,46 @@ public class AccountData {
 
   @Transactional(readOnly = true)
   public Optional<AccountRow> findByLoginId(String loginId) {
-    return repository.findByLoginId(loginId).map(AccountEntity::toRow);
+    return jdbc
+        .query(
+            "SELECT id,login_id,password_hash,display_name,email,role FROM accounts WHERE login_id=?",
+            (rs, n) ->
+                new AccountRow(
+                    rs.getLong("id"),
+                    rs.getString("login_id"),
+                    rs.getString("password_hash"),
+                    rs.getString("display_name"),
+                    rs.getString("email"),
+                    rs.getString("role")),
+            loginId)
+        .stream()
+        .findFirst();
+  }
+
+  public boolean active(String loginId) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM accounts WHERE login_id=? AND withdrawn_at IS NULL)",
+            Boolean.class,
+            loginId));
+  }
+
+  public boolean activeBuyer(long id) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM accounts WHERE id=? AND role='BUYER' AND withdrawn_at IS NULL)",
+            Boolean.class,
+            id));
+  }
+
+  public void withdraw(long id, String hash, String email, java.time.Instant now) {
+    if (jdbc.update(
+            "UPDATE accounts SET withdrawn_at=?,display_name='탈퇴회원',email=?,password_hash=?,contact_name=NULL,contact_phone=NULL WHERE id=? AND role='BUYER' AND withdrawn_at IS NULL",
+            java.sql.Timestamp.from(now),
+            email,
+            hash,
+            id)
+        != 1) throw new IllegalStateException("탈퇴할 수 있는 계정을 찾을 수 없습니다.");
   }
 
   @Transactional(readOnly = true)

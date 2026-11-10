@@ -94,6 +94,9 @@ public class SecurityConfig {
                     .deleteCookies("JSESSIONID")
                     .logoutSuccessHandler(
                         (request, response, authentication) -> response.setStatus(204)));
+    http.addFilterBefore(
+        new ActiveAccountFilter(accounts),
+        org.springframework.security.web.access.intercept.AuthorizationFilter.class);
     return http.build();
   }
 

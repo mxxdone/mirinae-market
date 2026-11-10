@@ -39,6 +39,24 @@ public class CheckoutData {
         "SELECT buyer_id FROM carts WHERE buyer_id=? FOR UPDATE", Long.class, buyerId);
   }
 
+  public void lockBuyerOrders(long buyerId) {
+    jdbc.queryForList(
+        "SELECT s.id FROM store_orders s JOIN checkouts c ON c.id=s.checkout_id WHERE c.buyer_id=? ORDER BY s.id FOR UPDATE OF s",
+        Long.class,
+        buyerId);
+  }
+
+  public boolean unfinishedBuyerTrade(long buyerId, java.time.LocalDateTime now) {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM checkouts WHERE buyer_id=? AND status='PENDING') OR EXISTS(SELECT 1 FROM store_orders s JOIN checkouts c ON c.id=s.checkout_id WHERE c.buyer_id=? AND c.status='CONFIRMED' AND s.picked_up_at IS NULL AND s.pickup_date+s.end_time>? AND EXISTS(SELECT 1 FROM order_items i WHERE i.store_order_id=s.id AND i.cancelled_at IS NULL)) OR EXISTS(SELECT 1 FROM refunds r JOIN store_orders s ON s.id=r.store_order_id JOIN checkouts c ON c.id=s.checkout_id WHERE c.buyer_id=? AND r.status<>'COMPLETED')",
+            Boolean.class,
+            buyerId,
+            buyerId,
+            java.sql.Timestamp.valueOf(now),
+            buyerId));
+  }
+
   public long version(long buyerId) {
     return jdbc.queryForObject("SELECT version FROM carts WHERE buyer_id=?", Long.class, buyerId);
   }
@@ -211,7 +229,7 @@ public class CheckoutData {
     var candidate =
         jdbc
             .queryForList(
-                "WITH seed AS MATERIALIZED(SELECT lpad(floor(random()*1000000)::text,6,'0') AS code) SELECT code FROM seed WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=seed.code)",
+                "WITH seed AS MATERIALIZED(SELECT lpad(floor(random()*10000)::text,4,'0') AS code) SELECT code FROM seed WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=seed.code)",
                 String.class,
                 store,
                 date)
@@ -220,7 +238,7 @@ public class CheckoutData {
     if (candidate.isPresent()) return candidate;
     return jdbc
         .queryForList(
-            "WITH seed AS MATERIALIZED(SELECT floor(random()*1000000)::integer AS start) SELECT lpad(((n+seed.start)%1000000)::text,6,'0') FROM seed CROSS JOIN generate_series(0,999999) n WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=lpad(((n+seed.start)%1000000)::text,6,'0')) LIMIT 1",
+            "WITH seed AS MATERIALIZED(SELECT floor(random()*10000)::integer AS start) SELECT lpad(((n+seed.start)%10000)::text,4,'0') FROM seed CROSS JOIN generate_series(0,9999) n WHERE NOT EXISTS(SELECT 1 FROM store_orders s WHERE s.store_id=? AND s.pickup_date=? AND s.pickup_code=lpad(((n+seed.start)%10000)::text,4,'0')) LIMIT 1",
             String.class, store, date)
         .stream()
         .findFirst();

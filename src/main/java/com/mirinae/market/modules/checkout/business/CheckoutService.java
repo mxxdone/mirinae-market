@@ -24,6 +24,10 @@ public class CheckoutService {
     return transactions.cart(loginId);
   }
 
+  public void prepareBuyerWithdrawal(String loginId) {
+    transactions.prepareBuyerWithdrawal(loginId);
+  }
+
   public CartView put(String loginId, long marketId, long offerId, Integer quantity) {
     return transactions.put(loginId, marketId, offerId, quantity);
   }

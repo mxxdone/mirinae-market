@@ -75,7 +75,8 @@ public class FulfillmentController {
 
   @Operation(
       summary = "수령 코드로 유효 상품 일괄 수령",
-      description = "신규4자리 또는 기존6자리 숫자 code 전체를 검사합니다. 주문의 수령 시작 이상·마감 미만에서만 허용하며 같은 올바른 코드의 완료 재요청은 기존 결과입니다.")
+      description =
+          "신규4자리 또는 기존6자리 숫자 code 전체를 검사합니다. 주문의 수령 시작 이상·마감 미만에서만 허용하며 같은 올바른 코드의 완료 재요청은 기존 결과입니다.")
   @SecurityRequirement(name = "csrfToken")
   @PostMapping("/api/seller/stores/{storeId}/orders/{id}/pickup")
   public StoreOrderView pickup(

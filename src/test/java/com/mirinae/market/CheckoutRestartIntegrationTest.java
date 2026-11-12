@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
+import com.mirinae.market.support.RedisTestConfig;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -32,7 +33,9 @@ class CheckoutRestartIntegrationTest {
                         + (round == 0 ? "2026-10-13T03:00:00Z" : "2026-10-13T03:00:04Z"),
                     "--spring.datasource.url=" + database.getJdbcUrl(),
                     "--spring.datasource.username=" + database.getUsername(),
-                    "--spring.datasource.password=" + database.getPassword())) {
+                    "--spring.datasource.password=" + database.getPassword(),
+                    "--spring.data.redis.host=" + RedisTestConfig.host(),
+                    "--spring.data.redis.port=" + RedisTestConfig.port())) {
           var jdbc = context.getBean(JdbcTemplate.class);
           int port = ((WebServerApplicationContext) context).getWebServer().getPort();
           if (round == 0) {

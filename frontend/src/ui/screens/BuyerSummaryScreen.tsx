@@ -7,19 +7,23 @@ interface BuyerSummaryScreenProps {
   onBrowse: () => void;
   onWithdrawn: () => void;
   onSessionExpired: () => void;
+  reauthConfirmed?: boolean;
 }
 
 /**
  * 구매자가 직접 여는 내 계정 화면
- * 실제 인증된 계정의 me 응답(표시이름, 로그인 아이디, 역할) 중심 렌더링
+ * 실제 인증된 계정의 me 응답(표시이름, 로그인 아이디, 역할, hasLocalPassword) 중심 렌더링
+ * 소셜 전용 계정에는 내부 로컬 ID를 일반 로그인 가능 ID처럼 오인하지 않도록 안내합니다.
  */
 export function BuyerSummaryScreen({
   user,
   onBrowse,
   onWithdrawn,
   onSessionExpired,
+  reauthConfirmed = false,
 }: BuyerSummaryScreenProps): ReactElement {
   const roleText = user.role === "BUYER" ? "구매자" : "입점 상인";
+  const hasLocalPassword = user.hasLocalPassword !== false;
 
   return (
     <section
@@ -63,7 +67,9 @@ export function BuyerSummaryScreen({
                 </tr>
                 <tr>
                   <th scope="row">로그인 아이디</th>
-                  <td id="userSummaryLoginId">{user.loginId}</td>
+                  <td id="userSummaryLoginId">
+                    {hasLocalPassword ? user.loginId : "소셜 연동 계정 (아이디 로그인 불가)"}
+                  </td>
                 </tr>
                 <tr>
                   <th scope="row">계정 역할</th>
@@ -75,7 +81,13 @@ export function BuyerSummaryScreen({
             </table>
           </div>
           {user.role === "BUYER" && (
-            <BuyerWithdrawalPanel onWithdrawn={onWithdrawn} onSessionExpired={onSessionExpired} />
+            <BuyerWithdrawalPanel
+              hasLocalPassword={hasLocalPassword}
+              linkedProviders={user.linkedProviders}
+              reauthConfirmed={reauthConfirmed}
+              onWithdrawn={onWithdrawn}
+              onSessionExpired={onSessionExpired}
+            />
           )}
         </div>
       </div>

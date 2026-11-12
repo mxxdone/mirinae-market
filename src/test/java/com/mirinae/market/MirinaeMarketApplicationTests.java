@@ -3,6 +3,7 @@ package com.mirinae.market;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -13,7 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
 /** 서버 기동과 핵심 HTTP 엔드포인트 응답을 검증한다. */
-@Import(PostgresTestConfig.class)
+@Import({PostgresTestConfig.class, RedisTestConfig.class})
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class MirinaeMarketApplicationTests {
 

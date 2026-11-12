@@ -9,6 +9,7 @@ import com.mirinae.market.modules.checkout.business.StoreOrderView;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
       "admin.bootstrap.login-id=statement_admin", "admin.bootstrap.password=Admin1234!",
       "admin.bootstrap.email=statement-admin@example.com"
     })
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class StatementHttpFlowTest {
   @Autowired private AccountService accounts;
   @Autowired private StoreService stores;

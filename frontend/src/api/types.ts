@@ -28,6 +28,8 @@ export interface AccountView {
 
 export interface LoginResponse {
   authenticated: boolean;
+  accessToken?: string;
+  expiresIn?: number;
 }
 
 export type UserRole = "BUYER" | "SELLER" | "ADMIN";
@@ -38,6 +40,44 @@ export interface UserMe {
   displayName: string;
   role: UserRole;
   requiresPasswordChange: boolean;
+  hasLocalPassword?: boolean;
+  linkedProviders?: ("kakao" | "google")[];
+}
+
+export interface OAuthProvidersResponse {
+  providers: string[];
+}
+
+export type OAuthPurpose = "login" | "link" | "withdraw";
+
+export interface OAuthStartRequest {
+  purpose: OAuthPurpose;
+}
+
+export interface OAuthStartResponse {
+  authorizationUrl: string;
+}
+
+export type OAuthFlowStatus = "LOGIN" | "SIGNUP" | "LINK" | "REAUTH" | "ERROR";
+
+export interface OAuthFlowResponse {
+  status: OAuthFlowStatus;
+  provider?: string;
+  displayName?: string;
+  email?: string;
+  message?: string;
+  linkVerified?: boolean;
+}
+
+export interface OAuthSignupRequest {
+  displayName: string;
+  email: string;
+}
+
+export interface OAuthLinkRequest {
+  confirm: boolean;
+  loginId?: string;
+  password?: string;
 }
 
 export interface StoreView {

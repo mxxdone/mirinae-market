@@ -17,7 +17,7 @@ class AccountEntity {
   @Column(name = "login_id", nullable = false, length = 20, unique = true)
   private String loginId;
 
-  @Column(name = "password_hash", nullable = false, length = 100)
+  @Column(name = "password_hash", length = 100)
   private String passwordHash;
 
   @Column(name = "display_name", nullable = false, length = 10)
@@ -42,5 +42,9 @@ class AccountEntity {
 
   AccountRow toRow() {
     return new AccountRow(id, loginId, passwordHash, displayName, email, role);
+  }
+
+  Long getId() {
+    return id;
   }
 }

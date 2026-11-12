@@ -198,15 +198,30 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.goto("/");
     await page.locator("#loginUserId").fill(buyerId);
     await page.locator("#loginPassword").fill(demoPassword);
+    const loginResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/login") &&
+        response.request().method() === "POST" &&
+        response.status() === 200,
+    );
     await page.locator("#btnLoginSubmit").click();
+    const loginResponse = await loginResponsePromise;
+    const loginData = (await loginResponse.json()) as { accessToken?: string };
+    const authHeaders: Record<string, string> = loginData.accessToken
+      ? { Authorization: `Bearer ${loginData.accessToken}` }
+      : {};
 
     await expect(page.locator("#heading-market")).toBeVisible();
 
     // 구매자 UI는 매장 진입을 제공하지 않으며, 같은 브라우저 세션의 직접 요청도 거부됩니다.
-    const response = await context.request.get(`/api/seller/stores/${storeAId}`);
+    const response = await context.request.get(`/api/seller/stores/${storeAId}`, {
+      headers: authHeaders,
+    });
     expect(response.status()).toBe(403);
     expect(await response.json()).toMatchObject({ code: "FORBIDDEN" });
-    const currentStore = await context.request.get("/api/seller/stores/me");
+    const currentStore = await context.request.get("/api/seller/stores/me", {
+      headers: authHeaders,
+    });
     expect(currentStore.status()).toBe(403);
     await expect(page.locator("#heading-market")).toBeVisible();
     await expect(page.locator("#storeInfoId")).not.toBeVisible();
@@ -244,10 +259,23 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
       await expect(page.locator("#storeIdInput")).toHaveCount(0);
       await expect(page.locator("#btnQueryStore")).toHaveCount(0);
 
+      const refreshResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/auth/refresh") &&
+          response.request().method() === "POST" &&
+          response.status() === 200,
+      );
       await page.reload();
+      const refreshResponse = await refreshResponsePromise;
+      const refreshData = (await refreshResponse.json()) as { accessToken?: string };
+      const authHeaders: Record<string, string> = refreshData.accessToken
+        ? { Authorization: `Bearer ${refreshData.accessToken}` }
+        : {};
       await expect(page.locator("#storeInfoId")).toHaveText(ownStoreId);
 
-      const response = await context.request.get(`/api/seller/stores/${foreignStoreId}`);
+      const response = await context.request.get(`/api/seller/stores/${foreignStoreId}`, {
+        headers: authHeaders,
+      });
       expect(response.status()).toBe(403);
       expect(await response.json()).toMatchObject({ code: "FORBIDDEN" });
       await expect(page.locator("#storeInfoId")).toHaveText(ownStoreId);
@@ -267,7 +295,18 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.goto("/");
     await page.locator("#loginUserId").fill(sellerAId);
     await page.locator("#loginPassword").fill(demoPassword);
+    const loginResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/login") &&
+        response.request().method() === "POST" &&
+        response.status() === 200,
+    );
     await page.locator("#btnLoginSubmit").click();
+    const loginResponse = await loginResponsePromise;
+    const loginData = (await loginResponse.json()) as { accessToken?: string };
+    const authHeaders: Record<string, string> = loginData.accessToken
+      ? { Authorization: `Bearer ${loginData.accessToken}` }
+      : {};
 
     await expect(page.locator("#heading-seller-store")).toBeVisible();
     await expect(page.locator("#storeInfoId")).toHaveCount(0);
@@ -285,7 +324,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     const csrfResponse = await context.request.get("/api/auth/csrf");
     const csrf = (await csrfResponse.json()) as { headerName: string; token: string };
     const logoutResponse = await context.request.post("/api/auth/logout", {
-      headers: { [csrf.headerName]: csrf.token },
+      headers: { [csrf.headerName]: csrf.token, ...authHeaders },
     });
     expect(logoutResponse.status()).toBe(204);
 

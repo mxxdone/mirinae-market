@@ -6,6 +6,7 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -19,7 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class CheckoutHttpFlowTest {
   @Autowired private AccountService accounts;
   @Autowired private StoreService stores;
@@ -79,6 +80,14 @@ class CheckoutHttpFlowTest {
     assertThat(client.login(id, "Pass1234!").statusCode()).isEqualTo(200);
     client.refreshCsrf();
     return client;
+  }
+
+  /** 고정 Clock 이동으로 기존 access·유휴 기한이 지난 뒤 같은 사용자로 세션을 다시 만든다. */
+  private void loginAgain(HttpSessionClient client, String id) throws Exception {
+    client.clearAccessToken();
+    client.refreshCsrf();
+    assertThat(client.login(id, "Pass1234!").statusCode()).isEqualTo(200);
+    client.refreshCsrf();
   }
 
   private long add(HttpSessionClient client, long id, int quantity) throws Exception {
@@ -421,6 +430,7 @@ class CheckoutHttpFlowTest {
       assertThat(original.get("storeOrders").get(0).get("items").get(0).get("priceWon").asInt())
           .isEqualTo(1000);
       clock.set(Instant.parse("2026-10-14T01:00:00Z"));
+      loginAgain(client, buyer);
       assertThat(client.json(client.get("/api/buyer/checkouts/multi")).get("status").asString())
           .isEqualTo("CONFIRMED");
       assertThat(
@@ -531,6 +541,7 @@ class CheckoutHttpFlowTest {
       assertThat(pay(client, "midnight", next, "DELAY").get("status").asString())
           .isEqualTo("PENDING");
       clock.set(Instant.parse("2026-10-14T00:00:00Z"));
+      loginAgain(client, buyer);
       assertThat(awaitResult(client, "midnight").get("status").asString()).isEqualTo("FAILED");
       assertThat(stock(offer)).isEqualTo(10);
     }
@@ -648,6 +659,7 @@ class CheckoutHttpFlowTest {
       assertThat(stock(offer)).isEqualTo(10);
       long next = add(client, otherOffer, 1);
       clock.set(Instant.parse("2026-10-13T04:00:00Z"));
+      loginAgain(client, buyer);
       assertThat(pay(client, "deadline", next, "SUCCESS").get("status").asString())
           .isEqualTo("FAILED");
       assertThat(stock(otherOffer)).isEqualTo(5);

@@ -12,7 +12,7 @@ import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@SecurityRequirement(name = "sessionCookie")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "400", description = "입력 형식·항목 선택 오류. 전체 미적용")
 @ApiResponse(responseCode = "401", description = "미로그인·세션 만료")
 @ApiResponse(responseCode = "403", description = "역할·소유 매장·CSRF 권한 오류")

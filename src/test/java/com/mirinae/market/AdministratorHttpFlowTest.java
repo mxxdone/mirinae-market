@@ -6,6 +6,7 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.admin.business.AdministratorService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
       "admin.bootstrap.enabled=true", "admin.bootstrap.login-id=first_admin",
       "admin.bootstrap.password=Admin1234!", "admin.bootstrap.email=admin@example.com"
     })
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class AdministratorHttpFlowTest {
   @Value("${local.server.port}")
   private int port;
@@ -120,9 +121,13 @@ class AdministratorHttpFlowTest {
                         true)
                     .statusCode())
             .isEqualTo(200);
-        assertThat(seller.get("/api/seller/stores/me").statusCode()).isEqualTo(200);
-        assertThat(seller.get("/api/admin/members?role=SELLER").statusCode()).isEqualTo(403);
-        assertThat(seller.put("/api/seller/profile", "{}", true).statusCode()).isEqualTo(405);
+        // 비밀번호 변경은 인증 버전을 올려 기존 access/refresh를 모두 거절한다.
+        assertThat(seller.get("/api/seller/stores/me").statusCode()).isEqualTo(401);
+        try (var renewed = login(id, "Next1234!")) {
+          assertThat(renewed.get("/api/seller/stores/me").statusCode()).isEqualTo(200);
+          assertThat(renewed.get("/api/admin/members?role=SELLER").statusCode()).isEqualTo(403);
+          assertThat(renewed.put("/api/seller/profile", "{}", true).statusCode()).isEqualTo(405);
+        }
       }
       try (var old = new HttpSessionClient(port)) {
         old.refreshCsrf();

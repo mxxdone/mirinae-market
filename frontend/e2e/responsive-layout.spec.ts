@@ -1,3 +1,4 @@
+import { authenticatedApiHeaders } from "./authApi";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
 import { chooseBuyerMarket } from "./buyerMarket";
@@ -15,15 +16,17 @@ async function csrf(request: APIRequestContext) {
   return { [value.headerName]: value.token };
 }
 async function signApi(request: APIRequestContext, loginId: string, password: string) {
-  expect(
-    (
-      await request.post("/api/auth/login", {
-        headers: await csrf(request),
-        form: { loginId, password },
-      })
-    ).status(),
-  ).toBe(200);
-  return csrf(request);
+  const loginRes = await request.post("/api/auth/login", {
+    headers: await csrf(request),
+    form: { loginId, password },
+  });
+  expect(loginRes.status()).toBe(200);
+  const data = (await loginRes.json()) as { accessToken?: string };
+  const csrfHeaders = await csrf(request);
+  return {
+    ...csrfHeaders,
+    ...(data.accessToken ? { Authorization: `Bearer ${data.accessToken}` } : {}),
+  };
 }
 async function login(page: Page, loginId: string, password: string) {
   await page.goto("/");
@@ -51,7 +54,9 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
   await login(page, required("E2E_ADMIN_LOGIN_ID"), required("E2E_ADMIN_PASSWORD"));
   await expect(page.locator(".admin-workspace")).toBeVisible();
   await expect(page.locator(".admin-table-wrap tbody tr").first()).toBeVisible();
-  const initialMarkets = (await (await page.request.get("/api/admin/markets")).json()) as {
+  const initialMarkets = (await (
+    await page.request.get("/api/admin/markets", { headers: await authenticatedApiHeaders(page) })
+  ).json()) as {
     id: number;
   }[];
   await page.locator("#adminSearchQuery").fill("미리내시장");
@@ -153,7 +158,9 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
         })
       ).status(),
     ).toBe(200);
-    sellerHeaders = await csrf(seller.request);
+    // 비밀번호 변경은 authVersion을 올려 기존 access/refresh를 모두 폐기한다.
+    // CSRF만 다시 받으면 이전 Bearer가 남아 이후 판매 등록이 401이 되므로 새 비밀번호로 다시 로그인한다.
+    sellerHeaders = await signApi(seller.request, sellerId, password);
     const date = required("E2E_FIXED_INSTANT").slice(0, 10);
     expect(
       (

@@ -38,7 +38,13 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.goto("/");
     await page.locator("#loginUserId").fill(adminLoginId);
     await page.locator("#loginPassword").fill(adminPassword);
+    // cold start에서도 로그인 응답을 정확히 기다린 뒤 화면 단언을 한다.
+    const adminLoginResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/login") && response.request().method() === "POST",
+    );
     await page.locator("#btnLoginSubmit").click();
+    expect((await adminLoginResponse).status()).toBe(200);
 
     await expect(page.locator(".admin-workspace")).toBeVisible();
     await expect(page.locator(".admin-sidebar h1")).toHaveText("미리내 마켓 관리자");
@@ -98,9 +104,22 @@ test.describe("미리내 마켓 Phase 4.5 관리자·판매자·구매자 연계
     await page.locator("#confirmPassword").fill(sellerNewPassword);
     await page.locator("#btnChangePassword").click();
 
-    // 비밀번호 변경 성공 후 판매자 본인 매장 작업 공간으로 전환 확인
+    // 비밀번호 변경은 모든 기기의 기존 토큰을 폐기한다. 현재 세션이 종료되고 로그인 화면으로 돌아가므로
+    // 새 비밀번호로 다시 로그인한 뒤 매장 업무를 이어간다.
+    await expect(page.locator("#heading-login")).toBeVisible();
+    await page.unroute("**/api/auth/me");
+
+    await page.locator("#loginUserId").fill(sellerLoginId);
+    await page.locator("#loginPassword").fill(sellerNewPassword);
+    const sellerReloginResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/auth/login") && response.request().method() === "POST",
+    );
+    await page.locator("#btnLoginSubmit").click();
+    expect((await sellerReloginResponse).status()).toBe(200);
     await expect(page.locator("#heading-seller-store")).toHaveText(storeName);
     await expect(page.getByRole("button", { name: "상품 추가", exact: true })).toBeVisible();
+
     await page.unroute("**/api/auth/me");
 
     // 3. 판매자 상품 등록 및 당일 판매 공개

@@ -7,7 +7,7 @@ import java.security.Principal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "sessionCookie")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 public class SellerAccountController {
   private final AccountService accounts;
 

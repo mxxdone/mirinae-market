@@ -5,7 +5,7 @@
 - 상태: 채택
 - 맥락·제약: 빠른 시연 구현과 주문·재고·환불 정확성 검증이 우선이며, 대시보드 집계 성능은 원본 조회에서 출발해 실측한다.
 - 대안: 서비스 분리와 메시지 기반 연동, 단일 서버의 기능 모듈 구성.
-- 결정·이유: Java 21·Spring Boot 단일 서버에서 기능별 Presentation → Business → Data 구조를 사용한다. 단일 저장소의 거래 처리를 먼저 검증하며, Redis·큐·복제 DB는 병목 확인 전 도입하지 않는다.
+- 결정·이유: Java 21·Spring Boot 단일 서버에서 기능별 Presentation → Business → Data 구조를 사용한다. 단일 저장소의 거래 처리를 먼저 검증하며, Redis·큐·복제 DB는 병목 확인 전 도입하지 않는다. 인증 상태의 TTL·RTR을 위한 Redis 도입만 ADR-015가 대체하며 주문/재고 저장소와 캐시 확장 보류는 유지한다.
 - 단점·재검토 조건: 모듈 간 의존성과 공통 DB 접근이 커질 수 있다. 실제 측정에서 배포·처리 독립성 필요가 확인되면 경계를 재검토한다.
 - 요구사항: [Spec](../SPEC.md). 검사·파일 구조는 AGENTS.md와 프로젝트 설정을 따른다.
 
@@ -19,7 +19,7 @@
 
 ## ADR-003 · 2026-10-11 · 웹 로그인은 서버 세션으로 시작
 
-- 상태: 채택
+- 상태: ADR-015로 대체. 아래는 당시 결정 기록이며 새 인증 계약은 SPEC의 OAuth 2.0·JWT 추가 계약을 따른다.
 - 맥락·제약: 구매자·판매자 웹이 초기 대상이며 주문·집계 검증이 주요 학습 목표다. 사용자는 JWT·OAuth2·Redis·RTR 구현 경험이 있지만 이번 초기 범위에는 세션을 선택했다.
 - 대안: 서버 세션, JWT와 갱신 토큰·Redis 저장, 외부 계정 로그인.
 - 결정·이유: Spring Security 세션으로 로그인·로그아웃과 구매자·판매자 인가를 구현한다. 별도 React 화면은 동일 출처 API 경로를 사용하고 쿠키·CSRF 보호를 구성한다.
@@ -114,7 +114,7 @@
 
 ## ADR-012 · 2026-11-02 · 단일 서버 배포와 로컬 영구 이미지 저장
 
-- 상태: 채택한 목표 구조. 인프라 구축·실배포는 상품 이미지 기능 이후 별도 작업이다.
+- 상태: 채택한 목표 구조. 인증 Redis 컨테이너 추가와 인증 상태의 비영속 운용은 ADR-015가 확장한다. 인프라 구축·실배포는 별도 작업이다.
 - 맥락·제약: 비용을 줄이기 위해 Instabox 서버 한 대에서 시작한다. 기존 AWS의 EC2/RDS/S3/Redis/CDN 분리 구성을 그대로 재현하지 않는다. 제공업체의 요금·일시정지 정책은 이 결정의 관리 대상에서 제외한다.
 - 대안: 관리형 DB·객체 저장소 분리, 단일 서버의 컨테이너와 호스트 영구 폴더. 이미지 삭제 요청에서 즉시 물리 삭제 또는 DB에 정리 대상을 기록하고 후속 삭제.
 - 결정·이유: Nginx(React 빌드 파일·이미지 제공·API 전달), Spring Boot, PostgreSQL의 세 컨테이너를 목표로 한다. DB와 업로드 파일은 컨테이너 교체와 독립적인 호스트 영구 경로에 둔다. 백엔드만 업로드 폴더에 쓰고 Nginx는 완성된 공개 이미지에 읽기 전용으로 접근한다. DB에는 이미지 식별자·상품 연결·상태를 기록하고 파일은 별도 폴더에 둔다. 로컬 기능 개발은 같은 저장 계약을 백엔드 파일 응답으로 검증한다.
@@ -142,3 +142,21 @@
 - 개인정보 처리: 이름·이메일·비밀번호·연락처를 정리하고 계정 id와 예약된 로그인 id를 남긴다. 로그인 id 보존은 기존 이름 기반 인증과 거래 주체의 혼동을 막기 위한 제약이며 완전한 데이터 삭제를 의미하지 않는다. 장기 보존/재사용 정책 변경 시 별도 검토한다.
 - 호환성: accounts.withdrawn_at은 기존 계정에 NULL(활성)로 추가한다. API 진입의 활성 계정 확인은 인증 후·인가 전에 적용해 다른 세션을 거절하되 익명 요청은 유지한다. V17은 코드 형식 제약만4/6자리로 넓히고 기존6자리·유일성 인덱스를 보존한다. 신규 발급은4자리·충돌 탐색·공간 소진 처리 원칙을 유지한다. V1~V15는 수정하지 않는다.
 - 단점·재검토 조건: 보호 요청에 활성 여부 조회 비용이 생기며 같은 구매자의 탈퇴/거래는 직렬화된다. 4자리는 매장·하루1만개 한도다. 실사용 부하·코드 추측 방어 요구·식별자 완전 삭제 요구가 생기면 측정과 별도 정책을 바탕으로 재검토한다.
+
+## ADR-015 · 2026-11-11 · OAuth 로그인과 Redis 기반 JWT 회전·폐기
+
+- 상태: 채택한 구현 목표. ADR-003의 세션 인증을 대체하고 ADR-001·012의 인증용 Redis 보류/컨테이너 범위만 확장한다. ADR-014의 거래/개인정보 원칙은 유지하며 소셜 재인증과 신규 재가입을 확장한다. 구현·검증 상태는 PLAN에 별도 관리한다.
+- 맥락·제약: 사용자가 카카오·구글 구매자 로그인, 전 역할 JWT 전환과 RTR, 키별 TTL로 관리하는 Redis Hash를 선택했다. 즉시 로그아웃·탈퇴 차단과 현재 기기/모든 기기 폐기가 필요하므로 JWT 서명만 확인하는 완전 무상태 인증은 충족하지 않는다. 기존 이메일은 미인증 정보여서 자동 계정 연결 근거가 될 수 없다.
+- 대안: 세션 유지+OAuth, PostgreSQL에 로그인/회전 이력 저장, Redis에 로그인별 상태 보관. 모든 사용 토큰 해시 누적 또는 서명된 회전번호와 현재 값 비교. Redis AOF/RDB 복원 또는 재시작 시 로그인 종료.
+- 결정·이유: auth 기능 모듈의 Presentation→Business→Data로 인증 흐름을 구성한다. auth Business→account 공개 Business, withdrawal Business→auth/account/checkout 공개 Business만 허용한다. account는 auth를 역호출하지 않는다. 기존 업무 Principal의 loginId 계약은 유지하되 서명된 내부 계정 id를 현재 계정으로 해석해 구성하고 역할도 현재 계정에서 확인한다. JWT/Redis/외부 HTTP SDK는 auth Data 안에 격리한다. 기능 코드가 config를 참조하지 않는다.
+- JWT: Spring Security의 JOSE/Nimbus 구현을 Data에서 사용하고 암호 서명 코드를 직접 만들지 않는다. 명시적인 고강도 환경 키(256bit 이상)와 고정 발급자/대상·알고리즘을 사용한다. access/refresh는 용도·audience로 분리하고 sub(내부 계정 id), sid(무작위 기기 로그인 id), 계정 auth_version과 exp를 검증한다. refresh에는 gen과 무작위 jti를 추가하고 원문 SHA-256 비교값만 보관한다. 인증 토큰은 응답/HTTP 로그에 남기지 않는다. 서명이 검증되지 않은 sid/gen만으로 로그인 폐기를 실행하지 않는다.
+- Redis: auth:login:{sid} Hash에 accountId, authVersion, refreshHash, generation, absoluteExpiresAt, idleExpiresAt, revoked를 저장한다. TTL은 Hash 필드가 아닌 키 설정이며 성공 인증마다 min(현재시각+30분, 절대기한)으로 갱신한다. access도 Hash 존재/현재 계정 활성·버전을 확인한다. 회전 검증·과거 번호 탐지·새 해시/번호·TTL 갱신은 한 Lua 스크립트로 수행한다. JWT 검증된 gen<현재 gen은 family 폐기, 현재 gen의 해시 불일치나 미래 gen은 발급 없이 거절한다. 개별 과거 토큰 이력은 쌓지 않는다. 계정별 sid 목록은 만들지 않고 PostgreSQL auth_version 증가로 전체 기기의 토큰을 차단한다.
+- 폐기와 저장소 경계: 계정의 비밀번호/활성 상태와 auth_version 증가를 PostgreSQL 한 트랜잭션에 반영한다. Redis를 먼저 수정하고 DB 롤백에 기대지 않는다. Redis에 옛 Hash가 남아도 DB 버전이 달라 이후 access/refresh가 거절되도록 한다. 현재 기기 로그아웃은 해당 Hash 폐기로 처리한다. 인증 상태를 확인할 수 없는 Redis/DB 장애는503이며 인증 우회하지 않는다.
+- 운용: 초기 인증 Redis는 비영속(save 비활성·appendonly no), noeviction·메모리 상한·로컬 포트 바인딩을 적용한다. 재시작/유실 시 로그인과 OAuth 임시 상태를 모두 새로 확인하는 가용성 비용을 수용한다. 과거 Redis 백업을 인증 상태로 복원하지 않는다. 이것은 폐기 전 상태가 복원돼 토큰이 살아나는 문제를 피하기 위한 선택이며 회원/거래는 PostgreSQL에 유지한다. 영속 세션 복구 요구가 생기면 영속화만 켜지 않고 폐기 내구성과 복원 epoch를 함께 재설계한다.
+- OAuth: 제공자별 고정 HTTPS authorize/token/userinfo endpoint로 서버에서 인가 코드를 교환하고 사용자 정보를 조회하는 OAuth 2.0 Code+PKCE 흐름을 사용한다. 제공자 토큰과 서비스 JWT는 분리하고 제공자 refresh는 저장하지 않는다. 사용자 식별은 서버 userinfo 응답의 provider+subject이며 브라우저 제공 id/email이나 미검증 ID 토큰을 신뢰하지 않는다. state는 10분 무작위·일회성·브라우저 쿠키 바인딩·제공자/목적 바인딩이고 callback 목적지는 고정이다. OAuth 임시 상태와 가입/연결 흐름은 Redis에만 TTL로 보관한다. scope·userinfo 파싱·재로그인 옵션은 제공자별 공식 문서에 맞춘다.
+- 계정 연결/가입: account Data가 PostgreSQL의 social identity와 auth_version·로컬 비밀번호 유무를 소유한다. password_hash는 소셜 전용 계정에서 NULL을 허용하고 로컬 로그인에서 명시적으로 거절한다. provider+subject는 활성 연결 하나만 허용하며 탈퇴 시 연결을 삭제해 신규 계정 재가입을 허용한다. 기존 내부 회원과 주문 FK를 바꾸지 않는다. 소셜 내부 로그인 ID는 예약 영역으로 자동 생성하며 UI는 비밀번호 로그인 가능 ID인 것처럼 안내하지 않는다. 미확인 이메일 후보에는 기존 가입 수단을 노출하지 않고 양쪽 재인증과 동의를 거쳐 연결한다.
+- 일회성 확인: 흐름은 HttpOnly 쿠키와 Redis 일회성 상태로 묶고 토큰을 URL/localStorage/sessionStorage에 전달하지 않는다. link 재인증은 원래 소셜 identity·후보 계정에, 탈퇴 재인증은 accountId·sid·authVersion에 묶는다. 확인 수명은5분이며 일회성 소비 후 업무 실패 시에도 새 재인증이 필요할 수 있다. Redis 소비와 DB 처리 사이 장애는 안전하게 재진입하도록 가입/연결의 DB 유일성·계정 상태를 다시 확인한다. DB commit 후 토큰 발급 실패는 이미 생긴 회원을 복원/삭제하지 않고 재로그인으로 복구한다.
+- 제공자 탈퇴: 카카오 공식 탈퇴 절차는 연결 해제 요청 뒤 서비스 탈퇴다. withdrawal Business에서 기존 거래 guard·계정 잠금·본인 확인을 먼저 끝내고 auth 공개 Business→Data로 카카오 unlink를 요청한 뒤 account 비활성화를 확정한다. 제공자 refresh 장기 저장 대신 서버 환경의 카카오 어드민 키로 연결된 subject만 해제한다. 외부 HTTP는 짧은 timeout을 두고 DB 잠금을 오래 보유하는 비용을 수용한다. unlink 성공 뒤 DB commit 실패는 분산 롤백으로 해결할 수 없으므로 로컬 회원/연결은 유지하고 재동의·탈퇴 재시도를 허용한다. 이미 해제된 사용자는 제공자의 명확한 오류 코드로만 멱등 성공 처리하며 일반400/인증실패를 성공으로 덮지 않는다. 지연 작업으로 unlink하면 즉시 재가입한 새 연결까지 나중에 끊을 수 있어 초기에는 outbox를 도입하지 않는다. Google 동의 철회·카카오 외부 연결 해제 웹훅의 제공자 설정/실제 검증은 운영 연결 전 별도 확인 대상으로 남기며 서비스 DB 내 연결 삭제를 제공자 전체 동의 철회 완료로 안내하지 않는다.
+- 단점·재검토 조건: Redis 한 컨테이너와 매 요청 현재 계정/로그인 확인 비용이 생긴다. 로그인 유실 시 재로그인이 필요하며 회전 응답 유실도 재로그인한다. 다중 탭/로그아웃/오래된 응답 경쟁을 클라이언트에서 직렬화·세대 검사해야 한다. 서비스 성능·지속 로그인 요구·다중 인스턴스/복원 요구가 확인되면 해당 근거로 재검토한다.
+- 호환성·복구: V1~V17을 수정하지 않고 V18 이후에 계정 버전·소셜 연결을 추가한다. V16/V17 미적용 상태도 보존한다. 기존 JSESSIONID는 인증에 쓰지 않는다. 적용은 사용자 요청 후 백업·별도 복원 확인 절차로 진행한다. 인증 전환 뒤 이전 세션 앱으로 되돌릴 때는 DB·앱 호환성을 확인하고 모든 인증 상태를 새로 발급한다. 필수 gate·독립 PostgreSQL+Redis·provider mock 경계/실제 provider 검증을 구분하며 미실행을 통과로 기록하지 않는다.
+- 근거: [OAuth 보안 권고](https://www.rfc-editor.org/rfc/rfc9700.html), [Redis TTL](https://redis.io/docs/latest/commands/expire/), [원자적 Lua](https://redis.io/docs/latest/develop/programmability/eval-intro/), [카카오 API](https://developers.kakao.com/docs/ko/kakaologin/rest-api), [Google Code 흐름](https://developers.google.com/identity/protocols/oauth2/web-server). Firebase/Auth0는 계정 연결 조사 참고일 뿐 제품 의존성으로 도입하지 않는다.

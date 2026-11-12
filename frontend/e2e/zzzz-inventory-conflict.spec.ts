@@ -14,23 +14,26 @@ test("작성 중 페이지 재조회가 오래된 재고 버전을 갱신하지 
         token: string;
         headerName: string;
       };
-      expect(
-        (
-          await context.request.post("/api/auth/login", {
-            headers: { [csrf.headerName]: csrf.token },
-            form: { loginId: id, password: required("E2E_DEMO_PASSWORD") },
-          })
-        ).status(),
-      ).toBe(200);
+      const loginRes = await context.request.post("/api/auth/login", {
+        headers: { [csrf.headerName]: csrf.token },
+        form: { loginId: id, password: required("E2E_DEMO_PASSWORD") },
+      });
+      expect(loginRes.status()).toBe(200);
+      const data = (await loginRes.json()) as { accessToken?: string };
       csrf = (await (await context.request.get("/api/auth/csrf")).json()) as {
         token: string;
         headerName: string;
       };
-      return { [csrf.headerName]: csrf.token };
+      return {
+        [csrf.headerName]: csrf.token,
+        ...(data.accessToken ? { Authorization: `Bearer ${data.accessToken}` } : {}),
+      };
     }
     const headers = await login(seller, "checkout_seller_a");
     const buyerHeaders = await login(buyer, required("E2E_BUYER_LOGIN_ID"));
-    const store = (await (await seller.request.get("/api/seller/stores/me")).json()) as {
+    const store = (await (
+      await seller.request.get("/api/seller/stores/me", { headers })
+    ).json()) as {
       id: number;
       marketId: number;
     };
@@ -47,7 +50,7 @@ test("작성 중 페이지 재조회가 오래된 재고 버전을 갱신하지 
     let target = 0;
     let offer = 0;
     const existing = (await (
-      await seller.request.get(`/api/seller/stores/${store.id}/products?size=1`)
+      await seller.request.get(`/api/seller/stores/${store.id}/products?size=1`, { headers })
     ).json()) as { totalItems: number };
     const fixtureCount = Math.max(1, 21 - existing.totalItems);
     await Promise.all(
@@ -79,6 +82,7 @@ test("작성 중 페이지 재조회가 오래된 재고 버전을 갱신하지 
       const result = (await (
         await seller.request.get(
           `/api/seller/stores/${store.id}/products?size=100&page=${nextPage}`,
+          { headers },
         )
       ).json()) as { items: { id: number }[]; hasNext: boolean };
       allProducts.push(...result.items);
@@ -116,7 +120,7 @@ test("작성 중 페이지 재조회가 오래된 재고 버전을 갱신하지 
     await sellerPage.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
     await expect(sellerPage.getByText(/재고가 변경되었습니다/)).toBeVisible();
     const result = (await (
-      await seller.request.get(`/api/markets/${store.marketId}/offers/${offer}`)
+      await seller.request.get(`/api/markets/${store.marketId}/offers/${offer}`, { headers })
     ).json()) as { onlineQuantity: number; priceWon: number };
     expect(result.onlineQuantity).toBe(8);
     expect(result.priceWon).toBe(1000);

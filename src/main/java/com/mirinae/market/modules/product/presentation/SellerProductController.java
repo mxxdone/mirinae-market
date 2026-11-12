@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/seller/stores/{storeId}")
-@SecurityRequirement(name = "sessionCookie")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "401", description = "미로그인: UNAUTHENTICATED")
 @ApiResponse(responseCode = "403", description = "판매자 역할·매장 소유권·CSRF 실패: FORBIDDEN")
 @ApiResponse(responseCode = "400", description = "잘못된 입력·날짜·시간·숫자: INVALID_INPUT")

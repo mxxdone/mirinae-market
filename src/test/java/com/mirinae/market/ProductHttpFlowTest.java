@@ -8,6 +8,7 @@ import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.modules.store.business.StoreView;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.net.URLEncoder;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -34,7 +35,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class ProductHttpFlowTest {
   private static final String PASSWORD = "Pass1234!";
   private static final LocalDate DATE = LocalDate.parse("2026-10-13");
@@ -70,6 +71,8 @@ class ProductHttpFlowTest {
   }
 
   private static void login(HttpSessionClient session, String loginId) throws Exception {
+    // 로그인 전 이전 토큰·쿠키 상태가 남아 있지 않도록 명시적으로 초기화하고, 새 로그인 결과만 사용한다.
+    session.clearAuthState();
     session.refreshCsrf();
     assertThat(session.login(loginId, PASSWORD).statusCode()).isEqualTo(200);
     session.refreshCsrf();
@@ -503,6 +506,8 @@ class ProductHttpFlowTest {
       login(seller, first.loginId());
       long productId = create(seller, first, "양파 3kg", "WEIGHT", 3000);
       clock.set(Instant.parse("2026-10-13T03:59:59Z"));
+      // 59분 59초를 건너뛰어 access·유휴 수명이 지나므로 상품 업무 규칙 검증 전에 새 로그인을 준비한다.
+      login(seller, first.loginId());
       long oldOffer = publish(seller, first, productId, 9000, 20).get("id").asLong();
       assertThat(
               seller
@@ -513,6 +518,8 @@ class ProductHttpFlowTest {
                   .asBoolean())
           .isTrue();
       clock.set(Instant.parse("2026-10-13T04:00:00Z"));
+      // access(10분)·유휴(30분) 수명이 지난 뒤이므로 새 로그인으로 세션을 다시 만든다.
+      login(seller, first.loginId());
       assertThat(
               seller
                   .putWithInventoryVersion(
@@ -545,6 +552,8 @@ class ProductHttpFlowTest {
           .isEqualTo(9000);
       assertThat(seller.get(windowPath(first, DATE)).statusCode()).isEqualTo(200);
       clock.set(Instant.parse("2026-10-13T15:00:00Z"));
+      // 오후로 건너뛰며 access·유휴 수명이 지나므로 세션을 다시 만든다. JWT 만료 완화가 아니라 업무 규칙 검증 준비다.
+      login(seller, first.loginId());
       assertThat(seller.json(seller.get(searchPath(first))).get("items").size()).isZero();
       LocalDate next = DATE.plusDays(1);
       assertThat(
@@ -622,7 +631,7 @@ class ProductHttpFlowTest {
               .get("post")
               .get("security");
       assertThat(security.size()).isEqualTo(1);
-      assertThat(security.get(0).get("sessionCookie")).isNotNull();
+      assertThat(security.get(0).get("bearerAuth")).isNotNull();
       assertThat(security.get(0).get("csrfToken")).isNotNull();
       assertThat(docs.body())
           .contains(
@@ -838,6 +847,8 @@ class ProductHttpFlowTest {
       assertThat(seller.putWithInventoryVersion(salesPath(first), valid, true).statusCode())
           .isEqualTo(204);
       clock.set(Instant.parse("2026-10-13T05:00:00Z"));
+      // 유휴 수명이 지난 시점이므로 새 로그인으로 세션을 다시 만든다.
+      login(seller, first.loginId());
       assertThat(
               seller
                   .putWithInventoryVersion(
@@ -846,6 +857,8 @@ class ProductHttpFlowTest {
           .isEqualTo(400);
       assertThat(seller.get(salesPath(first)).statusCode()).isEqualTo(200);
       clock.set(Instant.parse("2026-10-14T01:00:00Z"));
+      // 유휴 수명이 지난 시점이므로 새 로그인으로 세션을 다시 만든다.
+      login(seller, first.loginId());
       assertThat(seller.putWithInventoryVersion(salesPath(first), valid, true).statusCode())
           .isEqualTo(400);
     }

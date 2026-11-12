@@ -52,7 +52,10 @@ async function mockMarket(page: Page) {
           displayName: "구매자",
           role: "BUYER",
           requiresPasswordChange: false,
+          hasLocalPassword: true,
         };
+      else if (path === "/api/auth/refresh")
+        body = { authenticated: true, accessToken: "mock-access-token", expiresIn: 600 };
       else if (path.endsWith("/product-images")) body = [];
       else if (path === "/api/auth/csrf") body = { token: "test-csrf", headerName: "X-CSRF-TOKEN" };
       else if (path === "/api/market-regions") {

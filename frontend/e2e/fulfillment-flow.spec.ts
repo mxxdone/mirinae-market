@@ -1,3 +1,4 @@
+import { authenticatedApiHeaders } from "./authApi";
 import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import type { Checkout } from "../src/api/checkout";
@@ -38,7 +39,9 @@ async function logout(page: Page, role: "buyer" | "seller" | "admin") {
   await expect(page.locator("#heading-login")).toBeVisible();
 }
 async function orders(page: Page): Promise<Checkout[]> {
-  const response = await page.request.get("/api/buyer/orders");
+  const response = await page.request.get("/api/buyer/orders", {
+    headers: await authenticatedApiHeaders(page),
+  });
   expect(response.status()).toBe(200);
   return (await response.json()) as Checkout[];
 }
@@ -55,7 +58,9 @@ async function refundCompleted(page: Page, order: StoreOrderView, amount: string
   await expect
     .poll(
       async () => {
-        const response = await page.request.get(`/api/buyer/store-orders/${order.id}`);
+        const response = await page.request.get(`/api/buyer/store-orders/${order.id}`, {
+          headers: await authenticatedApiHeaders(page),
+        });
         expect(response.status()).toBe(200);
         return ((await response.json()) as StoreOrderView).refundedWon;
       },
@@ -279,7 +284,9 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     await page.locator("#reportDescriptionInput").fill("표시된 위치가 실제 매장 위치와 다릅니다.");
     await page.locator("#btnSubmitStoreReport").click();
     await expect(ownReport).toHaveCount(1);
-    const response = await page.request.get(`/api/buyer/stores/${order.storeId}/reports`);
+    const response = await page.request.get(`/api/buyer/stores/${order.storeId}/reports`, {
+      headers: await authenticatedApiHeaders(page),
+    });
     const reports = (await response.json()) as { id: number; status: string }[];
     expect(reports).toHaveLength(1);
     expect(first(reports).status).toBe("OPEN");
@@ -305,7 +312,9 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     );
     await page.locator("#btnAdminToggleOperation").click();
     await lateOperation.arrived;
-    const storeList = await page.request.get("/api/admin/stores?query=미수령%20검증매장");
+    const storeList = await page.request.get("/api/admin/stores?query=미수령%20검증매장", {
+      headers: await authenticatedApiHeaders(page),
+    });
     const other = first((await storeList.json()) as { id: number }[]);
     await adminRow(page, other.id).getByRole("button", { name: /상세/ }).click();
     await page.locator("#adminOperationReasonInput").fill("새 상세에서 작성 중인 사유");
@@ -315,14 +324,18 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     );
     await page.locator("#btnAdminRefresh").click();
     await expect(adminRow(page, order.storeId)).toContainText("일반취소 검증매장");
-    const stopped = await page.request.get("/api/admin/stores?query=일반취소%20검증매장");
+    const stopped = await page.request.get("/api/admin/stores?query=일반취소%20검증매장", {
+      headers: await authenticatedApiHeaders(page),
+    });
     expect(first((await stopped.json()) as { suspended: boolean }[]).suspended).toBe(true);
     await adminRow(page, order.storeId).getByRole("button", { name: /상세/ }).click();
     await page.locator("#adminOperationReasonInput").fill("정상 영업 재개 확인");
     await page.locator("#btnAdminToggleOperation").click();
     await expect
       .poll(async () => {
-        const result = await page.request.get("/api/admin/stores?query=일반취소%20검증매장");
+        const result = await page.request.get("/api/admin/stores?query=일반취소%20검증매장", {
+          headers: await authenticatedApiHeaders(page),
+        });
         return first((await result.json()) as { suspended: boolean }[]).suspended;
       })
       .toBe(false);
@@ -434,7 +447,9 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     await expect
       .poll(
         async () => {
-          const response = await page.request.get("/api/admin/refunds");
+          const response = await page.request.get("/api/admin/refunds", {
+            headers: await authenticatedApiHeaders(page),
+          });
           expect(response.status()).toBe(200);
           return ((await response.json()) as { id: number; status: string }[]).find(
             (value) => value.id === refund.id,

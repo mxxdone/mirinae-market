@@ -8,6 +8,7 @@ import com.mirinae.market.modules.checkout.business.RefundService;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,7 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"mirinae.refund.recovery.enabled=false"})
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class DashboardHttpFlowTest {
   @Autowired private AccountService accounts;
   @Autowired private StoreService stores;
@@ -214,6 +215,7 @@ class DashboardHttpFlowTest {
       assertThat(body.get("daily").get("noShowOrders").asLong()).isZero();
 
       clock.set(Instant.parse("2026-10-13T09:00:00Z"));
+      loginAgain(client, seller);
       var atEnd = client.json(client.get(path() + "?date=2026-10-13"));
       assertThat(atEnd.get("preparationItems")).isEmpty();
       assertThat(atEnd.get("daily").get("noShowOrders").asLong()).isEqualTo(1);
@@ -447,6 +449,7 @@ class DashboardHttpFlowTest {
           jdbc.queryForObject(
               "SELECT pickup_code FROM store_orders WHERE id=?", String.class, pickedOrder);
       clock.set(Instant.parse("2026-10-13T05:00:00Z"));
+      loginAgain(client, seller);
       var picked =
           client.post(
               "/api/seller/stores/" + store + "/orders/" + pickedOrder + "/pickup",
@@ -586,5 +589,13 @@ class DashboardHttpFlowTest {
     assertThat(client.login(id, "Pass1234!").statusCode()).isEqualTo(200);
     client.refreshCsrf();
     return client;
+  }
+
+  /** 고정 Clock 이동으로 기존 access·유휴 기한이 지난 뒤 같은 사용자로 세션을 다시 만든다. */
+  private void loginAgain(HttpSessionClient client, String id) throws Exception {
+    client.clearAccessToken();
+    client.refreshCsrf();
+    assertThat(client.login(id, "Pass1234!").statusCode()).isEqualTo(200);
+    client.refreshCsrf();
   }
 }

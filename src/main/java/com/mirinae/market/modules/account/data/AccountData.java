@@ -107,9 +107,145 @@ public class AccountData {
             id));
   }
 
+  /** 인증 판단용 계정 상태를 조회한다. 없는 계정은 비어 있고 DB 장애는 저장소 예외로 구분한다. */
+  public Optional<AccountAuthRow> authById(long id) {
+    try {
+      return jdbc
+          .query(
+              "SELECT id,login_id,password_hash,display_name,role,withdrawn_at IS NULL AS active,auth_version FROM accounts WHERE id=?",
+              (rs, n) -> authRow(rs),
+              id)
+          .stream()
+          .findFirst();
+    } catch (org.springframework.dao.DataAccessException exception) {
+      throw new AccountStorageUnavailableException(exception);
+    }
+  }
+
+  public Optional<AccountAuthRow> authByLoginId(String loginId) {
+    try {
+      return jdbc
+          .query(
+              "SELECT id,login_id,password_hash,display_name,role,withdrawn_at IS NULL AS active,auth_version FROM accounts WHERE login_id=?",
+              (rs, n) -> authRow(rs),
+              loginId)
+          .stream()
+          .findFirst();
+    } catch (org.springframework.dao.DataAccessException exception) {
+      throw new AccountStorageUnavailableException(exception);
+    }
+  }
+
+  private static AccountAuthRow authRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+    return new AccountAuthRow(
+        rs.getLong("id"),
+        rs.getString("login_id"),
+        rs.getString("password_hash"),
+        rs.getString("display_name"),
+        rs.getString("role"),
+        rs.getBoolean("active"),
+        rs.getLong("auth_version"));
+  }
+
+  /** 같은 이메일의 활성 계정 ID를 찾는다. 소유 확인 전 후보 정보를 노출하지 않는다. */
+  public Optional<Long> activeAccountIdByEmail(String normalizedEmail) {
+    return jdbc
+        .query(
+            "SELECT id FROM accounts WHERE email=? AND withdrawn_at IS NULL",
+            (rs, n) -> rs.getLong(1),
+            normalizedEmail)
+        .stream()
+        .findFirst();
+  }
+
+  public java.util.List<String> identityProviders(long accountId) {
+    return jdbc.query(
+        "SELECT provider FROM social_identities WHERE account_id=? ORDER BY provider",
+        (rs, n) -> rs.getString(1),
+        accountId);
+  }
+
+  public String identitySubject(long accountId, String provider) {
+    return jdbc.queryForObject(
+        "SELECT subject FROM social_identities WHERE account_id=? AND provider=?",
+        String.class,
+        accountId,
+        provider);
+  }
+
+  /** 제공자 신원으로 연결된 활성 계정 ID를 조회한다. */
+  public Optional<Long> activeAccountIdByIdentity(String provider, String subject) {
+    return jdbc
+        .query(
+            "SELECT a.id FROM social_identities s JOIN accounts a ON a.id=s.account_id WHERE s.provider=? AND s.subject=? AND a.withdrawn_at IS NULL",
+            (rs, n) -> rs.getLong(1),
+            provider,
+            subject)
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<Long> identityAccountId(String provider, String subject) {
+    return jdbc
+        .query(
+            "SELECT account_id FROM social_identities WHERE provider=? AND subject=?",
+            (rs, n) -> rs.getLong(1),
+            provider,
+            subject)
+        .stream()
+        .findFirst();
+  }
+
+  /** 소셜 신원을 연결한다. 동시 연결 경쟁은 (provider,subject) 유일성으로 한 건만 남는다. */
+  public void connectIdentity(
+      long accountId, String provider, String subject, java.time.Instant now) {
+    try {
+      jdbc.update(
+          "INSERT INTO social_identities(account_id,provider,subject,connected_at) VALUES (?,?,?,?)",
+          accountId,
+          provider,
+          subject,
+          java.sql.Timestamp.from(now));
+    } catch (DataIntegrityViolationException exception) {
+      if (exception.getMostSpecificCause() instanceof java.sql.SQLException sql
+          && "23505".equals(sql.getSQLState())) {
+        throw new DuplicateAccountDataException(exception);
+      }
+      throw exception;
+    }
+  }
+
+  public void removeIdentities(long accountId) {
+    jdbc.update("DELETE FROM social_identities WHERE account_id=?", accountId);
+  }
+
+  /** 비밀번호 없는 소셜 구매자 계정을 만든다. */
+  @Transactional
+  public AccountAuthRow createSocial(String loginId, String displayName, String email) {
+    try {
+      AccountEntity entity =
+          repository.saveAndFlush(new AccountEntity(loginId, null, displayName, email, "BUYER"));
+      return authById(entity.getId()).orElseThrow();
+    } catch (DataIntegrityViolationException exception) {
+      if (exception.getMostSpecificCause() instanceof java.sql.SQLException sql
+          && "23505".equals(sql.getSQLState())) {
+        throw new DuplicateAccountDataException(exception);
+      }
+      throw exception;
+    }
+  }
+
+  /** 계정 인증 버전을 증가시켜 모든 기기의 기존 토큰을 이후 요청부터 거절한다. */
+  public long bumpAuthVersion(long accountId) {
+    return jdbc.queryForObject(
+        "UPDATE accounts SET auth_version=auth_version+1 WHERE id=? RETURNING auth_version",
+        Long.class,
+        accountId);
+  }
+
   public void withdraw(long id, String hash, String email, java.time.Instant now) {
     if (jdbc.update(
-            "UPDATE accounts SET withdrawn_at=?,display_name='탈퇴회원',email=?,password_hash=?,contact_name=NULL,contact_phone=NULL WHERE id=? AND role='BUYER' AND withdrawn_at IS NULL",
+            "UPDATE accounts SET withdrawn_at=?,display_name='탈퇴회원',email=?,password_hash=?,contact_name=NULL,contact_phone=NULL,auth_version=auth_version+1 WHERE id=? AND role='BUYER' AND withdrawn_at IS NULL",
             java.sql.Timestamp.from(now),
             email,
             hash,

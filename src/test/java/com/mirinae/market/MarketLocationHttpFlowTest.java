@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
       "admin.bootstrap.password=Admin1234!",
       "admin.bootstrap.email=admin@example.com"
     })
-@Import(PostgresTestConfig.class)
+@Import({PostgresTestConfig.class, RedisTestConfig.class})
 class MarketLocationHttpFlowTest {
   @Value("${local.server.port}")
   private int port;

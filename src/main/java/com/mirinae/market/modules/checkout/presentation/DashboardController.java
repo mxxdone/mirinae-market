@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@SecurityRequirement(name = "sessionCookie")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "400", description = "날짜·월 형식 오류. YYYY-MM-DD·YYYY-MM만 허용")
 @ApiResponse(responseCode = "401", description = "미로그인·세션 만료")
 @ApiResponse(responseCode = "403", description = "판매자 역할·본인 매장 소유권 오류")

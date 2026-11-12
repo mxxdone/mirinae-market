@@ -30,7 +30,7 @@ public class ProductImageController {
   @PostMapping(
       value = "/api/seller/stores/{storeId}/product-images",
       consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @SecurityRequirement(name = "sessionCookie")
+  @SecurityRequirement(name = "bearerAuth")
   @SecurityRequirement(name = "csrfToken")
   @Operation(
       summary = "상품 사진 임시 업로드",
@@ -45,7 +45,7 @@ public class ProductImageController {
   public record ImageResponse(ProductImageView image) {}
 
   @GetMapping("/api/seller/stores/{storeId}/products/{productId}/image")
-  @SecurityRequirement(name = "sessionCookie")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(
       summary = "본인 상품의 대표 사진",
       description = "image 필드가 미등록이면 null, 등록돼 있으면 ID와 버전별 실제 치수·URL입니다.")
@@ -55,7 +55,7 @@ public class ProductImageController {
   }
 
   @GetMapping("/api/markets/{marketId}/product-images")
-  @SecurityRequirement(name = "sessionCookie")
+  @SecurityRequirement(name = "bearerAuth")
   @Operation(
       summary = "시장 상품 사진 일괄 조회",
       description =

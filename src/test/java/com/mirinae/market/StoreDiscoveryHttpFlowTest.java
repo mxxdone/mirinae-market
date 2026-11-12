@@ -8,6 +8,7 @@ import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.modules.store.business.StoreView;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,7 +27,11 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({PostgresTestConfig.class, StoreDiscoveryHttpFlowTest.TimeConfig.class})
+@Import({
+  PostgresTestConfig.class,
+  RedisTestConfig.class,
+  StoreDiscoveryHttpFlowTest.TimeConfig.class
+})
 class StoreDiscoveryHttpFlowTest {
   private static final String PASSWORD = "Pass1234!";
   private static final LocalDate DATE = LocalDate.of(2026, 10, 13);

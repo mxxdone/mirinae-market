@@ -1,18 +1,30 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from "react";
 import { withdrawBuyer } from "../../api/accounts";
+import { startOAuth } from "../../api/auth";
 import { ApiError } from "../../api/types";
 import { StatusAlert } from "./StatusAlert";
 
 interface Props {
+  hasLocalPassword?: boolean;
+  linkedProviders?: ("kakao" | "google")[];
   onWithdrawn: () => void;
   onSessionExpired: () => void;
+  reauthConfirmed?: boolean;
 }
 
-export function BuyerWithdrawalPanel({ onWithdrawn, onSessionExpired }: Props): ReactElement {
+export function BuyerWithdrawalPanel({
+  hasLocalPassword = true,
+  linkedProviders = [],
+  onWithdrawn,
+  onSessionExpired,
+  reauthConfirmed = false,
+}: Props): ReactElement {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [startingOAuth, setStartingOAuth] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
@@ -26,14 +38,21 @@ export function BuyerWithdrawalPanel({ onWithdrawn, onSessionExpired }: Props): 
     };
   }, []);
 
+  // 소셜 재인증 후 복귀 시 탈퇴 확인 모달 자동 오픈
+  useEffect(() => {
+    if (reauthConfirmed) {
+      setOpen(true);
+    }
+  }, [reauthConfirmed]);
+
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal();
     else if (!open) dialog.current?.close();
   }, [open]);
 
   useEffect(() => {
-    if (error && !submitting) passwordInput.current?.focus();
-  }, [error, submitting]);
+    if (error && !submitting && hasLocalPassword) passwordInput.current?.focus();
+  }, [error, submitting, hasLocalPassword]);
 
   function close(): void {
     if (pending.current) return;
@@ -42,14 +61,41 @@ export function BuyerWithdrawalPanel({ onWithdrawn, onSessionExpired }: Props): 
     setError(null);
   }
 
+  async function handleOAuthReauthStart(provider: string): Promise<void> {
+    setStartingOAuth(true);
+    setError(null);
+    try {
+      const response = await startOAuth(provider, "withdraw");
+      if (!response.authorizationUrl) {
+        throw new Error("소셜 재인증 주소를 받지 못했습니다.");
+      }
+      window.location.assign(response.authorizationUrl);
+    } catch (failure: unknown) {
+      if (!mounted.current) return;
+      setStartingOAuth(false);
+      if (failure instanceof ApiError && failure.status === 401) {
+        onSessionExpired();
+      } else {
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : "소셜 재인증을 시작하지 못했습니다. 다시 시도해 주세요.",
+        );
+      }
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (pending.current || !password) return;
+    if (pending.current) return;
+    if (hasLocalPassword && !password) return;
+
     pending.current = true;
     setSubmitting(true);
     setError(null);
     try {
-      await withdrawBuyer(password);
+      // 로컬 계정은 비밀번호 전달, 소셜 전용 계정은 비밀번호 생략 (쿠키 재인증 확인)
+      await withdrawBuyer(hasLocalPassword ? password : undefined);
       if (mounted.current) onWithdrawn();
     } catch (failure: unknown) {
       if (!mounted.current) return;
@@ -68,6 +114,8 @@ export function BuyerWithdrawalPanel({ onWithdrawn, onSessionExpired }: Props): 
       if (mounted.current) setSubmitting(false);
     }
   }
+
+  const availableProviders = linkedProviders || [];
 
   return (
     <section className="buyer-withdrawal-panel" aria-labelledby="withdrawal-heading">
@@ -101,28 +149,110 @@ export function BuyerWithdrawalPanel({ onWithdrawn, onSessionExpired }: Props): 
             탈퇴하면 로그인할 수 없고 이름·이메일·비밀번호가 정리됩니다. 주문·환불 기록은 남으며
             같은 로그인 아이디는 다시 사용할 수 없습니다.
           </p>
-          <div className="field-group">
-            <label className="field-label" htmlFor="withdrawal-password">
-              현재 비밀번호
-            </label>
-            <input
-              className="input-box"
-              id="withdrawal-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              disabled={submitting}
-              ref={passwordInput}
-              required
-            />
-          </div>
+
+          {hasLocalPassword ? (
+            <div className="field-group">
+              <label className="field-label" htmlFor="withdrawal-password">
+                현재 비밀번호
+              </label>
+              <input
+                className="input-box"
+                id="withdrawal-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={submitting}
+                ref={passwordInput}
+                required
+              />
+            </div>
+          ) : reauthConfirmed ? (
+            <div
+              className="field-group"
+              style={{
+                padding: "12px",
+                background: "var(--color-surface)",
+                borderRadius: "8px",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "14px",
+                  color: "var(--color-primary)",
+                  fontWeight: 600,
+                }}
+              >
+                ✓ 소셜 계정 본인 재인증이 완료되었습니다 (5분간 유효).
+              </p>
+              <p
+                style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--color-text-muted)" }}
+              >
+                비밀번호 입력 없이 아래 버튼을 눌러 탈퇴를 완료할 수 있습니다.
+              </p>
+            </div>
+          ) : (
+            <div
+              className="field-group"
+              style={{
+                padding: "12px",
+                background: "var(--color-surface)",
+                borderRadius: "8px",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: "14px", fontWeight: 600 }}>
+                소셜 연동 계정 본인 확인
+              </p>
+              <p
+                style={{
+                  margin: "4px 0 12px 0",
+                  fontSize: "13px",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                탈퇴를 위해 연결된 소셜 계정으로 본인 재인증이 필요합니다.
+              </p>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {availableProviders.includes("kakao") && (
+                  <button
+                    type="button"
+                    className="btn-oauth btn-oauth-kakao"
+                    style={{ padding: "8px 16px", fontSize: "13px" }}
+                    disabled={startingOAuth || submitting}
+                    onClick={() => void handleOAuthReauthStart("kakao")}
+                  >
+                    카카오로 본인 재인증
+                  </button>
+                )}
+                {availableProviders.includes("google") && (
+                  <button
+                    type="button"
+                    className="btn-oauth btn-oauth-google"
+                    style={{ padding: "8px 16px", fontSize: "13px" }}
+                    disabled={startingOAuth || submitting}
+                    onClick={() => void handleOAuthReauthStart("google")}
+                  >
+                    구글로 본인 재인증
+                  </button>
+                )}
+                {availableProviders.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "var(--color-danger)", margin: 0 }}>
+                    연결된 소셜 계정 정보가 없습니다. 고객센터에 문의해 주세요.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           <StatusAlert id="withdrawal-error" message={error} />
           <div className="checkout-actions">
             <button
               type="button"
               className="text-action-link"
-              disabled={submitting}
+              disabled={submitting || startingOAuth}
               onClick={close}
               autoFocus
             >
@@ -131,7 +261,12 @@ export function BuyerWithdrawalPanel({ onWithdrawn, onSessionExpired }: Props): 
             <button
               type="submit"
               className="withdrawal-confirm-button"
-              disabled={submitting || !password}
+              disabled={
+                submitting ||
+                startingOAuth ||
+                (hasLocalPassword && !password) ||
+                (!hasLocalPassword && !reauthConfirmed)
+              }
             >
               {submitting ? "탈퇴 처리 중…" : "탈퇴하기"}
             </button>

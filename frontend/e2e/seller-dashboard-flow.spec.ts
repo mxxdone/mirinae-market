@@ -1,3 +1,4 @@
+import { authenticatedApiHeaders } from "./authApi";
 import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import { installTestClock } from "./fixedTime";
@@ -222,7 +223,11 @@ test.describe("판매자 대시보드 (Phase 6)", () => {
     // 401이 무시되어 로그인 화면으로 튕기지 않고 판매자 화면이 유지되어야 함
     await expect(page.locator("#heading-login")).toHaveCount(0);
     await expect(page.locator("#heading-seller-store")).toBeVisible();
-    expect((await page.request.get("/api/auth/me")).status()).toBe(200);
+    expect(
+      (
+        await page.request.get("/api/auth/me", { headers: await authenticatedApiHeaders(page) })
+      ).status(),
+    ).toBe(200);
 
     await logout(page, "seller");
   });

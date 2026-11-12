@@ -16,23 +16,46 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
-server:
-  servlet:
-    session:
-      timeout: 30m
-      tracking-modes: cookie
-      cookie:
-        http-only: true
-        same-site: lax
-        secure: ${SESSION_COOKIE_SECURE:false}
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+  health:
+    redis:
+      enabled: true
 springdoc:
   api-docs:
     path: /v3/api-docs
 product:
   images:
     root: ${PRODUCT_IMAGE_ROOT:.local/uploads/product-images}
+auth:
+  # Base64로 인코딩한 32바이트 이상 서명 키. 값은 프로세스 환경으로만 전달한다.
+  jwt:
+    secret: ${AUTH_JWT_SECRET}
+    access-ttl: PT10M
+  public-base-url: ${AUTH_PUBLIC_BASE_URL:http://127.0.0.1:5173}
+  login:
+    idle-ttl: PT30M
+    absolute-ttl: P7D
+  cookie:
+    refresh-name: MIRINAE_REFRESH
+    browser-name: MIRINAE_OAUTH_BROWSER
+    flow-name: MIRINAE_OAUTH_FLOW
+    secure: ${AUTH_COOKIE_SECURE:false}
+  oauth:
+    state-ttl: PT10M
+    reauth-ttl: PT5M
+    kakao:
+      client-id: ${OAUTH_KAKAO_CLIENT_ID:}
+      client-secret: ${OAUTH_KAKAO_CLIENT_SECRET:}
+      admin-key: ${OAUTH_KAKAO_ADMIN_KEY:}
+    google:
+      client-id: ${OAUTH_GOOGLE_CLIENT_ID:}
+      client-secret: ${OAUTH_GOOGLE_CLIENT_SECRET:}

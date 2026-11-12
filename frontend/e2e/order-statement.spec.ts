@@ -2,6 +2,7 @@ import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import type { Checkout } from "../src/api/checkout";
 import { installTestClock } from "./fixedTime";
+import { authenticatedApiHeaders } from "./authApi";
 
 async function login(page: Page, id = "dashboard_buyer_a") {
   const password = process.env.E2E_DEMO_PASSWORD;
@@ -12,7 +13,9 @@ async function login(page: Page, id = "dashboard_buyer_a") {
   await page.locator("#loginPassword").fill(password);
   await page.locator("#btnLoginSubmit").click();
   await expect(page.locator("#heading-market")).toBeVisible();
-  const response = await page.request.get("/api/buyer/orders");
+  const response = await page.request.get("/api/buyer/orders", {
+    headers: await authenticatedApiHeaders(page),
+  });
   expect(response.status()).toBe(200);
   const orders = (await response.json()) as Checkout[];
   await buyerHeaderAction(page, "주문 내역");

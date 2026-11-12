@@ -9,6 +9,7 @@ import com.mirinae.market.modules.checkout.business.StoreOrderView;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -29,7 +30,7 @@ import tools.jackson.databind.JsonNode;
       "admin.bootstrap.login-id=review_admin", "admin.bootstrap.password=Admin1234!",
       "admin.bootstrap.email=review-admin@example.com"
     })
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class ReviewHttpFlowTest {
   @Value("${local.server.port}")
   private int port;
@@ -125,6 +126,16 @@ class ReviewHttpFlowTest {
     return session;
   }
 
+  /** 고정 Clock 이동으로 기존 access·유휴 기한이 지난 뒤 같은 사용자로 세션을 다시 만든다. */
+  private void loginAgain(HttpSessionClient session, String id) throws Exception {
+    session.clearAccessToken();
+    session.refreshCsrf();
+    assertThat(
+            session.login(id, id.equals("review_admin") ? "Admin1234!" : "Pass1234!").statusCode())
+        .isEqualTo(200);
+    session.refreshCsrf();
+  }
+
   private static String own(long order) {
     return "/api/buyer/store-orders/" + order + "/review";
   }
@@ -179,6 +190,8 @@ class ReviewHttpFlowTest {
           .isTrue();
       assertThat(customer.put(own(order.id()), content(3), true).statusCode()).isEqualTo(409);
       clock.set(Instant.parse("2026-11-14T05:00:00Z"));
+      // 날짜를 크게 넘겨 access·유휴 수명이 지나므로 리뷰 업무 규칙 검증 전에 새 로그인을 준비한다.
+      loginAgain(customer, buyer);
       assertThat(
               customer
                   .post(own(order.id()) + "/restore", "{}", "application/json", true)
@@ -216,10 +229,13 @@ class ReviewHttpFlowTest {
         assertThat(customer.put(own(order.id()), input, true).statusCode()).isEqualTo(400);
       }
       clock.set(deadline);
+      // 30일 뒤라 기존 access·유휴 수명이 지났다. 리뷰 마감 경계 검증을 위해 세션을 다시 만든다.
+      loginAgain(customer, buyer);
       assertThat(customer.put(own(order.id()), content(5), true).statusCode()).isEqualTo(409);
       assertThat(customer.json(customer.get(own(order.id()))).get("canCreate").asBoolean())
           .isFalse();
       clock.set(deadline.minusSeconds(1));
+      loginAgain(customer, buyer);
       assertThat(customer.put(own(order.id()), content(5), true).statusCode()).isEqualTo(200);
     }
   }
@@ -268,6 +284,9 @@ class ReviewHttpFlowTest {
                   .statusCode())
           .isEqualTo(200);
       pickup(order);
+      loginAgain(customer, buyer);
+      // foreign 세션도 Clock 이동 전에 만들어졌으므로 다시 인증한다.
+      loginAgain(foreign, otherSeller);
       assertThat(customer.put(own(order.id()), content(5), true).statusCode()).isEqualTo(200);
       long id = reviewId(customer, order.id());
       assertThat(foreign.put(sellerPath(id) + "/reply", "{\"content\":\"답글\"}", true).statusCode())

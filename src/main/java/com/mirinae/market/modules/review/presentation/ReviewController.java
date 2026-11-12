@@ -17,7 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@SecurityRequirement(name = "sessionCookie")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "400", description = "별점·본문·페이지·ID 입력 오류: INVALID_INPUT")
 @ApiResponse(responseCode = "401", description = "로그인이 필요합니다: UNAUTHENTICATED")
 @ApiResponse(responseCode = "403", description = "역할·소유권·CSRF 오류: FORBIDDEN")

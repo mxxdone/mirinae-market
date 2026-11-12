@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/buyer/stores/{storeId}/reports")
-@SecurityRequirement(name = "sessionCookie")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "400", description = "제보 종류·내용 형식 오류")
 @ApiResponse(responseCode = "401", description = "미로그인")
 @ApiResponse(responseCode = "403", description = "구매자 권한·CSRF 오류")

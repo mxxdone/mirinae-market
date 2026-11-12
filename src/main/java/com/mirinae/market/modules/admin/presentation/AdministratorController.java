@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin")
-@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "sessionCookie")
+@io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "401", description = "미로그인·세션 만료")
 @ApiResponse(responseCode = "403", description = "관리자 권한 없음 또는 CSRF 오류")
 @ApiResponse(responseCode = "400", description = "입력·조회 조건 오류, 전체 미적용")

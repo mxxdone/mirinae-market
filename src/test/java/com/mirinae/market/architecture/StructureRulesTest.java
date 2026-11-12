@@ -22,6 +22,9 @@ import com.mirinae.market.architecture.fixture.negative.modules.dataleak.busines
 import com.mirinae.market.architecture.fixture.negative.modules.dataleak.business.StaticImportJdbcLeak;
 import com.mirinae.market.architecture.fixture.negative.modules.entrypoint.business.EntryPointReferrer;
 import com.mirinae.market.architecture.fixture.negative.modules.sdkleak.business.HttpClientLeak;
+import com.mirinae.market.architecture.fixture.negative.modules.sdkleak.business.JwtSdkLeak;
+import com.mirinae.market.architecture.fixture.negative.modules.sdkleak.business.NimbusSdkLeak;
+import com.mirinae.market.architecture.fixture.negative.modules.sdkleak.business.RedisSdkLeak;
 import com.mirinae.market.architecture.fixture.negative.modules.web.business.ServletLeakingService;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -152,6 +155,24 @@ class StructureRulesTest {
   void jdkHttpClientReferenceIsDetected() {
     assertRuleFails(
         ArchitectureRules.integrationTypesOnlyInData(), importClasses(HttpClientLeak.class));
+  }
+
+  @Test
+  void jwtSdkReferenceIsDetected() {
+    assertRuleFails(
+        ArchitectureRules.integrationTypesOnlyInData(), importClasses(JwtSdkLeak.class));
+  }
+
+  @Test
+  void nimbusSdkReferenceIsDetected() {
+    assertRuleFails(
+        ArchitectureRules.integrationTypesOnlyInData(), importClasses(NimbusSdkLeak.class));
+  }
+
+  @Test
+  void redisSdkReferenceIsDetected() {
+    assertRuleFails(
+        ArchitectureRules.integrationTypesOnlyInData(), importClasses(RedisSdkLeak.class));
   }
 
   @Test

@@ -33,7 +33,10 @@ test.beforeEach(async ({ page }) => {
           displayName: "구매자",
           role: "BUYER",
           requiresPasswordChange: false,
+          hasLocalPassword: true,
         };
+      else if (url.pathname === "/api/auth/refresh")
+        body = { authenticated: true, accessToken: "mock-access-token", expiresIn: 600 };
       else if (url.pathname === "/api/buyer/cart") body = { version: 0, items: [] };
       else if (url.pathname === "/api/markets")
         body = names
@@ -179,6 +182,7 @@ test("지도는 4대3이며 마커의 시장 정보를 확인한 뒤 상품 보�
         displayName: "구매자",
         role: "BUYER",
         requiresPasswordChange: false,
+        hasLocalPassword: true,
       },
     });
   });
@@ -347,6 +351,7 @@ test("지도 안쪽 검색은 주변 조건을 대체하고 이동 중 조회·�
         displayName: "구매자",
         role: "BUYER",
         requiresPasswordChange: false,
+        hasLocalPassword: true,
       },
     });
   });

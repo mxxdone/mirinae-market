@@ -1,3 +1,4 @@
+import { authenticatedApiHeaders } from "./authApi";
 import { buyerHeaderAction } from "./buyerHeader";
 import { openBuyerProducts, chooseBuyerMarket } from "./buyerMarket";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
@@ -40,14 +41,20 @@ test("상품 상세의 브라우저 뒤로·앞으로·새로고침과 로그아
       form: { loginId: required("E2E_SELLER_A_LOGIN_ID"), password: required("E2E_DEMO_PASSWORD") },
     });
     expect(signedIn.status()).toBe(200);
+    const authData = (await signedIn.json()) as { accessToken?: string };
     csrf = (await (await seller.request.get("/api/auth/csrf")).json()) as {
       headerName: string;
       token: string;
     };
-    const store = (await (await seller.request.get("/api/seller/stores/me")).json()) as {
+    const headers: Record<string, string> = {
+      [csrf.headerName]: csrf.token,
+      ...(authData.accessToken ? { Authorization: `Bearer ${authData.accessToken}` } : {}),
+    };
+    const store = (await (
+      await seller.request.get("/api/seller/stores/me", { headers })
+    ).json()) as {
       id: number;
     };
-    const headers = { [csrf.headerName]: csrf.token };
     const product = await seller.request.post(`/api/seller/stores/${store.id}/products`, {
       headers,
       data: { name: query, description: "방문 기록 검증", unitType: "WEIGHT", unitAmount: 500 },
@@ -121,19 +128,19 @@ async function addProduct(page: Page, name: string, amount = "500", unit = "g") 
   await page.getByRole("button", { name: "상품 등록", exact: true }).click();
   await expect(saleRow(page, name)).toBeVisible();
 }
-async function sellerApi(context: BrowserContext) {
-  const csrf = (await (await context.request.get("/api/auth/csrf")).json()) as {
-    headerName: string;
-    token: string;
-  };
-  const store = (await (await context.request.get("/api/seller/stores/me")).json()) as {
+async function sellerApi(context: BrowserContext, page: Page) {
+  // page.request는 브라우저 메모리 access를 공유하지 않으므로 실제 세션으로 Bearer를 준비한다.
+  const authHeaders = await authenticatedApiHeaders(page);
+  const store = (await (
+    await context.request.get("/api/seller/stores/me", { headers: authHeaders })
+  ).json()) as {
     id: number;
     marketId: number;
   };
   const date = new Date(Date.parse(required("E2E_FIXED_INSTANT")) + 9 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
-  return { headers: { [csrf.headerName]: csrf.token }, store, date };
+  return { headers: authHeaders, store, date };
 }
 
 test("판매자 kg 입력→일괄 공개→구매자 시장 검색·상세·타 시장 격리", async ({ page, browser }) => {
@@ -218,7 +225,13 @@ test("입력 실패·통신 실패를 성공으로 표시하지 않고 세션 �
   await expect(page.locator(".market-success")).toHaveCount(0);
   await expect(page.locator("#productUnitAmount")).toHaveValue("500");
   await context.unroute("**/api/seller/stores/*/products");
-  await context.clearCookies();
+  // 쿠키 삭제만으로는 메모리 access JWT가 만료되지 않는다. 실제 로그아웃 API로 Redis 로그인 상태를 폐기한 뒤
+  // UI의 다음 보호 요청이 401을 받아 개인·매장 상태를 폐기하는지 검증한다.
+  const logoutHeaders = await authenticatedApiHeaders(page);
+  const logoutResponse = await page.request.post("/api/auth/logout", {
+    headers: logoutHeaders,
+  });
+  expect(logoutResponse.status()).toBe(204);
   await page.getByRole("button", { name: "목록으로", exact: true }).click();
   await page.getByRole("button", { name: "상품 목록 새로고침" }).click();
   const confirmation = page.getByRole("group", { name: "판매 작성값 새로고침 확인" });
@@ -286,7 +299,7 @@ test("작성 중인 수령일을 자정 경계에서도 다른 날짜로 자동 
 
 test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반영됨", async ({ page, context }) => {
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  const { headers, store, date } = await sellerApi(context);
+  const { headers, store, date } = await sellerApi(context, page);
   const prefix = `목록검증${Date.now()}`;
   const ids: number[] = [];
   expect(
@@ -332,7 +345,7 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
     "aria-current",
     "page",
   );
-  const list = await catalog(context, store.id);
+  const list = await catalog(context, store.id, headers);
   const target = list.items.findIndex((item) => item.id === ids[24]);
   expect(target).toBeGreaterThanOrEqual(0);
   await navigation
@@ -349,7 +362,9 @@ test("등록 상품 번호 이동·kg 복원·단건 삭제가 실제 API에 반
   await page.getByRole("button", { name: "삭제 확인", exact: true }).click();
   await expect(page.getByText("상품이 삭제되었습니다.", { exact: false })).toBeVisible();
   const after = (await (
-    await context.request.get(`/api/seller/stores/${store.id}/products?page=0&size=100`)
+    await context.request.get(`/api/seller/stores/${store.id}/products?page=0&size=100`, {
+      headers,
+    })
   ).json()) as { items: { id: number }[]; totalItems: number };
   expect(after.items.some((item) => item.id === ids[24])).toBe(false);
   expect(after.totalItems).toBe(list.totalItems - 1);
@@ -458,12 +473,13 @@ test("매장 정보 별도 화면의 방문 기록·새로고침·판매 입력 
   await expect(page.locator("#heading-products")).toHaveCount(0);
 });
 
-async function catalog(context: BrowserContext, storeId: number) {
+async function catalog(context: BrowserContext, storeId: number, headers: Record<string, string>) {
   const items: { id: number }[] = [];
   let page = 0;
   while (true) {
     const response = await context.request.get(
       `/api/seller/stores/${storeId}/products?page=${page}&size=100`,
+      { headers },
     );
     expect(response.status()).toBe(200);
     const result = (await response.json()) as {
@@ -476,8 +492,14 @@ async function catalog(context: BrowserContext, storeId: number) {
     page++;
   }
 }
-async function goToProduct(page: Page, context: BrowserContext, storeId: number, id: number) {
-  const list = await catalog(context, storeId);
+async function goToProduct(
+  page: Page,
+  context: BrowserContext,
+  storeId: number,
+  id: number,
+  headers: Record<string, string>,
+) {
+  const list = await catalog(context, storeId, headers);
   const index = list.items.findIndex((item) => item.id === id);
   expect(index).toBeGreaterThanOrEqual(0);
   const navigation = page.getByRole("navigation", { name: "등록 상품 페이지" });
@@ -499,7 +521,7 @@ test("페이지별 일괄 작성·오류 전체 미적용·입력 유지·삭제
   context,
 }) => {
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  const { headers, store, date } = await sellerApi(context);
+  const { headers, store, date } = await sellerApi(context, page);
   const prefix = `일괄오류${Date.now()}`;
   async function create(name: string) {
     const response = await context.request.post(`/api/seller/stores/${store.id}/products`, {
@@ -533,11 +555,11 @@ test("페이지별 일괄 작성·오류 전체 미적용·입력 유지·삭제
   page.on("request", (request) => {
     if (request.method() === "PUT" && request.url().includes("/sales/")) mutations++;
   });
-  const rowA = await goToProduct(page, context, store.id, a);
+  const rowA = await goToProduct(page, context, store.id, a, headers);
   await rowA.getByRole("textbox").nth(0).fill("2000");
   await rowA.getByRole("textbox").nth(1).fill("0");
   await page.locator("#pickupEnd").fill("18:30");
-  const rowB = await goToProduct(page, context, store.id, b);
+  const rowB = await goToProduct(page, context, store.id, b, headers);
   await rowB.getByRole("checkbox").check();
   await rowB.getByRole("textbox").nth(0).fill("0");
   await rowB.getByRole("textbox").nth(1).fill("1");
@@ -556,10 +578,12 @@ test("페이지별 일괄 작성·오류 전체 미적용·입력 유지·삭제
   await expect(rowB.getByRole("textbox").nth(0)).toHaveValue("1000");
   await expect(page.locator("#pickupEnd")).toHaveValue("18:30");
   await expect(page.locator(".market-success")).toHaveCount(0);
-  const savedIndex = (await catalog(context, store.id)).items.findIndex((item) => item.id === a);
+  const savedIndex = (await catalog(context, store.id, headers)).items.findIndex(
+    (item) => item.id === a,
+  );
   expect(savedIndex).toBeGreaterThanOrEqual(0);
   const salesPath = `/api/seller/stores/${store.id}/sales/${date}?page=${Math.floor(savedIndex / 100)}&size=100`;
-  const saved = (await (await context.request.get(salesPath)).json()) as {
+  const saved = (await (await context.request.get(salesPath, { headers })).json()) as {
     items: { product: { id: number }; priceWon: number; onlineQuantity: number }[];
   };
   expect(saved.items.find((row) => row.product.id === a)).toMatchObject({
@@ -567,17 +591,17 @@ test("페이지별 일괄 작성·오류 전체 미적용·입력 유지·삭제
     onlineQuantity: 10,
   });
   const window = (await (
-    await context.request.get(`/api/seller/stores/${store.id}/pickup-windows/${date}`)
+    await context.request.get(`/api/seller/stores/${store.id}/pickup-windows/${date}`, { headers })
   ).json()) as { endTime: string };
   expect(window.endTime).toBe("19:00:00");
-  await goToProduct(page, context, store.id, a);
+  await goToProduct(page, context, store.id, a, headers);
   await expect(rowA.getByRole("textbox").nth(0)).toHaveValue("2000");
   await expect(rowA.getByRole("textbox").nth(1)).toHaveValue("0");
   await page.getByRole("button", { name: `${prefix}-b 변경 제외`, exact: true }).click();
   await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
   await expect(page.getByText("변경 사항이 모두 적용되었습니다.", { exact: false })).toBeVisible();
   await expect(rowA).toContainText("품절");
-  const applied = (await (await context.request.get(salesPath)).json()) as {
+  const applied = (await (await context.request.get(salesPath, { headers })).json()) as {
     items: {
       product: { id: number };
       priceWon: number;
@@ -591,7 +615,7 @@ test("페이지별 일괄 작성·오류 전체 미적용·입력 유지·삭제
     selling: true,
   });
   const appliedWindow = (await (
-    await context.request.get(`/api/seller/stores/${store.id}/pickup-windows/${date}`)
+    await context.request.get(`/api/seller/stores/${store.id}/pickup-windows/${date}`, { headers })
   ).json()) as { endTime: string };
   expect(appliedWindow.endTime).toBe("18:30:00");
 });
@@ -601,7 +625,7 @@ test("오늘 판매 중단은 상품·가격·수량·이력을 보존하고 재
   context,
 }) => {
   await login(page, required("E2E_SELLER_A_LOGIN_ID"));
-  const { headers, store, date } = await sellerApi(context);
+  const { headers, store, date } = await sellerApi(context, page);
   const prefix = `중단검증${Date.now()}`;
   expect(
     (
@@ -631,27 +655,31 @@ test("오늘 판매 중단은 상품·가격·수량·이력을 보존하고 재
   const stoppedId = ids[1];
   expect(stoppedId).toBeDefined();
   await page.reload();
-  const row = await goToProduct(page, context, store.id, stoppedId as number);
+  const row = await goToProduct(page, context, store.id, stoppedId as number, headers);
   await row.getByRole("checkbox").uncheck();
   await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
   await expect(row).toContainText("판매 중단");
   expect(
-    (await context.request.get(`/api/markets/${store.marketId}/offers/${offerId}`)).status(),
+    (
+      await context.request.get(`/api/markets/${store.marketId}/offers/${offerId}`, { headers })
+    ).status(),
   ).toBe(404);
   const publicPage = (await (
     await context.request.get(
       `/api/markets/${store.marketId}/offers?query=${encodeURIComponent(prefix)}`,
+      { headers },
     )
   ).json()) as { totalItems: number; items: { onlineQuantity: number }[] };
   expect(publicPage.totalItems).toBe(1);
   expect(publicPage.items[0]?.onlineQuantity).toBe(0);
-  const productIndex = (await catalog(context, store.id)).items.findIndex(
+  const productIndex = (await catalog(context, store.id, headers)).items.findIndex(
     (item) => item.id === stoppedId,
   );
   expect(productIndex).toBeGreaterThanOrEqual(0);
   const privatePage = (await (
     await context.request.get(
       `/api/seller/stores/${store.id}/sales/${date}?page=${Math.floor(productIndex / 100)}&size=100`,
+      { headers },
     )
   ).json()) as {
     items: {
@@ -673,11 +701,14 @@ test("오늘 판매 중단은 상품·가격·수량·이력을 보존하고 재
   await page.getByRole("button", { name: "변경 사항 적용", exact: true }).click();
   await expect(row.locator(".sale-status-cell > span")).toHaveText("판매 중");
   expect(
-    (await context.request.get(`/api/markets/${store.marketId}/offers/${offerId}`)).status(),
+    (
+      await context.request.get(`/api/markets/${store.marketId}/offers/${offerId}`, { headers })
+    ).status(),
   ).toBe(200);
   const restored = (await (
     await context.request.get(
       `/api/markets/${store.marketId}/offers?query=${encodeURIComponent(prefix)}`,
+      { headers },
     )
   ).json()) as { totalItems: number };
   expect(restored.totalItems).toBe(2);

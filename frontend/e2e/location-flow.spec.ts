@@ -1,4 +1,5 @@
 import { buyerHeaderAction } from "./buyerHeader";
+import { authenticatedApiHeaders } from "./authApi";
 import { expect, test, type Page } from "@playwright/test";
 import type { MapSdkProvider } from "../src/api/mapSdk";
 import { installTestClock } from "./fixedTime";
@@ -56,11 +57,8 @@ test("지도 SDK가 늦게 준비돼도 최신 시장을 표시하고 지역 전
 }) => {
   await login(page, required("E2E_ADMIN_LOGIN_ID"), required("E2E_ADMIN_PASSWORD"));
   await expect(page.locator(".admin-workspace")).toBeVisible();
-  const csrf = (await (await page.request.get("/api/auth/csrf")).json()) as {
-    headerName: string;
-    token: string;
-  };
-  const headers = { [csrf.headerName]: csrf.token };
+  // page.request는 브라우저 메모리 access를 공유하지 않으므로 실제 세션 Bearer를 준비한다.
+  const headers = await authenticatedApiHeaders(page);
   const suffix = Date.now().toString().slice(-9);
   const marketResponse = await page.request.post("/api/admin/markets", {
     headers,

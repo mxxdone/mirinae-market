@@ -78,7 +78,7 @@
   - ArchUnit fixture(`architecture/fixture`)는 구조 위반을 의도적으로 담으므로 PMD에서 제외한다(규칙: `.*[\\/]architecture[\\/]fixture[\\/].*`).
 - 아키텍처(ArchUnit): `ArchitectureRules`의 규칙을 `StructureRulesTest`에서 생산 코드와 양성·음성 fixture에 적용한다. 규칙은 같은 기능 내 Presentation→Business→Data, 기능 간 Business 공개 진입점만 허용, 계층 밖 기능 패키지 거부, DB/ORM·외부 연동 SDK의 Data 격리, Business의 HTTP/Servlet 금지, 모듈·클래스 순환 금지, 진입점·`config` 역참조 금지다.
   - 기능 간 공개 Business 진입점은 `modules.<feature>.business` 바로 아래 public 타입이다.
-  - Data 밖 금지 타입: `java.sql`, `javax.sql`, `jakarta.persistence`, `org.hibernate`, `org.springframework.jdbc/orm/data`, `java.net.http`, `org.apache.http`, `okhttp3`, `com.squareup.okhttp3`. 새 외부 SDK를 도입하면 이 목록을 갱신한다.
+  - Data 밖 금지 타입: `java.sql`, `javax.sql`, `jakarta.persistence`, `org.hibernate`, `org.springframework.jdbc/orm/data`, `java.net.http`, `org.apache.http`, `okhttp3`, `com.squareup.okhttp3`, `org.springframework.security.oauth2.jwt/jose`, `com.nimbusds`, `io.lettuce`, `redis.clients`, `org.springframework.web.client`. 새 외부 SDK를 도입하면 이 목록을 갱신한다.
   - Phase 2의 계정·매장 생산 모듈 도입 후 `allowEmptyShould(true)` 예외를 제거한다. 생산 규칙의 빈 선택자는 실패하며 양성·음성 fixture 검출을 유지한다.
 - 테스트 예외: 동시 중복 가입을 검증하는 `AccountHttpFlowTest.concurrentDuplicateIdOrEmailPersistsOnlyOneAccount`에만 `PMD.DoNotUseThreads`를 억제한다. 웹 컨테이너 밖 테스트 클라이언트의 병렬 실행을 위한 것으로, executor를 종료하고 생산 코드의 동시성 규칙은 유지한다.
 - 예외: `gradlew`·`gradlew.bat`·`gradle-wrapper.jar`는 Gradle이 생성한 upstream 산출물이므로 한국어 주석 규칙 적용 대상에서 제외한다.

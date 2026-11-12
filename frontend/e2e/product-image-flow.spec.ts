@@ -1,3 +1,4 @@
+import { authenticatedApiHeaders } from "./authApi";
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -64,8 +65,13 @@ test("사진 선택 등록·교체·제거와 카드/리스트/상세·기본 SV
   const firstName = `${prefix} 사과`,
     secondName = `${prefix} 딸기`;
   await login(page, env("E2E_SELLER_A_LOGIN_ID"));
-  const store = ((await (await page.request.get("/api/seller/stores/me")).json()) as { id: number })
-    .id;
+  const store = (
+    (await (
+      await page.request.get("/api/seller/stores/me", {
+        headers: await authenticatedApiHeaders(page),
+      })
+    ).json()) as { id: number }
+  ).id;
   const products: number[] = [];
   for (const [name, image] of [
     [firstName, "apple"],
@@ -96,7 +102,12 @@ test("사진 선택 등록·교체·제거와 카드/리스트/상세·기본 SV
     await expect(row.locator(".sale-status-cell > span")).toHaveText("판매 중");
   }
   const imagePath = `/api/seller/stores/${store}/products/${products[0]!}/image`;
-  const original = (await (await page.request.get(imagePath)).json()) as { image: ProductImage };
+  const imageHeaders = await authenticatedApiHeaders(page);
+  const original = (await (
+    await page.request.get(imagePath, { headers: imageHeaders })
+  ).json()) as {
+    image: ProductImage;
+  };
   const context = await browser.newContext();
   try {
     const buyer = await context.newPage();
@@ -136,7 +147,11 @@ test("사진 선택 등록·교체·제거와 카드/리스트/상세·기본 SV
     await page.locator("#productPhoto").setInputFiles(await photo("strawberry"));
     await saveImageChange(page);
     await expect(row).toBeVisible();
-    const replaced = (await (await page.request.get(imagePath)).json()) as { image: ProductImage };
+    const replaced = (await (
+      await page.request.get(imagePath, { headers: imageHeaders })
+    ).json()) as {
+      image: ProductImage;
+    };
     expect(replaced.image.id).not.toBe(original.image.id);
     await buyer.reload();
     await expect(buyer.locator(".product-photo--detail img")).toHaveAttribute(

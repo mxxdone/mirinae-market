@@ -1,6 +1,8 @@
 package com.mirinae.market.config;
 
 import com.mirinae.market.modules.account.business.DuplicateAccountException;
+import com.mirinae.market.modules.auth.business.AuthException;
+import com.mirinae.market.modules.auth.data.AuthStorageUnavailableException;
 import com.mirinae.market.modules.product.business.ProductConflictException;
 import com.mirinae.market.modules.product.business.ProductNotFoundException;
 import com.mirinae.market.modules.product.business.SaleBatchException;
@@ -14,6 +16,66 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+  @ExceptionHandler(AuthStorageUnavailableException.class)
+  public ResponseEntity<Map<String, String>> authUnavailable(
+      AuthStorageUnavailableException exception) {
+    return ResponseEntity.status(503)
+        .header("Cache-Control", "no-store")
+        .body(
+            Map.of(
+                "code",
+                "AUTH_UNAVAILABLE",
+                "message",
+                "인증 서버를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."));
+  }
+
+  @ExceptionHandler(AuthException.class)
+  public ResponseEntity<Map<String, Object>> authFailure(AuthException exception) {
+    var body = new java.util.LinkedHashMap<String, Object>();
+    body.put("code", exception.code());
+    body.put("message", exception.getMessage());
+    if (exception.flowId() != null) {
+      // UI가 흐름을 다시 조회해 연결 화면으로 이동할 수 있게 한다.
+      body.put("flowId", exception.flowId());
+    }
+    return ResponseEntity.status(statusOf(exception.code()))
+        .header("Cache-Control", "no-store")
+        .body(body);
+  }
+
+  @ExceptionHandler(com.mirinae.market.modules.account.business.AccountUnavailableException.class)
+  public ResponseEntity<Map<String, String>> accountUnavailable(RuntimeException exception) {
+    // DB 장애는 자격 증명 불일치와 구분해 503으로 닫고, 원인·SQL은 노출하지 않는다.
+    return ResponseEntity.status(503)
+        .header("Cache-Control", "no-store")
+        .body(
+            Map.of(
+                "code",
+                "AUTH_UNAVAILABLE",
+                "message",
+                "인증 서버를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."));
+  }
+
+  private static int statusOf(String code) {
+    return switch (code) {
+      case "UNAUTHENTICATED", "INVALID_CREDENTIALS", "REFRESH_REUSED" -> 401;
+      case "FORBIDDEN" -> 403;
+      case "LINK_CONFLICT", "LINK_REQUIRED" -> 409;
+      case "AUTH_UNAVAILABLE" -> 503;
+      case "OAUTH_PROVIDER_ERROR" -> 502;
+      default -> 400;
+    };
+  }
+
+  @ExceptionHandler(
+      com.mirinae.market.modules.withdrawal.business.WithdrawalPartialFailureException.class)
+  public ResponseEntity<Map<String, String>> withdrawalPartial(RuntimeException exception) {
+    // 제공자 연결 해제(502)와 달리 로컬 저장 실패이므로 500과 별도 한국어 재시도 안내를 사용한다.
+    return ResponseEntity.status(500)
+        .header("Cache-Control", "no-store")
+        .body(Map.of("code", "WITHDRAWAL_INCOMPLETE", "message", exception.getMessage()));
+  }
+
   @ExceptionHandler(com.mirinae.market.modules.account.business.AccountInactiveException.class)
   public ResponseEntity<Map<String, String>> inactiveAccount(RuntimeException exception) {
     return ResponseEntity.status(401)

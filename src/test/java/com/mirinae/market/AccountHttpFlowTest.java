@@ -7,6 +7,7 @@ import com.mirinae.market.modules.account.business.AccountView;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +23,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestConfig.class)
+@Import({PostgresTestConfig.class, RedisTestConfig.class})
 class AccountHttpFlowTest {
   @Value("${local.server.port}")
   private int port;
@@ -44,8 +45,8 @@ class AccountHttpFlowTest {
       assertThat(session.get("/api/seller/stores/1").statusCode()).isEqualTo(401);
       assertThat(session.get("/api/seller/stores/me").statusCode()).isEqualTo(401);
       session.refreshCsrf();
-      String oldSession = session.sessionId();
-      // 로그인 시 새 세션 쿠키에서도 같은 보안 속성이 유지되어야 한다.
+      String oldRefresh = session.refreshCookie();
+      // 가입은 자동 로그인하지 않는다.
       HttpResponse<String> signup = session.signup(loginId, " Mixed" + loginId + "@Example.com ");
       assertThat(signup.statusCode()).isEqualTo(201);
       assertThat(signup.body()).contains("BUYER").doesNotContain("password", "email");
@@ -61,46 +62,41 @@ class AccountHttpFlowTest {
           .isEqualTo("mixed" + loginId + "@example.com");
       HttpResponse<String> loginResponse = session.login(loginId, "Pass1234!");
       assertThat(loginResponse.statusCode()).isEqualTo(200);
+      assertThat(loginResponse.body())
+          .contains("authenticated", "accessToken", "expiresIn")
+          .doesNotContain(hash);
       assertThat(loginResponse.headers().allValues("set-cookie").toString())
-          .contains("HttpOnly", "SameSite=Lax")
+          .contains("MIRINAE_REFRESH", "HttpOnly", "SameSite=Lax", "Path=/api/auth")
           .doesNotContain("Secure");
-      assertThat(session.sessionId()).isNotEmpty().isNotEqualTo(oldSession);
+      assertThat(session.accessToken()).isNotBlank();
+      assertThat(session.refreshCookie()).isNotEmpty().isNotEqualTo(oldRefresh);
       assertThat(session.get("/api/auth/me").body())
-          .contains(loginId, "BUYER")
+          .contains(loginId, "BUYER", "hasLocalPassword", "linkedProviders")
           .doesNotContain(hash);
       assertThat(session.get("/api/seller/stores/1").statusCode()).isEqualTo(403);
       assertThat(session.get("/api/seller/stores/me").statusCode()).isEqualTo(403);
-      // 로그인 전 토큰은 로그인 성공 후 폐기되어야 한다.
+      // CSRF 없이 보낸 로그아웃은 거부되고 로그인 상태가 유지된다.
       assertThat(
               session
-                  .post("/api/auth/logout", "", "application/x-www-form-urlencoded", true)
+                  .post("/api/auth/logout", "", "application/x-www-form-urlencoded", false)
                   .statusCode())
           .isEqualTo(403);
       session.refreshCsrf();
-      String loggedInCookie = session.sessionId();
-      HttpResponse<String> logout =
-          session.post("/api/auth/logout", "", "application/x-www-form-urlencoded", true);
+      String loggedInRefresh = session.refreshCookie();
+      HttpResponse<String> logout = session.logout();
       assertThat(logout.statusCode()).isEqualTo(204);
       assertThat(
               logout.headers().allValues("set-cookie").stream()
                   .flatMap(header -> java.net.HttpCookie.parse(header).stream())
                   .anyMatch(
-                      cookie -> cookie.getName().equals("JSESSIONID") && cookie.getMaxAge() == 0))
+                      cookie ->
+                          cookie.getName().equals("MIRINAE_REFRESH") && cookie.getMaxAge() == 0))
           .isTrue();
       assertThat(session.get("/api/auth/me").statusCode()).isEqualTo(401);
-      try (var oldClient = java.net.http.HttpClient.newHttpClient()) {
-        var request =
-            java.net.http.HttpRequest.newBuilder(
-                    java.net.URI.create("http://localhost:" + port + "/api/auth/me"))
-                .header("Cookie", "JSESSIONID=" + loggedInCookie)
-                .GET()
-                .build();
-        assertThat(
-                oldClient
-                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                    .statusCode())
-            .isEqualTo(401);
-      }
+      // 쿠키가 지워진 뒤 refresh는 인증을 복원하지 못한다.
+      session.refreshCsrf();
+      assertThat(session.refresh().statusCode()).isEqualTo(401);
+      assertThat(loggedInRefresh).isNotBlank();
     }
   }
 

@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/markets/{marketId}/stores")
-@SecurityRequirement(name = "sessionCookie")
+@SecurityRequirement(name = "bearerAuth")
 @ApiResponse(responseCode = "401", description = "미로그인: UNAUTHENTICATED")
 public class MarketStoreController {
   private final StoreService stores;

@@ -9,6 +9,7 @@ import com.mirinae.market.modules.checkout.business.StoreOrderView;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -29,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
       "admin.bootstrap.login-id=fulfillment_admin", "admin.bootstrap.password=Admin1234!",
       "admin.bootstrap.email=fulfillment-admin@example.com"
     })
-@Import({PostgresTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
 class FulfillmentHttpFlowTest {
   @Autowired private AccountService accounts;
   @Autowired private StoreService stores;
@@ -290,6 +291,8 @@ class FulfillmentHttpFlowTest {
     var existing = order();
     try (var merchant = session(seller)) {
       clock.set(Instant.parse("2026-10-13T14:59:59Z"));
+      // 12시간 이동으로 세션이 만료됐다. 수령 마감 경계 검증 전에 판매자 세션을 다시 만든다.
+      loginAgain(merchant, seller);
       assertThat(
               merchant
                   .post(
@@ -307,6 +310,8 @@ class FulfillmentHttpFlowTest {
                   .statusCode())
           .isEqualTo(200);
       clock.set(Instant.parse("2026-10-13T15:00:00Z"));
+      // 12시간 이동으로 세션이 만료됐다. 수령 마감 정각 경계 검증을 위해 판매자 세션을 다시 만든다.
+      loginAgain(merchant, seller);
       assertThat(
               merchant
                   .post(
@@ -482,6 +487,8 @@ class FulfillmentHttpFlowTest {
                   accounts.current(buyer).id()))
           .isEqualTo("CONFIRMED");
       clock.set(Instant.parse("2026-10-13T09:00:00Z"));
+      // 6시간 이동으로 세션이 만료됐다. 탈퇴 boundary 검증 전에 구매자 세션을 다시 만든다.
+      loginAgain(customer, buyer);
       assertThat(customer.post(path, body, "application/json", true).statusCode()).isEqualTo(204);
     }
   }
@@ -1091,6 +1098,18 @@ class FulfillmentHttpFlowTest {
     return client;
   }
 
+  /** 고정 Clock 이동으로 기존 access·유휴 기한이 지난 뒤 같은 사용자로 세션을 다시 만든다. */
+  private void loginAgain(HttpSessionClient client, String id) throws Exception {
+    client.clearAccessToken();
+    client.refreshCsrf();
+    assertThat(
+            client
+                .login(id, id.equals("fulfillment_admin") ? "Admin1234!" : "Pass1234!")
+                .statusCode())
+        .isEqualTo(200);
+    client.refreshCsrf();
+  }
+
   private static String json(Object value) {
     return new JsonMapper().writeValueAsString(value);
   }
@@ -1209,8 +1228,11 @@ class FulfillmentHttpFlowTest {
           body = json(Map.of("code", order.pickupCode()));
       assertThat(merchant.post(path, body, "application/json", true).statusCode()).isEqualTo(409);
       clock.set(Instant.parse("2026-10-13T05:00:00Z"));
+      loginAgain(merchant, seller);
       assertThat(merchant.post(path, body, "application/json", true).statusCode()).isEqualTo(200);
       clock.set(Instant.parse("2026-10-13T09:00:00Z"));
+      // 6시간 이동으로 세션이 만료됐다. 탈퇴·수령 경계 검증 전에 세션을 다시 만든다.
+      loginAgain(merchant, seller);
       assertThat(merchant.post(path, body, "application/json", true).statusCode()).isEqualTo(200);
       String wrong = order.pickupCode().equals("000000") ? "000001" : "000000";
       assertThat(

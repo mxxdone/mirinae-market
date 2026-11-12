@@ -62,7 +62,13 @@ final class ArchitectureRules {
             "java.net.http..",
             "org.apache.http..",
             "okhttp3..",
-            "com.squareup.okhttp3..");
+            "com.squareup.okhttp3..",
+            "org.springframework.web.client..",
+            "org.springframework.security.oauth2.jwt..",
+            "org.springframework.security.oauth2.jose..",
+            "com.nimbusds..",
+            "io.lettuce..",
+            "redis.clients..");
   }
 
   /** Business 계층에서는 HTTP·Servlet 타입을 참조하지 못하게 한다. */

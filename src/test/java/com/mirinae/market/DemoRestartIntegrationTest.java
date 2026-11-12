@@ -3,6 +3,7 @@ package com.mirinae.market;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mirinae.market.support.HttpSessionClient;
+import com.mirinae.market.support.RedisTestConfig;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -20,7 +21,7 @@ class DemoRestartIntegrationTest {
     try (PostgreSQLContainer database = new PostgreSQLContainer("postgres:17.10")) {
       database.start();
       for (boolean secure : java.util.List.of(false, true)) {
-        // 컨테이너는 유지하고 서버·세션·JPA를 실제 종료한 뒤 같은 DB로 다시 시작한다.
+        // 컨테이너는 유지하고 서버·인증 상태·JPA를 실제 종료한 뒤 같은 DB·Redis로 다시 시작한다.
         try (ConfigurableApplicationContext context =
             new SpringApplicationBuilder(MirinaeMarketApplication.class)
                 .profiles("demo")
@@ -29,7 +30,9 @@ class DemoRestartIntegrationTest {
                     "--spring.datasource.url=" + database.getJdbcUrl(),
                     "--spring.datasource.username=" + database.getUsername(),
                     "--spring.datasource.password=" + database.getPassword(),
-                    "--server.servlet.session.cookie.secure=" + secure)) {
+                    "--spring.data.redis.host=" + RedisTestConfig.host(),
+                    "--spring.data.redis.port=" + RedisTestConfig.port(),
+                    "--auth.cookie.secure=" + secure)) {
           JdbcTemplate jdbc = context.getBean(JdbcTemplate.class);
           assertThat(jdbc.queryForObject("SELECT count(*) FROM accounts", Long.class))
               .isEqualTo(3L);
@@ -45,25 +48,25 @@ class DemoRestartIntegrationTest {
             HttpResponse<String> token = session.get("/api/auth/csrf");
             assertThat(token.statusCode()).isEqualTo(200);
             String setCookie = token.headers().allValues("set-cookie").toString();
-            assertThat(setCookie).contains("JSESSIONID=", "HttpOnly", "SameSite=Lax");
+            assertThat(setCookie).contains("MIRINAE_CSRF=", "HttpOnly", "SameSite=Lax");
             assertThat(setCookie.contains("Secure")).isEqualTo(secure);
             if (!secure) {
               session.refreshCsrf();
               assertThat(session.login("demo_buyer", "Demo1234!").statusCode()).isEqualTo(200);
               assertThat(session.get("/api/auth/me").statusCode()).isEqualTo(200);
-              try (HttpClient withoutCookies = HttpClient.newHttpClient()) {
+              // URL에 세션·토큰 식별자를 붙이지 않는다.
+              try (HttpClient withoutAuthorization = HttpClient.newHttpClient()) {
                 HttpRequest request =
                     HttpRequest.newBuilder(
                             URI.create(
                                 "http://localhost:"
                                     + port
                                     + "/api/auth/me;jsessionid="
-                                    + session.sessionId()))
+                                    + session.refreshCookie()))
                         .GET()
                         .build();
-                // 기본 방화벽은 URL 세션 구문을 잘못된 요청으로 거절한다.
                 assertThat(
-                        withoutCookies
+                        withoutAuthorization
                             .send(request, HttpResponse.BodyHandlers.ofString())
                             .statusCode())
                     .isEqualTo(400);

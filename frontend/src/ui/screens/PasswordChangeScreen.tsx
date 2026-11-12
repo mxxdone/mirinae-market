@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { handleAuthTerminated } from "../../api/auth";
 import {
   changeSellerPassword,
   getSellerProfile,
@@ -14,7 +15,7 @@ export function PasswordChangeScreen({
 }: {
   required?: boolean;
   onChanged?: () => Promise<void>;
-  onSessionExpired: () => void;
+  onSessionExpired: (message?: string) => void;
   onLogout?: () => void;
 }) {
   const mountedRef = useRef(true);
@@ -76,6 +77,11 @@ export function PasswordChangeScreen({
       setConfirm("");
       setSuccess(true);
       await onChanged?.();
+      // 비밀번호 변경 성공 시 모든 기기의 인증이 만료되므로 개인 상태를 폐기하고 재로그인을 안내합니다.
+      handleAuthTerminated();
+      onSessionExpired(
+        "비밀번호가 성공적으로 변경되었습니다. 보안을 위해 모든 기기에서 로그아웃되었으니 새 비밀번호로 다시 로그인해 주세요.",
+      );
     } catch (err) {
       if (!mountedRef.current) return;
       setCurrent("");

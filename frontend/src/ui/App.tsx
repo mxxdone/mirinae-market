@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import { getMe, logout } from "../api/auth";
+import { bootstrapAuth, getMe, logout } from "../api/auth";
+import { registerLogoutListener } from "../api/client";
 import { ApiError, type UserMe } from "../api/types";
 import type { Checkout } from "../api/checkout";
 import type { OfferView } from "../api/types";
@@ -14,6 +15,7 @@ import { StatusAlert } from "./components/StatusAlert";
 import { BuyerSummaryScreen } from "./screens/BuyerSummaryScreen";
 import { BuyerMarketContainer } from "./screens/BuyerMarketContainer";
 import { LoginScreen } from "./screens/LoginScreen";
+import { OAuthFlowScreen } from "./screens/OAuthFlowScreen";
 import { SellerStoreScreen } from "./screens/SellerStoreScreen";
 import { SignupCompleteScreen } from "./screens/SignupCompleteScreen";
 import { SignupScreen } from "./screens/SignupScreen";
@@ -38,13 +40,15 @@ export type ScreenId =
   | "buyer-market"
   | "buyer-cart"
   | "buyer-direct"
-  | "buyer-orders";
+  | "buyer-orders"
+  | "oauth";
 
 function buyerScreenFromLocation(): ScreenId {
   if (readDirectPurchaseLocation()) return "buyer-direct";
   if (window.location.hash === "#cart") return "buyer-cart";
   if (window.location.hash === "#orders") return "buyer-orders";
   if (window.location.hash === "#account") return "buyer-summary";
+  if (window.location.hash.startsWith("#oauth")) return "oauth";
   return "buyer-market";
 }
 
@@ -63,6 +67,7 @@ export function App(): ReactElement {
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
+  const [socialReauthConfirmed, setSocialReauthConfirmed] = useState<boolean>(false);
 
   // 비동기 요청 경합 방지용 카운터 (오래된 응답 덮어쓰기 방지)
   const requestIdRef = useRef<number>(0);
@@ -123,15 +128,26 @@ export function App(): ReactElement {
     }
   }
 
-  // 컴포넌트 최초 마운트 시 세션 복원
+  // 컴포넌트 최초 마운트 시 세션 복원 (refresh 후 me 조회 bootstrap)
   useEffect(() => {
     let isMounted = true;
     const currentReqId = ++requestIdRef.current;
 
     async function restoreInitialSession(): Promise<void> {
       try {
-        const me = await getMe();
+        if (window.location.hash.startsWith("#oauth")) {
+          if (!isMounted || currentReqId !== requestIdRef.current) return;
+          setCurrentScreen("oauth");
+          return;
+        }
+        const me = await bootstrapAuth();
         if (!isMounted || currentReqId !== requestIdRef.current) return;
+        if (!me) {
+          setCurrentUser(null);
+          setCompletedOrder(null);
+          setCurrentScreen("login");
+          return;
+        }
         setCurrentUser(me);
         if (me.role === "ADMIN") {
           setCurrentScreen("admin");
@@ -147,10 +163,21 @@ export function App(): ReactElement {
           }
           setCurrentScreen(buyerScreenFromLocation());
         }
-      } catch {
+      } catch (err: unknown) {
         if (!isMounted || currentReqId !== requestIdRef.current) return;
         setCurrentUser(null);
         setCompletedOrder(null);
+        if (err instanceof ApiError && err.status === 503) {
+          setSyncErrorMessage(
+            err.message || "인증 서비스를 일시적으로 사용할 수 없습니다. 다시 시도해 주세요.",
+          );
+        } else if (err instanceof ApiError) {
+          setSyncErrorMessage(
+            err.message || "계정 정보를 확인하지 못했습니다. 다시 시도해 주세요.",
+          );
+        } else {
+          setSyncErrorMessage("네트워크 연결 상태를 확인하고 다시 시도해 주세요.");
+        }
         setCurrentScreen("login");
       } finally {
         if (isMounted && currentReqId === requestIdRef.current) {
@@ -214,6 +241,7 @@ export function App(): ReactElement {
       // 성공 204: 개인정보 폐기 및 로그인 화면 전환
       ++requestIdRef.current;
       setCurrentUser(null);
+      setSocialReauthConfirmed(false);
       setLogoutError(null);
       showToast("안전하게 로그아웃되었습니다.");
       setCompletedOrder(null);
@@ -223,6 +251,7 @@ export function App(): ReactElement {
         // 이미 서버 세션이 만료된 경우: 개인정보 폐기 및 로그인 안내
         ++requestIdRef.current;
         setCurrentUser(null);
+        setSocialReauthConfirmed(false);
         setLogoutError(null);
         setSessionExpiredMessage("로그인 세션이 이미 만료되어 로그아웃 처리되었습니다.");
         setCompletedOrder(null);
@@ -254,20 +283,33 @@ export function App(): ReactElement {
   /**
    * 보호 자원 접근 중 401 발생 시 개인/매장 정보 폐기 및 로그인 안내
    */
-  const handleSessionExpired = useCallback((): void => {
-    ++requestIdRef.current;
-    setCurrentUser(null);
-    setSessionExpiredMessage("로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
-    setCompletedOrder(null);
-    setCurrentScreen("login");
-    showToast("세션이 만료되어 로그인 화면으로 이동합니다.");
-  }, [showToast]);
+  const handleSessionExpired = useCallback(
+    (customMsg?: string): void => {
+      ++requestIdRef.current;
+      setCurrentUser(null);
+      setSocialReauthConfirmed(false);
+      setSessionExpiredMessage(customMsg || "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
+      setCompletedOrder(null);
+      setCurrentScreen("login");
+      showToast("세션이 만료되어 로그인 화면으로 이동합니다.");
+    },
+    [showToast],
+  );
+
+  // 다중 탭 로그아웃 수신 시 세션 정리
+  useEffect(() => {
+    const unregister = registerLogoutListener(() => {
+      handleSessionExpired("다른 기기 또는 다른 탭에서 로그아웃되어 로그인 화면으로 이동합니다.");
+    });
+    return unregister;
+  }, [handleSessionExpired]);
 
   const { cartCount, onCartChanged } = useCartSummary(currentUser, handleSessionExpired);
 
   function handleWithdrawn(): void {
     ++requestIdRef.current;
     setCurrentUser(null);
+    setSocialReauthConfirmed(false);
     setRegisteredLoginId("");
     setCompletedOrder(null);
     setLogoutError(null);
@@ -446,11 +488,43 @@ export function App(): ReactElement {
             />
           )}
 
+          {currentScreen === "oauth" && (
+            <OAuthFlowScreen
+              onLoginSuccess={async () => {
+                leaveMarketLocation(true);
+                await syncCurrentUser();
+              }}
+              onNavigateLogin={() => {
+                window.history.replaceState(null, "", "#");
+                leaveMarketLocation(true);
+                setCurrentScreen("login");
+              }}
+              onReauthConfirmed={async () => {
+                setSocialReauthConfirmed(true);
+                if (!currentUser) {
+                  try {
+                    await syncCurrentUser();
+                  } catch {
+                    // syncCurrentUser sets syncErrorMessage on failure
+                  }
+                }
+                window.history.replaceState(
+                  { mirinaeReturnMarket: window.location.hash },
+                  "",
+                  "#account",
+                );
+                setCurrentScreen("buyer-summary");
+                showToast("소셜 재인증이 완료되었습니다. 탈퇴를 진행해 주세요.");
+              }}
+            />
+          )}
+
           {currentScreen === "buyer-summary" && currentUser && (
             <BuyerSummaryScreen
               key={currentUser.id}
               onBrowse={browseMarket}
               user={currentUser}
+              reauthConfirmed={socialReauthConfirmed}
               onWithdrawn={handleWithdrawn}
               onSessionExpired={handleSessionExpired}
             />

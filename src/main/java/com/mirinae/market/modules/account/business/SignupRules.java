@@ -26,6 +26,22 @@ final class SignupRules {
         "영문 소문자와 숫자만 사용하여 5~20자로 입력해 주세요.");
   }
 
+  static void displayName(String displayName) {
+    require(
+        displayName != null && DISPLAY_NAME.matcher(displayName).matches(),
+        "표시 이름은 2~10자의 한글·영문·숫자여야 합니다.");
+  }
+
+  /** 형식이 올바른 이메일만 정규화해 돌려주고, 아니면 null이다. 제공자 값 보완 판단에 사용한다. */
+  public static String optionalEmail(String email) {
+    if (email == null) return null;
+    try {
+      return email(email);
+    } catch (IllegalArgumentException exception) {
+      return null;
+    }
+  }
+
   static String validate(String loginId, String password, String displayName, String email) {
     require(
         loginId != null && LEGACY_LOGIN_ID.matcher(loginId).matches(),

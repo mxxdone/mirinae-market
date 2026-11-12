@@ -12,23 +12,26 @@ async function signed(context: BrowserContext, loginId: string) {
     token: string;
     headerName: string;
   };
-  expect(
-    (
-      await context.request.post("/api/auth/login", {
-        headers: { [csrf.headerName]: csrf.token },
-        form: { loginId, password: required("E2E_DEMO_PASSWORD") },
-      })
-    ).status(),
-  ).toBe(200);
+  const loginRes = await context.request.post("/api/auth/login", {
+    headers: { [csrf.headerName]: csrf.token },
+    form: { loginId, password: required("E2E_DEMO_PASSWORD") },
+  });
+  expect(loginRes.status()).toBe(200);
+  const data = (await loginRes.json()) as { accessToken?: string };
   csrf = (await (await context.request.get("/api/auth/csrf")).json()) as {
     token: string;
     headerName: string;
   };
-  return { [csrf.headerName]: csrf.token };
+  return {
+    [csrf.headerName]: csrf.token,
+    ...(data.accessToken ? { Authorization: `Bearer ${data.accessToken}` } : {}),
+  };
 }
 async function publish(context: BrowserContext, loginId: string, name: string) {
   const headers = await signed(context, loginId);
-  const store = (await (await context.request.get("/api/seller/stores/me")).json()) as {
+  const store = (await (
+    await context.request.get("/api/seller/stores/me", { headers })
+  ).json()) as {
     id: number;
     marketId: number;
   };
@@ -173,7 +176,9 @@ test("모의 결제 실패와 가격 변경 재확인은 재고를 차감하지 
     expect(
       (
         (await (
-          await seller.request.get(`/api/markets/${item.marketId}/offers/${item.offerId}`)
+          await seller.request.get(`/api/markets/${item.marketId}/offers/${item.offerId}`, {
+            headers: item.headers,
+          })
         ).json()) as { onlineQuantity: number }
       ).onlineQuantity,
     ).toBe(10);

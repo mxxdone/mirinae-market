@@ -1,5 +1,5 @@
-import { useState, type FormEvent, type ReactElement } from "react";
-import { login } from "../../api/auth";
+import { useEffect, useState, type FormEvent, type ReactElement } from "react";
+import { getOAuthProviders, login, startOAuth } from "../../api/auth";
 import { ApiError } from "../../api/types";
 import { BrandIntroPanel } from "../components/BrandIntroPanel";
 import { StatusAlert } from "../components/StatusAlert";
@@ -16,6 +16,7 @@ interface LoginScreenProps {
 /**
  * 로그인 화면 (구매자/입점 상인 공용)
  * 데스크톱 40:60 스플릿 레이아웃, 모바일 390px 폼 우선 배치
+ * 실제 활성화된 소셜 제공자만 노출하고 OAuth 흐름을 시작합니다.
  */
 export function LoginScreen({
   initialLoginId = "",
@@ -29,10 +30,47 @@ export function LoginScreen({
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [oauthProviders, setOauthProviders] = useState<string[]>([]);
+  const [startingOAuthProvider, setStartingOAuthProvider] = useState<string | null>(null);
 
   const [idError, setIdError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [serverAlert, setServerAlert] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getOAuthProviders()
+      .then((providers) => {
+        if (active) setOauthProviders(providers);
+      })
+      .catch(() => {
+        if (active) setOauthProviders([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleOAuthStart(provider: string): Promise<void> {
+    setStartingOAuthProvider(provider);
+    setServerAlert(null);
+    try {
+      const response = await startOAuth(provider, "login");
+      if (!response.authorizationUrl) {
+        throw new Error("소셜 로그인 인증 주소를 받지 못했습니다.");
+      }
+      window.location.assign(response.authorizationUrl);
+    } catch (err: unknown) {
+      setStartingOAuthProvider(null);
+      if (err instanceof ApiError && err.status === 503) {
+        setServerAlert("현재 해당 소셜 로그인을 사용할 수 없습니다.");
+      } else if (err instanceof ApiError) {
+        setServerAlert(err.message);
+      } else {
+        setServerAlert("소셜 로그인 시작 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    }
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -267,12 +305,51 @@ export function LoginScreen({
               type="submit"
               id="btnLoginSubmit"
               className={`btn-submit-primary ${isLoading ? "is-loading" : ""}`}
-              disabled={isLoading}
+              disabled={isLoading || startingOAuthProvider !== null}
             >
               {isLoading && <span className="spinner-icon" aria-hidden="true" />}
               <span className="btn-text">{isLoading ? "로그인 중..." : "로그인"}</span>
             </button>
           </form>
+
+          {/* 소셜 로그인 제공자 노출 영역 */}
+          {oauthProviders.length > 0 && (
+            <div className="oauth-login-area">
+              <div className="oauth-divider">
+                <span>또는 소셜 계정으로 간편 로그인</span>
+              </div>
+              <div className="oauth-button-group">
+                {oauthProviders.includes("kakao") && (
+                  <button
+                    type="button"
+                    id="btnOAuthKakao"
+                    className="btn-oauth btn-oauth-kakao"
+                    disabled={isLoading || startingOAuthProvider !== null}
+                    onClick={() => void handleOAuthStart("kakao")}
+                  >
+                    <span className="oauth-icon kakao-icon" aria-hidden="true" />
+                    <span>
+                      {startingOAuthProvider === "kakao" ? "카카오 연결 중…" : "카카오로 시작하기"}
+                    </span>
+                  </button>
+                )}
+                {oauthProviders.includes("google") && (
+                  <button
+                    type="button"
+                    id="btnOAuthGoogle"
+                    className="btn-oauth btn-oauth-google"
+                    disabled={isLoading || startingOAuthProvider !== null}
+                    onClick={() => void handleOAuthStart("google")}
+                  >
+                    <span className="oauth-icon google-icon" aria-hidden="true" />
+                    <span>
+                      {startingOAuthProvider === "google" ? "구글 연결 중…" : "구글로 시작하기"}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="form-footer-navigation">
             <span>아직 미리내 마켓 회원이 아니신가요?</span>

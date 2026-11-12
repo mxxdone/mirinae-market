@@ -1,3 +1,4 @@
+import { authenticatedApiHeaders } from "./authApi";
 import { buyerHeaderAction } from "./buyerHeader";
 import { expect, test, type Page } from "@playwright/test";
 import type { Checkout } from "../src/api/checkout";
@@ -52,7 +53,9 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   await expect(page.locator(".checkout-item")).toHaveCount(2);
   await page.getByRole("button", { name: "통합 모의 결제", exact: true }).click();
   await expect(page.locator("#orders-heading")).toBeVisible();
-  const response = await page.request.get("/api/buyer/orders");
+  const response = await page.request.get("/api/buyer/orders", {
+    headers: await authenticatedApiHeaders(page),
+  });
   expect(response.status()).toBe(200);
   const orders = (await response.json()) as Checkout[];
   // 고정 시각 E2E에서는 전날 수령 완료 fixture를 사용한다. 실제 수령 전환은 HTTP integration·기존 수령 E2E가 검증한다.
@@ -76,7 +79,9 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   await expect(card.getByRole("status")).toContainText("리뷰를 저장했습니다");
   await card.getByLabel("리뷰 별점").selectOption("4");
   await card.getByRole("button", { name: "리뷰 저장", exact: true }).click();
-  const editorResponse = await page.request.get(`/api/buyer/store-orders/${order.id}/review`);
+  const editorResponse = await page.request.get(`/api/buyer/store-orders/${order.id}/review`, {
+    headers: await authenticatedApiHeaders(page),
+  });
   const editor = (await editorResponse.json()) as ReviewEditor;
   const id = editor.review?.review.id;
   expect(id).toBeTruthy();
@@ -101,6 +106,10 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   await logout(page, "seller");
   await login(page, "review_buyer");
   await page.goto(`/#market?market=${market}&store=${order.storeId}`);
+  // 해시만 다른 URL로의 page.goto는 same-document 탐색이라 앱을 다시 부팅하지 않는다.
+  // 그러면 로그인 직후 자동 선택된 시장(미리내시장)이 그대로 남아 딥링크가 적용되지 않는다.
+  // 새 문서 로드(URL 직접 접근과 동일)로 진입해 저장된 위치를 실제로 복원시킨다.
+  await page.reload();
   await expect(page.locator(".store-reviews")).toContainText("찾아주셔서 감사합니다");
   await expect(page.locator(".store-rating").first()).toContainText("매장 평점 ★ 4.0");
   await page.goto("/#orders");
@@ -125,6 +134,7 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   await login(page, "review_buyer");
   const summariesResponse = await page.request.get(
     `/api/markets/${market}/review-summaries?storeIds=${order.storeId}`,
+    { headers: await authenticatedApiHeaders(page) },
   );
   const summaries = (await summariesResponse.json()) as ReviewSummary[];
   expect(summaries[0]?.reviewCount).toBe(0);
@@ -133,10 +143,16 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   await card.getByRole("button", { name: "리뷰 복구", exact: true }).click();
   await expect(card.getByRole("status")).toContainText("리뷰를 복구했습니다");
   const restored = (await (
-    await page.request.get(`/api/buyer/store-orders/${order.id}/review`)
+    await page.request.get(`/api/buyer/store-orders/${order.id}/review`, {
+      headers: await authenticatedApiHeaders(page),
+    })
   ).json()) as ReviewEditor;
   expect(restored.review?.review.id).toBe(id);
   await page.goto(`/#market?market=${market}&store=${order.storeId}`);
+  // 해시만 다른 URL로의 page.goto는 same-document 탐색이라 앱을 다시 부팅하지 않는다.
+  // 그러면 로그인 직후 자동 선택된 시장(미리내시장)이 남아 딥링크가 적용되지 않는다.
+  // 새 문서 로드(URL 직접 접근과 동일)로 진입해 저장된 위치를 실제로 복원시킨다.
+  await page.reload();
   await expect(page.locator(".store-reviews")).toContainText("찾아주셔서 감사합니다");
   await expect(page.locator(".toast-region")).toHaveCount(0);
   await page.screenshot({

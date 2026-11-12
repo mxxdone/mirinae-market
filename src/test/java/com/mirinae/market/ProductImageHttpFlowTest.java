@@ -8,6 +8,7 @@ import com.mirinae.market.modules.product.business.ProductService;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
+import com.mirinae.market.support.RedisTestConfig;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.net.URI;
@@ -36,7 +37,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
       "product.images.root=.local/test-uploads/product-image-http",
       "product.images.cleanup-initial-delay-ms=86400000"
     })
-@Import({PostgresTestConfig.class, ProductImageHttpFlowTest.TimeConfig.class})
+@Import({
+  PostgresTestConfig.class,
+  RedisTestConfig.class,
+  ProductImageHttpFlowTest.TimeConfig.class
+})
 class ProductImageHttpFlowTest {
   private static final String PASSWORD = "Pass1234!";
 
@@ -81,6 +86,15 @@ class ProductImageHttpFlowTest {
 
   private HttpResponse<String> upload(HttpSessionClient session, byte[] bytes, boolean csrf)
       throws Exception {
+    if (!csrf) {
+      // CSRF 토큰을 일부러 빼고 보내야 하는 경계 검증이다.
+      return uploadWithoutCsrf(session, bytes);
+    }
+    return session.postMultipart(base() + "/product-images", "image-test-boundary", bytes);
+  }
+
+  private HttpResponse<String> uploadWithoutCsrf(HttpSessionClient session, byte[] bytes)
+      throws Exception {
     String boundary = "image-test-boundary";
     var output = new ByteArrayOutputStream();
     output.write(
@@ -93,11 +107,8 @@ class ProductImageHttpFlowTest {
         ("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
     var request =
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + base() + "/product-images"))
-            .header("Cookie", "JSESSIONID=" + session.sessionId())
+            .header("Authorization", "Bearer " + session.accessToken())
             .header("Content-Type", "multipart/form-data; boundary=" + boundary);
-    if (csrf)
-      request.header(
-          "X-CSRF-TOKEN", session.json(session.get("/api/auth/csrf")).get("token").asString());
     try (var client = HttpClient.newHttpClient()) {
       return client.send(
           request.POST(HttpRequest.BodyPublishers.ofByteArray(output.toByteArray())).build(),
@@ -170,7 +181,7 @@ class ProductImageHttpFlowTest {
   }
 
   @Test
-  void publicFileWorksWithoutSessionAndMalformedUploadsKeepProduct() throws Exception {
+  void publicFileWorksWithoutAuthenticationAndMalformedUploadsKeepProduct() throws Exception {
     try (var session = login();
         var client = HttpClient.newHttpClient()) {
       var photo = session.json(upload(session, png(1, 1), true));

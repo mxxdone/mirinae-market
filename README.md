@@ -1,6 +1,19 @@
 # 미리내 마켓
 
-Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway·서버 세션 인증을 사용하며 상품·당일 판매 관리, 시장 검색, 통합 모의 결제와 주문 취소·수령·환불, 관리자 운영과 판매자 대시보드를 제공한다.
+Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트엔드다. PostgreSQL·Flyway를 사용하며 상품·당일 판매 관리, 시장 검색, 통합 모의 결제와 주문 취소·수령·환불, 관리자 운영과 판매자 대시보드를 제공한다.
+
+인증은 카카오·구글 OAuth 2.0·서비스 JWT·Redis RTR를 사용한다. 인증 계약은 `SPEC.md`, 설계는 `docs/ADR.md` ADR-015, 현재 구현·검증 상태는 로컬 `PLAN.md`를 확인한다.
+
+### 인증 전환 설정·복구 기준
+
+- `AUTH_JWT_SECRET`: Base64로 인코딩한 32바이트 이상 난수 서명 키. 실제 값은 프로세스 환경으로 전달하며 저장소에 기록하지 않는다. 운영/일반 실행에 기본 키를 제공하지 않는다.
+- `AUTH_COOKIE_SECURE`: HTTPS 환경은 `true`, 로컬 HTTP만 `false`. 브라우저와 API는 같은 출처로 제공하고 개발은 Vite `/api` 프록시를 사용한다. access는 메모리 Bearer, refresh는 HttpOnly 쿠키이며 브라우저 저장소·URL에 토큰을 복사하지 않는다.
+- `REDIS_HOST`·`REDIS_PORT`: 기본 로컬 `127.0.0.1:6379`. 인증용 Redis는 내부 접근으로 제한하고 메모리 상한·noeviction을 사용한다. 초기 구성은 비영속으로서 Redis 재시작 시 로그인/OAuth 미완료 상태가 사라지며 사용자는 다시 로그인한다. 인증 키를 과거 백업에서 복원하지 않는다. PostgreSQL의 회원·거래 데이터는 유지한다.
+- `OAUTH_GOOGLE_CLIENT_ID`·`OAUTH_GOOGLE_CLIENT_SECRET`, `OAUTH_KAKAO_CLIENT_ID`·`OAUTH_KAKAO_CLIENT_SECRET`: 해당 제공자 앱 설정. 카카오는 REST API 키와 활성화한 client secret을 사용한다. 미설정 제공자는 UI 목록에 노출하지 않는다. 제공자 토큰·시크릿을 응답·로그·스크린샷에 남기지 않는다.
+- `OAUTH_KAKAO_ADMIN_KEY`: 카카오 연결 계정의 탈퇴 시 해당 서비스 앱 연결만 해제하는 서버 전용 어드민 키. 카카오 제공자 활성화에는 이 키도 필요하다. 클라이언트/저장소에 전달하지 않는다. 실제 제공자 연결 전 카카오 외부 연결 해제 웹훅 설정과 Google 계정의 제3자 앱 동의 철회 안내를 확인한다. 서비스 탈퇴와 제공자 계정 삭제를 혼동하지 않는다.
+- `AUTH_PUBLIC_BASE_URL`: 브라우저가 접근하는 동일 출처 기준 주소(로컬 예: `http://127.0.0.1:5173`). 제공자에 `{기준 주소}/api/auth/oauth/google/callback`, `{기준 주소}/api/auth/oauth/kakao/callback`을 각각 정확히 등록한다. 프록시 뒤에서 전달 헤더나 임의 요청 Host로 redirect URI를 만들지 않는다. Google은 profile/email, 카카오는 닉네임/이메일 동의 항목을 앱 권한에 맞춰 설정하며 누락된 정보는 가입 폼에서 보완한다.
+- Redis 연결 장애는 인증 요청을503으로 거절한다. 연결 복구 후 상태가 남아 있으면 재시도하며, 키가 유실된 경우 재로그인한다. PostgreSQL을 백업에서 복구하거나 서명 키를 변경할 때는 앱 중지·별도 DB 복원 확인·인증 Redis 초기화·새 인증 발급을 포함해 이전 인증을 되살리지 않는다.
+- 마이그레이션 작성과 기존 DB 적용은 구분한다. 적용 전 현재 DB 백업·별도 복원 확인을 수행한다. 통합 테스트는 독립 PostgreSQL·Redis에서 실행하며 기존 검토·운영 DB에 테스트 fixture를 적용하지 않는다.
 
 - 구조·검사 규칙: [AGENTS.md](AGENTS.md)
 - 요구사항·계정 입력 규칙·API 계약: [SPEC.md](SPEC.md)
@@ -10,13 +23,18 @@ Java 21 · Spring Boot 4.1.1 백엔드와 React · TypeScript · Vite 프런트�
 
 ## 실행
 
-JDK 21과 Linux 컨테이너를 실행할 수 있는 Docker 엔진이 필요하다. 첫 실행에는 Gradle 의존성과 PostgreSQL 이미지를 내려받는 인터넷 연결이 필요하다. 시스템 Gradle은 사용하지 않는다.
+JDK 21과 Linux 컨테이너를 실행할 수 있는 Docker 엔진이 필요하다. 첫 실행에는 Gradle 의존성과 PostgreSQL·Redis 이미지를 내려받는 인터넷 연결이 필요하다. 시스템 Gradle은 사용하지 않는다. 서버 실행 전 서명 키를 환경에 설정한다. 아래 예시는 로컬 프로세스용 키를 생성하며 재생성하면 기존 토큰은 무효가 된다. 키를 출력하거나 파일로 저장하지 않는다.
 
 ```powershell
 # 저장소 루트에서 실행
 # Docker Desktop이 꺼져 있으면 시작
 # docker desktop start
 
+$authKeyBytes = [byte[]]::new(32)
+$authRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$authRng.GetBytes($authKeyBytes)
+$authRng.Dispose()
+$env:AUTH_JWT_SECRET = [Convert]::ToBase64String($authKeyBytes)
 docker compose up -d --wait
 .\gradlew.bat bootRun
 
@@ -32,7 +50,7 @@ docker compose up -d --wait
 java -jar build\libs\mirinae-market-0.0.1-SNAPSHOT.jar --spring.profiles.active=demo
 ```
 
-기본 연결값은 compose의 로컬 개발 전용 계정과 일치한다. `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` 환경변수로 바꿀 수 있다. HTTPS 환경에서는 `SESSION_COOKIE_SECURE=true`를 설정한다. compose는 DB 포트를 127.0.0.1에만 열며 예제 비밀번호를 운영용으로 사용하지 않는다.
+기본 연결값은 compose의 로컬 개발 전용 계정과 일치한다. `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` 환경변수로 바꿀 수 있다. HTTPS 환경에서는 `AUTH_COOKIE_SECURE=true`를 설정한다. compose는 DB·Redis 포트를 127.0.0.1에만 열며 예제 비밀번호를 운영용으로 사용하지 않는다.
 
 서버 실행 중 다시 빌드할 때는 실행할 jar를 별도 경로로 복사해 사용한다. 실행 중인 `build/libs/` jar를 덮어쓰면 이후 클래스 로딩이 실패할 수 있다. 현재 로컬 시연은 별도 jar로 실행하며 화면 주소는 `http://127.0.0.1:5175`다. 이 주소는 기본 개발 포트 5173과 구분한다.
 
@@ -50,7 +68,7 @@ Linux 검사 명령은 `bash ./gradlew check build`다. CI는 [GitHub Actions](h
 | demo_seller_a | 판매자 | 미리내시장 · 미리내청과 |
 | demo_seller_b | 판매자 | 은하시장 · 은하수산 |
 
-이메일은 example.com 데모 주소다. 실제 메일 발송·소유 확인·비밀번호 재설정·소셜 로그인은 제공하지 않는다.
+이메일은 example.com 데모 주소다. 실제 메일 발송·소유 확인·비밀번호 재설정은 제공하지 않는다. 데모 계정에는 소셜 연결이 없으며 소셜 로그인은 별도의 제공자 앱 설정이 필요하다.
 
 ## HTTP 확인
 
@@ -58,26 +76,27 @@ Linux 검사 명령은 `bash ./gradlew check build`다. CI는 [GitHub Actions](h
 - OpenAPI: `http://localhost:8080/v3/api-docs`
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 
-세션 쿠키를 유지하고 CSRF 토큰을 변경 요청 헤더에 보낸다. 가입은 JSON, 로그인은 폼 데이터다. 로그인·로그아웃 후에는 새 CSRF 토큰을 조회한다. 예시는 데모 프로필로 실행한 서버를 대상으로 한다.
+refresh·CSRF 쿠키를 유지하고 access는 Bearer 헤더에, CSRF 토큰은 변경 요청 헤더에 보낸다. 가입은 JSON, 로그인은 폼 데이터다. 아래 WebSession 변수는 PowerShell의 클라이언트 쿠키 보관함이며 서버 세션 인증을 뜻하지 않는다. 예시는 데모 프로필로 실행한 서버를 대상으로 한다.
 
 ```powershell
 $apiBase = 'http://localhost:8080'
 $tokenResponse = Invoke-WebRequest "$apiBase/api/auth/csrf" -SessionVariable marketSession
 $csrf = ($tokenResponse.Content | ConvertFrom-Json).token
-Invoke-WebRequest "$apiBase/api/auth/login" -Method Post -WebSession $marketSession `
+$login = Invoke-RestMethod "$apiBase/api/auth/login" -Method Post -WebSession $marketSession `
   -Headers @{ 'X-CSRF-TOKEN' = $csrf } `
   -Body @{ loginId = 'demo_buyer'; password = 'Demo1234!' }
-Invoke-RestMethod "$apiBase/api/auth/me" -WebSession $marketSession
+$headers = @{ Authorization = "Bearer $($login.accessToken)"; 'X-CSRF-TOKEN' = $csrf }
+Invoke-RestMethod "$apiBase/api/auth/me" -WebSession $marketSession -Headers $headers
 $csrf = (Invoke-RestMethod "$apiBase/api/auth/csrf" -WebSession $marketSession).token
 Invoke-WebRequest "$apiBase/api/auth/logout" -Method Post -WebSession $marketSession `
-  -Headers @{ 'X-CSRF-TOKEN' = $csrf }
+  -Headers @{ Authorization = "Bearer $($login.accessToken)"; 'X-CSRF-TOKEN' = $csrf }
 ```
 
 매장 ID는 DB가 발급한다. 판매자 계정으로 로그인한 뒤 해당 매장 ID로 `/api/seller/stores/{storeId}`를 조회한다. 다른 판매자의 매장과 구매자 접근은 403, 미로그인은 401이다. 각 API의 입력·응답·실패 계약은 Swagger UI에서 확인한다.
 
 ## 검증 범위
 
-`check`는 Spotless·컴파일 경고 실패·PMD·ArchUnit·JUnit을 실행한다. 핵심 업무 Unit은 가입·소유권·상품·단위·시간·일괄 판매 입력 규칙을 검증한다. 통합 테스트는 Mock DB 없이 Testcontainers PostgreSQL과 실제 임의 포트 서버에서 저장·조회·쿠키·CSRF·인가·동시 변경·일괄 저장의 롤백을 검증한다. Docker 실패 시 테스트를 skip하지 않는다.
+`check`는 Spotless·컴파일 경고 실패·PMD·ArchUnit·JUnit을 실행한다. 핵심 업무 Unit은 가입·소유권·상품·단위·시간·일괄 판매 입력 규칙을 검증한다. 통합 테스트는 Testcontainers PostgreSQL·Redis와 실제 임의 포트 서버에서 저장·조회·JWT·RTR·쿠키·CSRF·인가·동시 변경·일괄 저장의 롤백을 검증한다. OAuth 제공자는 테스트 전용 Data 대역으로 교체하며 실제 카카오·구글 왕복 검증과 구분한다. Docker 실패 시 테스트를 skip하지 않는다.
 
 화면의 핵심 흐름은 실제 백엔드와 PostgreSQL을 포함한 Playwright로 검증한다. HTTP 통합 테스트와 브라우저 검증은 구분한다. 로컬 검증 로그는 Git에서 제외한 `.local/verification/`에 둔다.
 
@@ -95,9 +114,9 @@ npm run check
 npm run build
 ```
 
-브라우저 주소는 `http://127.0.0.1:5173`이다. `/api`와 `/actuator`는 Vite가 백엔드로 전달한다. 기본 대상은 `http://127.0.0.1:8080`이며 다른 백엔드를 사용할 때는 개발 서버 실행 전에 `$env:BACKEND_URL`을 지정한다. 인증 정보를 브라우저 저장소에 보관하지 않으며 새로고침 시 서버 세션으로 현재 사용자를 복원한다.
+브라우저 주소는 `http://127.0.0.1:5173`이다. `/api`와 `/actuator`는 Vite가 백엔드로 전달한다. 기본 대상은 `http://127.0.0.1:8080`이며 다른 백엔드를 사용할 때는 개발 서버 실행 전에 `$env:BACKEND_URL`을 지정한다. 인증 정보를 브라우저 저장소에 보관하지 않으며 새로고침 시 refresh 쿠키로 access를 발급받아 현재 사용자를 복원한다.
 
-가입 후 로그인은 별도로 수행한다. 판매자는 로그인 후 서버 세션에 연결된 담당 매장을 자동으로 확인한다. 매장 번호를 입력할 필요가 없다. 아래 DB 조회는 E2E 기대값 확인용이며 사용자 화면의 입력 절차가 아니다.
+일반 가입 후 로그인은 별도로 수행하고 소셜 가입 완료는 즉시 로그인한다. 판매자는 인증된 계정의 담당 매장을 자동으로 확인한다. 매장 번호를 입력할 필요가 없다. 아래 DB 조회는 E2E 기대값 확인용이며 사용자 화면의 입력 절차가 아니다.
 
 ```powershell
 docker compose exec postgres psql -U mirinae -d mirinae -c "SELECT s.id, a.login_id, s.name FROM stores s JOIN accounts a ON a.id = s.owner_account_id ORDER BY s.id;"
@@ -105,7 +124,7 @@ docker compose exec postgres psql -U mirinae -d mirinae -c "SELECT s.id, a.login
 
 ## 브라우저 연동 검증
 
-테스트용 DB를 연결한 백엔드는 `demo,e2e` 프로필과 `--e2e.fixed-instant=2026-10-13T03:00:00Z`로 실행한다. 브라우저도 동일한 시각을 사용하며 실제 HTTP·PostgreSQL·세션 인증을 검증한다. 일반 시연 서버는 `demo` 프로필만 사용해 실제 시간으로 동작한다. 테스트 환경에 계정 정보와 실제 매장 번호를 제공한다. 설정 누락이나 잘못된 고정 시각·백엔드·DB 장애는 실패하며 skip하지 않는다. 테스트 가입 정보는 매 실행마다 고유하게 생성하므로 운영 DB를 대상으로 실행하지 않는다.
+독립 PostgreSQL·Redis를 연결한 백엔드는 `demo,e2e` 프로필과 `--e2e.fixed-instant=2026-10-13T03:00:00Z`로 실행한다. JWT 발급·검증도 같은 시계를 사용한다. 브라우저도 동일한 시각을 사용하며 실제 HTTP·PostgreSQL·Redis JWT 인증을 검증한다. 일반 시연 서버는 `demo` 프로필만 사용해 실제 시간으로 동작한다. 테스트 환경에 위 인증 설정·계정 정보와 실제 매장 번호를 제공한다. 설정 누락이나 잘못된 고정 시각·백엔드·DB·Redis 장애는 실패하며 skip하지 않는다. 테스트 가입 정보는 매 실행마다 고유하게 생성하므로 운영 DB를 대상으로 실행하지 않는다.
 
 ```powershell
 cd frontend
@@ -133,7 +152,7 @@ Chromium을 별도로 설치하는 환경에서는 `npx playwright install chrom
 ```powershell
 $storeId = Read-Host '본인 매장 번호'
 $ownedStore = Invoke-RestMethod "$apiBase/api/seller/stores/$storeId" -WebSession $marketSession
-$headers = @{ 'X-CSRF-TOKEN' = $csrf }
+$headers = @{ Authorization = "Bearer $($login.accessToken)"; 'X-CSRF-TOKEN' = $csrf }
 $pickupDate = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'Korea Standard Time').ToString('yyyy-MM-dd')
 
 $product = Invoke-RestMethod "$apiBase/api/seller/stores/$storeId/products" -Method Post `
@@ -202,7 +221,7 @@ fixture는 기존 테스트 판매자의 비밀번호 해시를 복사해 같은
 
 관리자 운영은 일반 프로필에서 진행한다. 기존 시연 DB에 데모 계정·시장·매장이 필요하면 먼저 `demo` 프로필로 한 번 생성한 뒤, 같은 DB에 `demo` 프로필을 해제해 재기동하고 관리한다. `demo` 초기화는 기존의 엄격한 충돌 검사 정책을 유지하므로, 데모 계정의 이메일·비밀번호나 매장·시장 이름을 바꾼 DB에 `demo`를 다시 활성화하면 원래 초기값과의 충돌로 기동이 실패할 수 있다. 프로필 해제는 기존 데이터를 삭제하지 않는다. E2E에서는 고정 데모 fixture를 유지하고 관리자 시나리오가 별도의 시장·매장·판매자를 생성한다.
 
-관리자는 공통 로그인 화면에서 로그인하면 관리자 메뉴로 진입한다. 시장부터 등록하고 매장·새 판매자를 함께 등록한다. 판매자 첫 비밀번호는 서비스 밖에서 전달하며, 판매자는 첫 로그인 후 현재 비밀번호와 다른 새 비밀번호로 변경해야 상품·판매 업무를 사용할 수 있다. 담당자 이름·국내 전화번호·이메일은 관리자와 해당 판매자 본인만 조회하고 관리자만 수정한다. 기존 판매자는 담당자 정보가 없어도 계속 이용하며 미등록 정보를 관리자가 보완한다.
+관리자는 공통 로그인 화면에서 로그인하면 관리자 메뉴로 진입한다. 시장부터 등록하고 매장·새 판매자를 함께 등록한다. 판매자 첫 비밀번호는 서비스 밖에서 전달하며, 판매자는 첫 로그인 후 현재 비밀번호와 다른 새 비밀번호로 변경하고 새 비밀번호로 다시 로그인해야 상품·판매 업무를 사용할 수 있다. 담당자 이름·국내 전화번호·이메일은 관리자와 해당 판매자 본인만 조회하고 관리자만 수정한다. 기존 판매자는 담당자 정보가 없어도 계속 이용하며 미등록 정보를 관리자가 보완한다.
 
 시장·매장 이름 수정, 구매자/판매자 목록, 확정 주문과 주문 당시 상품·수령 조건, 날짜별 판매 기록, 대상·기간별 변경 이력을 제공한다. 판매 현황은 당일·과거의 중단/삭제 상품 기록을 포함한다. 가격·수량 수정, 매장 이동·주인 변경·계정 삭제·운영 종료는 제공하지 않는다. 관리자 대신 취소·환불과 매장 운영 중지·해제는 아래 Phase 5 절을 참조한다. API 요청·응답·실패 계약은 Swagger UI의 관리자 및 판매자 계정 API를 참조한다.
 

@@ -7,6 +7,7 @@ import com.mirinae.market.modules.checkout.business.CheckoutService;
 import com.mirinae.market.modules.checkout.business.FulfillmentService;
 import com.mirinae.market.modules.checkout.business.RefundService;
 import com.mirinae.market.modules.store.business.StoreService;
+import com.mirinae.market.support.RedisTestConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -30,6 +31,8 @@ class RefundRestartIntegrationTest {
                     "--spring.datasource.url=" + database.getJdbcUrl(),
                     "--spring.datasource.username=" + database.getUsername(),
                     "--spring.datasource.password=" + database.getPassword(),
+                    "--spring.data.redis.host=" + RedisTestConfig.host(),
+                    "--spring.data.redis.port=" + RedisTestConfig.port(),
                     "--mirinae.refund.mode=LOST_RESPONSE",
                     "--mirinae.refund.recovery.enabled=false")) {
           var jdbc = context.getBean(JdbcTemplate.class);

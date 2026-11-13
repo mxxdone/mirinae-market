@@ -34,6 +34,16 @@ async function login(page: Page, loginId: string, password: string) {
   await page.locator("#loginPassword").fill(password);
   await page.locator("#btnLoginSubmit").click();
 }
+async function logout(page: Page, selector: string) {
+  const completed = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/auth/logout",
+  );
+  await page.locator(selector).click();
+  expect((await completed).status()).toBe(204);
+  await expect(page.locator("#heading-login")).toBeVisible();
+}
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
@@ -108,7 +118,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
   }
   await page.setViewportSize({ width: 2560, height: 1440 });
   await page.screenshot({ path: "../output/playwright/responsive-form-qhd.png", fullPage: true });
-  await page.locator("#btnAdminLogout").click();
+  await logout(page, "#btnAdminLogout");
 
   const suffix = Date.now().toString().slice(-9);
   const sellerId = `layout_${suffix}`;
@@ -226,7 +236,7 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
       .locator(".seller-workspace")
       .evaluate((element) => element.getBoundingClientRect().width),
   ).toBeLessThanOrEqual(1024);
-  await page.locator("#btnLogoutSeller").click();
+  await logout(page, "#btnLogoutSeller");
 
   await login(page, required("E2E_BUYER_LOGIN_ID"), required("E2E_DEMO_PASSWORD"));
 

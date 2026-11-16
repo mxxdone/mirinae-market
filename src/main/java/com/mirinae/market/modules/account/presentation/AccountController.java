@@ -4,11 +4,15 @@ import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.account.business.AccountView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import java.security.Principal;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -51,4 +55,33 @@ public class AccountController {
     return accounts.signup(
         request.loginId(), request.password(), request.displayName(), request.email());
   }
+
+  @Operation(
+      summary = "구매자 표시 이름 변경",
+      description =
+          "Bearer 인증의 본인 계정 표시 이름만 변경합니다. 일반·소셜 가입 모두 같은 가입 규칙(한글·영문·숫자 2~10자)을 적용하며 임의로 자르거나 공백을 제거하지 않습니다. 이름 중복은 허용합니다. 이메일·로그인 수단·역할·인증 버전은 바뀌지 않습니다.")
+  @SecurityRequirement(name = "bearerAuth")
+  @SecurityRequirement(name = "csrfToken")
+  @ApiResponse(responseCode = "200", description = "저장한 표시 이름: {displayName}")
+  @ApiResponse(responseCode = "400", description = "이름 누락·길이·문자 규칙 위반 또는 잘못된 JSON: INVALID_INPUT")
+  @ApiResponse(responseCode = "401", description = "미로그인·만료·폐기 또는 탈퇴한 계정: UNAUTHENTICATED")
+  @ApiResponse(responseCode = "403", description = "구매자 외 역할 또는 CSRF 토큰 누락·불일치: FORBIDDEN")
+  @PatchMapping("/api/buyer/profile")
+  public ResponseEntity<Map<String, String>> changeDisplayName(
+      Principal principal, @RequestBody DisplayNameInput input) {
+    String requested = input == null ? null : input.displayName();
+    String displayName = accounts.changeBuyerDisplayName(principal.getName(), requested);
+    return ResponseEntity.ok()
+        .header("Cache-Control", "no-store")
+        .body(Map.of("displayName", displayName));
+  }
+
+  public record DisplayNameInput(
+      @Schema(
+              description = "2~10자의 완성형 한글·영문·숫자. 앞뒤 공백·특수문자·이모지 불가",
+              example = "시장손님",
+              minLength = 2,
+              maxLength = 10,
+              requiredMode = Schema.RequiredMode.REQUIRED)
+          String displayName) {}
 }

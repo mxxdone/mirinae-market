@@ -1,12 +1,13 @@
 import {
   apiGet,
+  apiPatchJson,
   apiPostJson,
   broadcastLogoutEvent,
   clearAuthTokens,
   invalidateAuthGeneration,
   refreshCsrfSilently,
 } from "./client";
-import type { AccountView, SignupRequest } from "./types";
+import type { AccountView, BuyerProfileResponse, SignupRequest } from "./types";
 
 /**
  * 구매자 계정 생성 (회원가입)
@@ -42,4 +43,17 @@ export async function withdrawBuyer(password?: string): Promise<void> {
   clearAuthTokens();
   broadcastLogoutEvent();
   await refreshCsrfSilently();
+}
+
+/**
+ * 구매자 표시 이름 변경 (PATCH /api/buyer/profile)
+ * 활성 구매자 본인의 표시 이름만 변경하며, 응답으로 서버가 저장한 { displayName }을 반환합니다.
+ * 편집값을 임의로 자르거나 trim하지 않습니다.
+ */
+export async function changeBuyerDisplayName(displayName: string): Promise<BuyerProfileResponse> {
+  const result = await apiPatchJson<BuyerProfileResponse>("/api/buyer/profile", { displayName });
+  if (!result || typeof result.displayName !== "string") {
+    throw new Error("표시 이름 변경 응답이 올바르지 않습니다.");
+  }
+  return result;
 }

@@ -54,6 +54,32 @@ class AuthHttpFlowTest {
   }
 
   @Test
+  void currentUserReturnsOnlyTheAuthenticatedAccountsStoredEmail() throws Exception {
+    String firstEmail = uniqueId() + "@example.com";
+    String secondEmail = uniqueId() + "@example.com";
+    String firstId = signup(uniqueId(), firstEmail);
+    String secondId = signup(uniqueId(), secondEmail);
+    try (HttpSessionClient first = loggedIn(firstId);
+        HttpSessionClient second = loggedIn(secondId);
+        HttpSessionClient anonymous = new HttpSessionClient(port)) {
+      HttpResponse<String> firstMe = first.get("/api/auth/me");
+      assertThat(firstMe.statusCode()).isEqualTo(200);
+      assertThat(firstMe.body())
+          .contains("\"email\":\"" + firstEmail + "\"")
+          .doesNotContain(secondEmail);
+      assertThat(firstMe.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+      HttpResponse<String> secondMe = second.get("/api/auth/me");
+      assertThat(secondMe.statusCode()).isEqualTo(200);
+      assertThat(secondMe.body())
+          .contains("\"email\":\"" + secondEmail + "\"")
+          .doesNotContain(firstEmail);
+      HttpResponse<String> anonymousMe = anonymous.get("/api/auth/me");
+      assertThat(anonymousMe.statusCode()).isEqualTo(401);
+      assertThat(anonymousMe.body()).doesNotContain(firstEmail, secondEmail);
+    }
+  }
+
+  @Test
   void refreshRotatesOnceAndOldTokenReuseRevokesTheLogin() throws Exception {
     String loginId = signup(uniqueId(), uniqueId() + "@example.com");
     try (HttpSessionClient client = loggedIn(loginId)) {
@@ -149,7 +175,8 @@ class AuthHttpFlowTest {
       assertThat(client.get("/api/auth/me").body())
           .contains("hasLocalPassword")
           .contains("linkedProviders")
-          .contains("kakao");
+          .contains("kakao")
+          .contains("\"email\":\"" + email + "\"");
 
       var row = jdbc.queryForMap("SELECT password_hash,role FROM accounts WHERE email=?", email);
       assertThat(row.get("password_hash")).isNull();
@@ -314,6 +341,80 @@ class AuthHttpFlowTest {
                   accountId))
           .isNull();
       assertThat(client.get("/api/auth/me").statusCode()).isEqualTo(200);
+    }
+  }
+
+  @Test
+  void signupFlowExposesProviderEmailVerifiedOnlyForSignup() throws Exception {
+    String email = uniqueId() + "@example.com";
+    String subject = Long.toString(Math.abs(UUID.randomUUID().getMostSignificantBits()));
+    try (HttpSessionClient client = new HttpSessionClient(port)) {
+      client.refreshCsrf();
+      // 제공자 확인 상태가 true인 신규 사용자는 SIGNUP 화면에서 확인됨으로 노출된다.
+      String code = provider.issueCode("kakao", subject, "확인손님", email, true);
+      startFlow(client, "kakao", "login");
+      assertThat(callback(client, "kakao", code).statusCode()).isEqualTo(302);
+      HttpResponse<String> flow = flow(client);
+      assertThat(flow.statusCode()).isEqualTo(200);
+      assertThat(client.json(flow).get("status").asString()).isEqualTo("SIGNUP");
+      assertThat(client.json(flow).get("displayName").asString()).isEqualTo("확인손님");
+      assertThat(client.json(flow).get("email").asString()).isEqualTo(email);
+      assertThat(client.json(flow).get("providerEmailVerified").asBoolean()).isTrue();
+
+      // 확인되지 않은 이메일은 미확인으로 노출된다.
+      String googleSubject = Long.toString(Math.abs(UUID.randomUUID().getMostSignificantBits()));
+      String unverifiedEmail = uniqueId() + "@example.com";
+      String unverifiedCode =
+          provider.issueCode("google", googleSubject, "미확인손님", unverifiedEmail, false);
+      startFlow(client, "google", "login");
+      callback(client, "google", unverifiedCode);
+      HttpResponse<String> unverified = flow(client);
+      assertThat(client.json(unverified).get("status").asString()).isEqualTo("SIGNUP");
+      assertThat(client.json(unverified).get("providerEmailVerified").asBoolean()).isFalse();
+
+      // 확인되지 않은 상태로 가입을 완료한 뒤 같은 소셜 계정으로 다시 로그인한다.
+      client.refreshCsrf();
+      var signup =
+          client.post(
+              "/api/auth/oauth/signup",
+              "{\"displayName\":\"미확인손님\",\"email\":\"" + unverifiedEmail + "\"}",
+              "application/json",
+              true);
+      assertThat(signup.statusCode()).isEqualTo(200);
+      client.captureAccess(signup);
+
+      // 기존 계정의 LOGIN 흐름에는 이름·이메일·확인 상태를 공개하지 않는다.
+      client.refreshCsrf();
+      String loginCode =
+          provider.issueCode("google", googleSubject, "미확인손님", unverifiedEmail, true);
+      startFlow(client, "google", "login");
+      assertThat(callback(client, "google", loginCode).statusCode()).isEqualTo(302);
+      HttpResponse<String> loginFlow = flow(client);
+      assertThat(client.json(loginFlow).get("status").asString()).isEqualTo("LOGIN");
+      assertThat(client.json(loginFlow).has("providerEmailVerified")).isFalse();
+      assertThat(client.json(loginFlow).has("email")).isFalse();
+      assertThat(client.json(loginFlow).has("displayName")).isFalse();
+    }
+  }
+
+  @Test
+  void linkFlowDoesNotExposeProviderEmailOrVerifiedState() throws Exception {
+    String loginId = signup(uniqueId(), uniqueId() + "@example.com");
+    String email =
+        jdbc.queryForObject("SELECT email FROM accounts WHERE login_id=?", String.class, loginId);
+    String subject = Long.toString(Math.abs(UUID.randomUUID().getMostSignificantBits()));
+    try (HttpSessionClient client = new HttpSessionClient(port)) {
+      client.refreshCsrf();
+      String code = provider.issueCode("kakao", subject, "연결손님", email, true);
+      startFlow(client, "kakao", "login");
+      callback(client, "kakao", code);
+      HttpResponse<String> flow = flow(client);
+      assertThat(client.json(flow).get("status").asString()).isEqualTo("LINK");
+      // 연결 화면에는 후보 계정의 이메일·확인 상태·이름을 노출하지 않는다.
+      assertThat(client.json(flow).has("providerEmailVerified")).isFalse();
+      assertThat(client.json(flow).has("email")).isFalse();
+      assertThat(client.json(flow).has("displayName")).isFalse();
+      assertThat(flow.body()).doesNotContain(email, loginId);
     }
   }
 

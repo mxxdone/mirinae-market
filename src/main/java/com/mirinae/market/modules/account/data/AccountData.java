@@ -243,6 +243,19 @@ public class AccountData {
         accountId);
   }
 
+  /**
+   * 활성 구매자의 표시 이름만 갱신한다. 역할·활성 조건을 SQL에서도 다시 확인하고 입력값을 자르거나 가공하지 않고 그대로 저장한다.
+   *
+   * @return 대상 행을 정확히 1개 갱신했으면 true
+   */
+  public boolean changeBuyerDisplayName(long id, String displayName) {
+    return jdbc.update(
+            "UPDATE accounts SET display_name=? WHERE id=? AND role='BUYER' AND withdrawn_at IS NULL",
+            displayName,
+            id)
+        == 1;
+  }
+
   public void withdraw(long id, String hash, String email, java.time.Instant now) {
     if (jdbc.update(
             "UPDATE accounts SET withdrawn_at=?,display_name='탈퇴회원',email=?,password_hash=?,contact_name=NULL,contact_phone=NULL,auth_version=auth_version+1 WHERE id=? AND role='BUYER' AND withdrawn_at IS NULL",

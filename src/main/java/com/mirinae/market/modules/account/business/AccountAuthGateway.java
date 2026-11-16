@@ -42,6 +42,9 @@ public interface AccountAuthGateway {
   /** 현재 사용자 응답·인가 판단에 쓰는 최소 계정 정보다. */
   AccountSummary summary(String loginId);
 
+  /** 활성 계정의 상세 정보다. 인증된 본인의 조회 범위는 호출자가 보장한다. */
+  MemberView profile(String loginId);
+
   /** 계정에 연결된 소셜 신원 목록이다. */
   java.util.List<LinkedIdentity> linkedIdentities(long accountId);
 

@@ -29,6 +29,7 @@ import {
 import { AdminScreen } from "./screens/AdminScreen";
 import { PasswordChangeScreen } from "./screens/PasswordChangeScreen";
 import { isSellerLocation } from "./sellerLocation";
+import { AppFooter } from "./components/PolicyLinks";
 
 export type ScreenId =
   | "admin"
@@ -321,6 +322,15 @@ export function App(): ReactElement {
     showToast("회원 탈퇴가 완료되었습니다.");
   }
 
+  const handleDisplayNameUpdated = useCallback((buyerId: number, newDisplayName: string): void => {
+    ++requestIdRef.current;
+    setCurrentUser((prev) =>
+      prev && prev.id === buyerId && prev.role === "BUYER"
+        ? { ...prev, displayName: newDisplayName }
+        : prev,
+    );
+  }, []);
+
   /**
    * 회원가입 성공 처리 (자동 로그인 없음, 로그인 아이디 인계 가능)
    */
@@ -414,6 +424,7 @@ export function App(): ReactElement {
             <p style={{ marginTop: "12px", fontSize: "14px", fontWeight: 600 }}>세션 확인 중...</p>
           </div>
         </main>
+        <AppFooter />
       </div>
     );
   }
@@ -527,6 +538,7 @@ export function App(): ReactElement {
               reauthConfirmed={socialReauthConfirmed}
               onWithdrawn={handleWithdrawn}
               onSessionExpired={handleSessionExpired}
+              onDisplayNameUpdated={handleDisplayNameUpdated}
             />
           )}
 
@@ -603,9 +615,7 @@ export function App(): ReactElement {
         </div>
       </main>
 
-      <footer className="app-footer">
-        <span>미리내 마켓 · 동네 시장 예약 방문 수령</span>
-      </footer>
+      <AppFooter />
 
       <Toast message={toastMessage} />
     </div>

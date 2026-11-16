@@ -45,6 +45,7 @@ public class AccountService implements AccountAuthGateway {
     if (!"ADMIN".equals(current(loginId).role())) throw new AccountForbiddenException();
   }
 
+  @Override
   @org.springframework.transaction.annotation.Transactional(readOnly = true)
   public MemberView profile(String loginId) {
     requireActive(loginId);
@@ -82,6 +83,27 @@ public class AccountService implements AccountAuthGateway {
 
   public MemberView lockMember(long id) {
     return memberView(data.lockMember(id));
+  }
+
+  /**
+   * 활성 구매자 본인의 표시 이름을 변경한다. 인증 주체의 loginId만 받고 계정 ID는 신뢰하지 않는다. 계정 행을 잠근 뒤 활성·구매자 여부를 다시 확인하고 표시
+   * 이름만 갱신한다. 이메일·로그인 수단·역할·인증 버전은 바꾸지 않는다.
+   *
+   * @return 저장된 표시 이름
+   */
+  @org.springframework.transaction.annotation.Transactional
+  public String changeBuyerDisplayName(String loginId, String displayName) {
+    AccountView account = current(loginId);
+    var locked = data.lockMember(account.id());
+    // 잠금 이후 상태를 다시 확인해 탈퇴·역할 변경 경합에서 다른 계정을 수정하지 않는다.
+    requireActive(loginId);
+    if (!"BUYER".equals(locked.role()))
+      throw new org.springframework.security.access.AccessDeniedException(
+          "구매자만 표시 이름을 변경할 수 있습니다.");
+    SignupRules.displayName(displayName);
+    if (!data.changeBuyerDisplayName(account.id(), displayName))
+      throw new AccountInactiveException();
+    return displayName;
   }
 
   @org.springframework.transaction.annotation.Transactional

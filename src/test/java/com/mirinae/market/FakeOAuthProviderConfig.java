@@ -29,8 +29,15 @@ public class FakeOAuthProviderConfig {
         java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public String issueCode(String provider, String subject, String displayName, String email) {
+      // 확인 상태를 모르는 기존 호출은 미확인(false)으로 취급한다.
+      return issueCode(provider, subject, displayName, email, false);
+    }
+
+    /** 제공자 이메일 확인 상태까지 지정한다. 확인 상태는 가입 폼 참고값일 뿐 소유 확인이 아니다. */
+    public String issueCode(
+        String provider, String subject, String displayName, String email, boolean emailVerified) {
       String code = "code-" + java.util.UUID.randomUUID();
-      codes.put(code, new ProviderUser(provider, subject, displayName, email));
+      codes.put(code, new ProviderUser(provider, subject, displayName, email, emailVerified));
       return code;
     }
 

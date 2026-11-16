@@ -194,3 +194,157 @@ test("SIGNUP 409 LINK_REQUIRED 뒤 flow 재조회가 실패하면 로딩을 해�
   await expect(page.locator("#heading-oauth-link")).toBeVisible();
   expect(flowCalls).toBeGreaterThanOrEqual(2);
 });
+
+test("SIGNUP에서 이름·이메일 자동 채움과 제공자 확인 안내가 노출되고 이메일 편집 시 안내가 해제된다", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname.startsWith("/api/") || url.pathname === "/actuator/health",
+    async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/actuator/health") {
+        await route.fulfill({ json: { status: "UP" } });
+        return;
+      }
+      if (path === "/api/auth/oauth/flow") {
+        await route.fulfill({
+          json: {
+            status: "SIGNUP",
+            provider: "kakao",
+            displayName: "카카오손님",
+            email: "verified@market.local",
+            linkVerified: false,
+            providerEmailVerified: true,
+          },
+        });
+        return;
+      }
+      if (path === "/api/auth/csrf") {
+        await route.fulfill({ json: { token: "mock-csrf", headerName: "X-CSRF-TOKEN" } });
+        return;
+      }
+      if (path === "/api/buyer/cart") {
+        await route.fulfill({ json: { version: 0, items: [] } });
+        return;
+      }
+      await route.fulfill({ json: [] });
+    },
+  );
+
+  await page.goto("/#oauth");
+  await expect(page.locator("#heading-oauth-signup")).toBeVisible();
+
+  // 이름·이메일 자동 채움 확인
+  await expect(page.locator("#oauthDisplayName")).toHaveValue("카카오손님");
+  await expect(page.locator("#oauthEmail")).toHaveValue("verified@market.local");
+
+  // 제공자 확인 안내 노출 확인
+  const verifiedNotice = page.locator("#oauthEmailVerifiedNotice");
+  await expect(verifiedNotice).toBeVisible();
+  await expect(verifiedNotice).toContainText("카카오에서 확인된 이메일입니다");
+
+  // 이메일 편집 시 확인 안내 해제
+  await page.locator("#oauthEmail").fill("edited@market.local");
+  await expect(verifiedNotice).toHaveCount(0);
+
+  // 원래 값으로 복원 시 다시 노출
+  await page.locator("#oauthEmail").fill("verified@market.local");
+  await expect(verifiedNotice).toBeVisible();
+});
+
+test("SIGNUP에서 미확인 플래그가 있지만 이메일이 존재하는 경우 확인 안내가 노출되지 않고 입력값은 유지된다", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname.startsWith("/api/") || url.pathname === "/actuator/health",
+    async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/actuator/health") {
+        await route.fulfill({ json: { status: "UP" } });
+        return;
+      }
+      if (path === "/api/auth/oauth/flow") {
+        await route.fulfill({
+          json: {
+            status: "SIGNUP",
+            provider: "kakao",
+            displayName: "미확인손님",
+            email: "unverified@market.local",
+            linkVerified: false,
+            providerEmailVerified: false,
+          },
+        });
+        return;
+      }
+      if (path === "/api/auth/csrf") {
+        await route.fulfill({ json: { token: "mock-csrf", headerName: "X-CSRF-TOKEN" } });
+        return;
+      }
+      if (path === "/api/buyer/cart") {
+        await route.fulfill({ json: { version: 0, items: [] } });
+        return;
+      }
+      await route.fulfill({ json: [] });
+    },
+  );
+
+  await page.goto("/#oauth");
+  await expect(page.locator("#heading-oauth-signup")).toBeVisible();
+
+  // 입력값 유지 확인
+  await expect(page.locator("#oauthDisplayName")).toHaveValue("미확인손님");
+  await expect(page.locator("#oauthEmail")).toHaveValue("unverified@market.local");
+
+  // 확인 안내 및 누락 안내 미노출 확인
+  await expect(page.locator("#oauthEmailVerifiedNotice")).toHaveCount(0);
+  await expect(page.locator("#oauthDisplayNameMissingNotice")).toHaveCount(0);
+  await expect(page.locator("#oauthEmailMissingNotice")).toHaveCount(0);
+});
+
+test("SIGNUP에서 이름·이메일이 누락된 경우 직접 입력 안내를 표시하고 확인 안내는 노출하지 않는다", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname.startsWith("/api/") || url.pathname === "/actuator/health",
+    async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/actuator/health") {
+        await route.fulfill({ json: { status: "UP" } });
+        return;
+      }
+      if (path === "/api/auth/oauth/flow") {
+        await route.fulfill({
+          json: {
+            status: "SIGNUP",
+            provider: "kakao",
+            linkVerified: false,
+            providerEmailVerified: false,
+          },
+        });
+        return;
+      }
+      if (path === "/api/auth/csrf") {
+        await route.fulfill({ json: { token: "mock-csrf", headerName: "X-CSRF-TOKEN" } });
+        return;
+      }
+      if (path === "/api/buyer/cart") {
+        await route.fulfill({ json: { version: 0, items: [] } });
+        return;
+      }
+      await route.fulfill({ json: [] });
+    },
+  );
+
+  await page.goto("/#oauth");
+  await expect(page.locator("#heading-oauth-signup")).toBeVisible();
+
+  await expect(page.locator("#oauthDisplayName")).toHaveValue("");
+  await expect(page.locator("#oauthEmail")).toHaveValue("");
+  await expect(page.locator("#oauthDisplayNameMissingNotice")).toHaveText(
+    "소셜 계정에서 이름 정보를 전달받지 못했습니다. 직접 입력해 주세요.",
+  );
+  await expect(page.locator("#oauthEmailMissingNotice")).toHaveText(
+    "소셜 계정에서 이메일 정보를 전달받지 못했습니다. 직접 입력해 주세요.",
+  );
+  await expect(page.locator("#oauthEmailVerifiedNotice")).toHaveCount(0);
+});

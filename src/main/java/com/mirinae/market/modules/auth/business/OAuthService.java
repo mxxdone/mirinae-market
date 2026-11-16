@@ -254,6 +254,7 @@ public class OAuthService {
         user.subject(),
         user.displayName(),
         user.email(),
+        user.providerEmailVerified(),
         message);
   }
 
@@ -267,7 +268,8 @@ public class OAuthService {
   public OAuthFlowView flow(String flowId) {
     OAuthFlowRecord flow = flowId == null || flowId.isBlank() ? null : store.flow(flowId);
     if (flow == null) {
-      return new OAuthFlowView("ERROR", null, null, null, false, "인증 확인 시간이 지났습니다. 다시 시작해 주세요.");
+      return new OAuthFlowView(
+          "ERROR", null, null, null, false, false, "인증 확인 시간이 지났습니다. 다시 시작해 주세요.");
     }
     var view = flow.view();
     return new OAuthFlowView(
@@ -275,6 +277,7 @@ public class OAuthService {
         view.provider(),
         view.displayName(),
         view.email(),
+        view.providerEmailVerified(),
         view.linkVerified(),
         view.message());
   }

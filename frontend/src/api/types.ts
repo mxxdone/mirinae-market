@@ -38,6 +38,8 @@ export interface UserMe {
   id: number;
   loginId: string;
   displayName: string;
+  /** 이전 서버 응답과의 호환을 위해 누락을 허용한다. */
+  email?: string;
   role: UserRole;
   requiresPasswordChange: boolean;
   hasLocalPassword?: boolean;
@@ -67,6 +69,11 @@ export interface OAuthFlowResponse {
   email?: string;
   message?: string;
   linkVerified?: boolean;
+  providerEmailVerified?: boolean;
+}
+
+export interface BuyerProfileResponse {
+  displayName: string;
 }
 
 export interface OAuthSignupRequest {

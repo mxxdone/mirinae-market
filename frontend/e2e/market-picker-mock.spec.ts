@@ -59,6 +59,21 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
+test("시장 선택 제목의 자동 포커스에는 테두리가 없고 검색 버튼의 키보드 포커스는 표시한다", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const heading = page.locator("#heading-market");
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveCSS("outline-style", "none");
+
+  await page.keyboard.press("Tab");
+  const searchButton = page.locator("#btnSearchMarketName");
+  await searchButton.focus();
+  await expect(searchButton).toHaveCSS("outline-style", "solid");
+  await expect(searchButton).toHaveCSS("outline-width", "3px");
+});
+
 test("가나다순 10개씩 페이지를 제공하고 검색 시 첫 페이지로 복귀하며 행 클릭으로 바로 진입한다", async ({
   page,
 }) => {
@@ -503,3 +518,167 @@ test("탈퇴 제한 응답은 계정 화면과 확인창을 유지하고 비밀�
   await expect(page.locator("#withdrawal-password")).toHaveValue("");
   await expect(page.locator("#userSummaryLoginId")).toHaveText("test_buyer");
 });
+
+test("표시 이름 변경 시 지연 응답 중 중복 제출을 차단하고 500 오류 시 기존 이름을 유지하며 401 시 세션 만료로 전환한다", async ({
+  page,
+}) => {
+  let patchCalls = 0;
+  let statusToReturn = 200;
+  let resolveDeferredPatch: () => void = () => {
+    throw new Error("지연 응답 해제 함수를 준비하지 못했습니다.");
+  };
+  const deferredPatch = new Promise<void>((resolve) => {
+    resolveDeferredPatch = resolve;
+  });
+  let isDeferred = false;
+
+  await page.route("**/api/auth/csrf", (route) =>
+    route.fulfill({ json: { token: "test-csrf", headerName: "X-CSRF-TOKEN" } }),
+  );
+  await page.route("**/api/buyer/profile", async (route) => {
+    patchCalls += 1;
+    if (isDeferred) {
+      await deferredPatch;
+    }
+    if (statusToReturn === 401) {
+      await route.fulfill({
+        status: 401,
+        json: { code: "UNAUTHENTICATED", message: "인증이 만료되었습니다." },
+      });
+      return;
+    }
+    if (statusToReturn === 500) {
+      await route.fulfill({
+        status: 500,
+        json: { code: "INTERNAL_ERROR", message: "서버 처리 오류가 발생했습니다." },
+      });
+      return;
+    }
+    await route.fulfill({ json: { displayName: "수정된이름" } });
+  });
+
+  await page.goto("/#account");
+  await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+  await expect(page.locator("#userSummaryDisplayName")).toHaveText("구매자");
+
+  // 1) 500 오류 시 기존 이름 유지 및 오류 안내 (첫 번째 요청)
+  statusToReturn = 500;
+  isDeferred = false;
+  await page.locator("#inputChangeDisplayName").fill("실패테스트");
+  await page.locator("#btnSubmitChangeDisplayName").click();
+  await expect(page.locator("#changeDisplayNameStatus")).toHaveText(
+    "서버 처리 오류가 발생했습니다.",
+  );
+  await expect(page.locator("#userSummaryDisplayName")).toHaveText("구매자");
+  expect(patchCalls).toBe(1);
+
+  // 2) 지연 응답 중 중복 제출 차단 검증 (결정적 deferred promise 해제)
+  statusToReturn = 200;
+  isDeferred = true;
+  await page.locator("#inputChangeDisplayName").fill("지연테스트");
+  await page.locator("#btnSubmitChangeDisplayName").click();
+
+  // 버튼 비활성화 및 로딩 문구 확인
+  const submitBtn = page.locator("#btnSubmitChangeDisplayName");
+  await expect(submitBtn).toBeDisabled();
+  await expect(submitBtn).toHaveText("저장 중…");
+  await expect.poll(() => patchCalls).toBe(2);
+
+  // 진행 중 추가 클릭 시도 (비활성화 상태이므로 추가 PATCH 요청이 발생하지 않아야 함)
+  await submitBtn.click({ force: true });
+  expect(patchCalls).toBe(2);
+
+  // 지연된 응답 해제
+  resolveDeferredPatch();
+  await expect(submitBtn).toBeEnabled();
+  await expect(page.locator("#changeDisplayNameStatus")).toHaveText("표시 이름이 변경되었습니다.");
+  await expect(page.locator("#userSummaryDisplayName")).toHaveText("수정된이름");
+  expect(patchCalls).toBe(2);
+
+  // 3) 401 응답 시 세션 만료 전환
+  isDeferred = false;
+  statusToReturn = 401;
+  await page.locator("#inputChangeDisplayName").fill("만료테스트");
+  await page.locator("#btnSubmitChangeDisplayName").click();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  expect(patchCalls).toBe(3);
+});
+
+for (const delayedStatus of [200, 401]) {
+  test(`계정 전환 뒤 도착한 이전 이름 변경 ${delayedStatus} 응답은 새 계정을 덮거나 만료시키지 않는다`, async ({
+    page,
+  }) => {
+    let activeId = 1;
+    let releasePatch: () => void = () => {
+      throw new Error("지연 응답을 준비하지 못했습니다.");
+    };
+    const patchGate = new Promise<void>((resolve) => {
+      releasePatch = resolve;
+    });
+    await page.route("**/api/auth/csrf", (route) =>
+      route.fulfill({ json: { token: "test-csrf", headerName: "X-CSRF-TOKEN" } }),
+    );
+    await page.route("**/api/auth/me", (route) =>
+      route.fulfill({
+        json: {
+          id: activeId,
+          loginId: activeId === 1 ? "first_buyer" : "second_buyer",
+          displayName: activeId === 1 ? "이전구매자" : "새구매자",
+          role: "BUYER",
+          requiresPasswordChange: false,
+          hasLocalPassword: true,
+        },
+      }),
+    );
+    await page.route("**/api/auth/logout", (route) => route.fulfill({ status: 204 }));
+    await page.route("**/api/auth/login", (route) =>
+      route.fulfill({
+        json: { authenticated: true, accessToken: "second-access-token", expiresIn: 600 },
+      }),
+    );
+    await page.route("**/api/buyer/profile", async (route) => {
+      await patchGate;
+      await route.fulfill({
+        status: delayedStatus,
+        json:
+          delayedStatus === 200
+            ? { displayName: "이전계정별명" }
+            : { code: "UNAUTHENTICATED", message: "이전 인증이 만료되었습니다." },
+      });
+    });
+
+    await page.goto("/#account");
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText("이전구매자");
+    await page.locator("#inputChangeDisplayName").fill("이전계정별명");
+    const pendingRequest = page.waitForRequest("**/api/buyer/profile");
+    await page.locator("#btnSubmitChangeDisplayName").click();
+    await pendingRequest;
+
+    await page.getByRole("button", { name: "계정 메뉴", exact: true }).click();
+    await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+    await expect(page.locator("#heading-login")).toBeVisible();
+    activeId = 2;
+    await page.locator("#loginUserId").fill("second_buyer");
+    await page.locator("#loginPassword").fill("Pass1234!");
+    await page.locator("#btnLoginSubmit").click();
+    await expect(page.locator("#heading-market")).toBeVisible();
+    await page.getByRole("button", { name: "계정 메뉴", exact: true }).click();
+    await page.getByRole("button", { name: "내 계정", exact: true }).click();
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText("새구매자");
+
+    const delayedResponse = page.waitForResponse("**/api/buyer/profile");
+    releasePatch();
+    await (await delayedResponse).finished();
+    // 브라우저의 응답 처리와 React 렌더를 다음 프레임까지 진행시킨 뒤 새 계정을 확인한다.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await expect(page.locator("#heading-buyer-summary")).toBeVisible();
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText("새구매자");
+    await expect(page.locator("#userSummaryLoginId")).toHaveText("second_buyer");
+    await expect(page.locator("#heading-login")).toHaveCount(0);
+  });
+}

@@ -10,6 +10,7 @@ import {
 import { ApiError, type OAuthFlowResponse } from "../../api/types";
 import { validateDisplayName, validateEmail } from "../../validation/signupValidation";
 import { StatusAlert } from "../components/StatusAlert";
+import { SignupPolicyNotice } from "../components/PolicyLinks";
 
 interface OAuthFlowScreenProps {
   onLoginSuccess: () => Promise<void> | void;
@@ -428,6 +429,11 @@ export function OAuthFlowScreen({
                     <span>{signupNameError}</span>
                   </div>
                 )}
+                {!flow?.displayName && (
+                  <p id="oauthDisplayNameMissingNotice" className="field-help-text">
+                    소셜 계정에서 이름 정보를 전달받지 못했습니다. 직접 입력해 주세요.
+                  </p>
+                )}
                 <span className="field-help-text">한글·영문·숫자 2~10자</span>
               </div>
 
@@ -455,8 +461,30 @@ export function OAuthFlowScreen({
                     <span>{signupEmailError}</span>
                   </div>
                 )}
-                <span className="field-help-text">주요 안내를 전달받을 이메일 주소입니다.</span>
+                {!flow?.email && (
+                  <p id="oauthEmailMissingNotice" className="field-help-text">
+                    소셜 계정에서 이메일 정보를 전달받지 못했습니다. 직접 입력해 주세요.
+                  </p>
+                )}
+                {flow?.providerEmailVerified === true &&
+                  flow.email &&
+                  signupEmail === flow.email && (
+                    <p
+                      id="oauthEmailVerifiedNotice"
+                      className="field-help-text"
+                      style={{ color: "var(--color-primary, #2563eb)" }}
+                    >
+                      {(flow.provider === "kakao"
+                        ? "카카오"
+                        : flow.provider === "google"
+                          ? "구글"
+                          : "소셜 제공자") + "에서 확인된 이메일입니다."}
+                    </p>
+                  )}
+                <span className="field-help-text">계정에 연결할 이메일 주소입니다.</span>
               </div>
+
+              <SignupPolicyNotice />
 
               <div className="checkout-actions" style={{ marginTop: "24px" }}>
                 <button

@@ -10,6 +10,7 @@ import {
 } from "../../validation/signupValidation";
 import { BrandIntroPanel } from "../components/BrandIntroPanel";
 import { StatusAlert } from "../components/StatusAlert";
+import { SignupPolicyNotice } from "../components/PolicyLinks";
 
 interface SignupScreenProps {
   onSignupSuccess: (loginId: string) => void;
@@ -435,6 +436,8 @@ export function SignupScreen({
                 </div>
               )}
             </div>
+
+            <SignupPolicyNotice />
 
             <button
               type="submit"

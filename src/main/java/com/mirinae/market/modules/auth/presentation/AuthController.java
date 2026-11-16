@@ -41,9 +41,9 @@ public class AuthController {
 
   @Operation(
       summary = "현재 사용자 조회",
-      description = "Authorization: Bearer access로 조회합니다. 본인에게만 로그인 수단을 제공합니다.")
+      description = "Authorization: Bearer access로 조회합니다. 인증된 본인에게만 저장된 이메일과 로그인 수단을 제공합니다.")
   @SecurityRequirement(name = "bearerAuth")
-  @ApiResponse(responseCode = "200", description = "현재 계정 정보")
+  @ApiResponse(responseCode = "200", description = "본인의 계정 정보·저장된 이메일·로그인 수단")
   @ApiResponse(responseCode = "401", description = "미로그인·만료·폐기: UNAUTHENTICATED")
   @GetMapping("/api/auth/me")
   public AuthMe current(@AuthenticationPrincipal AuthenticatedUser user) {
@@ -168,7 +168,8 @@ public class AuthController {
 
   @Operation(
       summary = "소셜 흐름 상태",
-      description = "HttpOnly 흐름 쿠키로 조회하며 서버 확인 정보만 반환합니다. 만료는 200 ERROR입니다.")
+      description =
+          "HttpOnly 흐름 쿠키로 조회하며 서버 확인 정보만 반환합니다. 만료는 200 ERROR입니다. 제공자 이메일 확인 상태는 SIGNUP 화면에만 참고값으로 포함합니다.")
   @GetMapping("/api/auth/oauth/flow")
   public Map<String, Object> flow(HttpServletRequest request) {
     OAuthFlowView flow = oauth.flow(cookies.flowId(request));
@@ -178,6 +179,10 @@ public class AuthController {
     if (flow.displayName() != null) body.put("displayName", flow.displayName());
     if (flow.email() != null) body.put("email", flow.email());
     if (flow.message() != null) body.put("message", flow.message());
+    if ("SIGNUP".equals(flow.status())) {
+      // 가입 폼의 참고 상태일 뿐 서비스 이메일 소유 확인이 아니다. 다른 흐름에는 공개하지 않는다.
+      body.put("providerEmailVerified", flow.providerEmailVerified());
+    }
     body.put("linkVerified", flow.linkVerified());
     return body;
   }

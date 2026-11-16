@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { withdrawBuyer } from "./accounts";
+import { changeBuyerDisplayName, withdrawBuyer } from "./accounts";
 import {
   bootstrapAuth,
   getMe,
@@ -189,11 +189,12 @@ describe("auth API and in-memory JWT management", () => {
   });
 
   describe("getMe", () => {
-    it("hasLocalPassword와 linkedProviders를 포함한 계정 정보를 조회한다", async () => {
+    it("저장된 이메일과 로그인 수단을 포함한 본인 계정 정보를 조회한다", async () => {
       const mockUser: UserMe = {
         id: 1,
         loginId: "social_buyer",
         displayName: "소셜구매자",
+        email: "social@example.com",
         role: "BUYER",
         requiresPasswordChange: false,
         hasLocalPassword: false,
@@ -204,6 +205,7 @@ describe("auth API and in-memory JWT management", () => {
       const result = await getMe();
       expect(apiGetSpy).toHaveBeenCalledWith("/api/auth/me", undefined);
       expect(result).toEqual(mockUser);
+      expect(result.email).toBe("social@example.com");
       expect(result.hasLocalPassword).toBe(false);
       expect(result.linkedProviders).toEqual(["kakao"]);
     });
@@ -598,6 +600,37 @@ describe("auth API and in-memory JWT management", () => {
       await withdrawBuyer();
       expect(postJsonSpy).toHaveBeenCalledWith("/api/buyer/withdrawal", {});
       expect(client.getAccessToken()).toBeNull();
+    });
+  });
+
+  describe("changeBuyerDisplayName", () => {
+    it("PATCH /api/buyer/profile로 유효한 이름을 전달하고 서버가 반환한 이름을 검증하여 반환한다", async () => {
+      const patchSpy = vi
+        .spyOn(client, "apiPatchJson")
+        .mockResolvedValue({ displayName: "새별명" });
+
+      const result = await changeBuyerDisplayName("새별명");
+      expect(patchSpy).toHaveBeenCalledWith("/api/buyer/profile", { displayName: "새별명" });
+      expect(result).toEqual({ displayName: "새별명" });
+    });
+
+    it("응답이 없거나 displayName이 문자열이 아니면 오류를 던진다", async () => {
+      vi.spyOn(client, "apiPatchJson").mockResolvedValue(null);
+      await expect(changeBuyerDisplayName("별명")).rejects.toThrow(
+        "표시 이름 변경 응답이 올바르지 않습니다.",
+      );
+
+      vi.spyOn(client, "apiPatchJson").mockResolvedValue({ displayName: 123 });
+      await expect(changeBuyerDisplayName("별명")).rejects.toThrow(
+        "표시 이름 변경 응답이 올바르지 않습니다.",
+      );
+    });
+
+    it("401 ApiError는 호출자에게 그대로 전파된다", async () => {
+      vi.spyOn(client, "apiPatchJson").mockRejectedValue(
+        new ApiError(401, "UNAUTHENTICATED", "인증이 만료되었습니다."),
+      );
+      await expect(changeBuyerDisplayName("별명")).rejects.toThrow("인증이 만료되었습니다.");
     });
   });
 });

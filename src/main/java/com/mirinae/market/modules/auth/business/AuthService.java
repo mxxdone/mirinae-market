@@ -178,16 +178,17 @@ public class AuthService {
     }
   }
 
-  /** 인증된 본인의 계정 요약과 로그인 수단을 반환한다. */
+  /** 인증된 본인의 저장된 이메일과 계정 정보·로그인 수단을 반환한다. */
   public AuthMe me(AuthenticatedUser user) {
-    var summary = accounts.summary(user.loginId());
+    var profile = accounts.profile(user.loginId());
     var authentication = accounts.accountForAuthentication(user.accountId()).orElseThrow();
     return new AuthMe(
-        summary.id(),
-        summary.loginId(),
-        summary.displayName(),
-        summary.role(),
-        summary.requiresPasswordChange(),
+        profile.id(),
+        profile.loginId(),
+        profile.displayName(),
+        profile.email(),
+        profile.role(),
+        profile.passwordChangeRequired(),
         authentication.hasLocalPassword(),
         accounts.linkedProviders(user.accountId()));
   }

@@ -120,17 +120,7 @@ public class OAuthHttpClient implements OAuthProviderClient {
     JsonNode token = postForm(KAKAO_BASE + "/oauth/token", form, null);
     String accessToken = text(token, "access_token");
     if (accessToken == null) throw new OAuthProviderUnavailableException("제공자 토큰을 확인하지 못했습니다.");
-    JsonNode info = getJson(KAKAO_API + "/v2/user/me", accessToken);
-    String subject = info.has("id") ? text(info, "id") : null;
-    JsonNode account = info.get("kakao_account");
-    String email = account == null ? null : text(account, "email");
-    String displayName = null;
-    if (account != null && account.get("profile") != null) {
-      displayName = text(account.get("profile"), "nickname");
-    }
-    if (subject == null || subject.isBlank())
-      throw new OAuthProviderUnavailableException("제공자 사용자 식별자를 확인하지 못했습니다.");
-    return new ProviderUser("kakao", subject, displayName, email);
+    return kakaoProviderUser(getJson(KAKAO_API + "/v2/user/me", accessToken));
   }
 
   private ProviderUser googleExchange(String code, String codeVerifier, String redirectUri) {
@@ -140,11 +130,54 @@ public class OAuthHttpClient implements OAuthProviderClient {
     JsonNode token = postForm(GOOGLE_API + "/token", form, null);
     String accessToken = text(token, "access_token");
     if (accessToken == null) throw new OAuthProviderUnavailableException("제공자 토큰을 확인하지 못했습니다.");
-    JsonNode info = getJson(GOOGLE_USERINFO, accessToken);
+    return googleProviderUser(getJson(GOOGLE_USERINFO, accessToken));
+  }
+
+  /**
+   * 카카오 userinfo 응답을 사용자 정보로 해석한다. 명시적으로 무효({@code is_email_valid=false})인 이메일은 자동 채움·후보 조회에 쓰지 않도록
+   * 비우되 이름은 유지한다. 확인 상태는 두 플래그가 모두 boolean true일 때만 true다.
+   */
+  static ProviderUser kakaoProviderUser(JsonNode info) {
+    if (info == null) throw new OAuthProviderUnavailableException("제공자 응답을 확인하지 못했습니다.");
+    String subject = info.has("id") ? text(info, "id") : null;
+    if (subject == null || subject.isBlank())
+      throw new OAuthProviderUnavailableException("제공자 사용자 식별자를 확인하지 못했습니다.");
+    JsonNode account = info.get("kakao_account");
+    String email = account == null ? null : text(account, "email");
+    String displayName = null;
+    if (account != null && account.get("profile") != null) {
+      displayName = text(account.get("profile"), "nickname");
+    }
+    // 무효 이메일에 대한 안내 문구 필드는 오류 판별에 쓰지 않고 확인 상태로만 판단한다.
+    if (account != null && Boolean.FALSE.equals(booleanFlag(account, "is_email_valid"))) {
+      email = null;
+    }
+    if (email != null && email.isBlank()) email = null;
+    boolean verified =
+        email != null
+            && Boolean.TRUE.equals(booleanFlag(account, "is_email_valid"))
+            && Boolean.TRUE.equals(booleanFlag(account, "is_email_verified"));
+    return new ProviderUser("kakao", subject, displayName, email, verified);
+  }
+
+  /** Google userinfo 응답을 사용자 정보로 해석한다. {@code email_verified}는 strict boolean만 인정한다. */
+  static ProviderUser googleProviderUser(JsonNode info) {
+    if (info == null) throw new OAuthProviderUnavailableException("제공자 응답을 확인하지 못했습니다.");
     String subject = text(info, "sub");
     if (subject == null || subject.isBlank())
       throw new OAuthProviderUnavailableException("제공자 사용자 식별자를 확인하지 못했습니다.");
-    return new ProviderUser("google", subject, text(info, "name"), text(info, "email"));
+    String email = text(info, "email");
+    if (email != null && email.isBlank()) email = null;
+    boolean verified = email != null && Boolean.TRUE.equals(booleanFlag(info, "email_verified"));
+    return new ProviderUser("google", subject, text(info, "name"), email, verified);
+  }
+
+  /** JSON boolean만 인정한다. 누락·null·문자열·숫자는 null로 취급한다. */
+  private static Boolean booleanFlag(JsonNode node, String field) {
+    if (node == null) return null;
+    JsonNode value = node.get(field);
+    if (value == null || value.isNull() || !value.isBoolean()) return null;
+    return value.booleanValue();
   }
 
   private MultiValueMap<String, String> tokenForm(

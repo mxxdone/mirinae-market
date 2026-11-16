@@ -355,6 +355,108 @@ class AccountHttpFlowTest {
   }
 
   @Test
+  void buyerCanChangeOwnDisplayNameThroughHttpAndMeReflectsIt() throws Exception {
+    String loginId = uniqueId();
+    try (HttpSessionClient session = new HttpSessionClient(port)) {
+      session.refreshCsrf();
+      assertThat(session.signup(loginId, loginId + "@example.com").statusCode()).isEqualTo(201);
+      assertThat(session.login(loginId, "Pass1234!").statusCode()).isEqualTo(200);
+      long accountId =
+          jdbc.queryForObject("SELECT id FROM accounts WHERE login_id = ?", Long.class, loginId);
+
+      // CSRF 없이는 거부되고 이름이 바뀌지 않는다.
+      HttpResponse<String> withoutCsrf =
+          session.patch("/api/buyer/profile", "{\"displayName\":\"새별명\"}", false);
+      assertThat(withoutCsrf.statusCode()).isEqualTo(403);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT display_name FROM accounts WHERE id = ?", String.class, accountId))
+          .isEqualTo("시장손님");
+
+      session.refreshCsrf();
+      HttpResponse<String> changed =
+          session.patch("/api/buyer/profile", "{\"displayName\":\"새별명\"}", true);
+      assertThat(changed.statusCode()).isEqualTo(200);
+      // 응답은 저장한 표시 이름만 돌려준다.
+      assertThat(session.json(changed).get("displayName").asString()).isEqualTo("새별명");
+      assertThat(changed.body()).doesNotContain("email", "role", "loginId");
+      assertThat(changed.headers().allValues("Cache-Control")).containsExactly("no-store");
+      assertThat(session.get("/api/auth/me").body()).contains("새별명").doesNotContain("시장손님");
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT display_name FROM accounts WHERE id = ?", String.class, accountId))
+          .isEqualTo("새별명");
+      // 이메일·역할·로그인 ID는 유지되고 인증은 계속 유효하다.
+      String storedEmail =
+          jdbc.queryForObject("SELECT email FROM accounts WHERE id=?", String.class, accountId);
+      String storedLoginId =
+          jdbc.queryForObject("SELECT login_id FROM accounts WHERE id=?", String.class, accountId);
+      String storedRole =
+          jdbc.queryForObject("SELECT role FROM accounts WHERE id=?", String.class, accountId);
+      assertThat(storedEmail).isEqualTo(loginId + "@example.com");
+      assertThat(storedLoginId).isEqualTo(loginId);
+      assertThat(storedRole).isEqualTo("BUYER");
+
+      // 경계값 2자·10자는 허용하고 1자·11자·공백·특수문자는 400 INVALID_INPUT이다.
+      assertThat(session.patch("/api/buyer/profile", "{\"displayName\":\"가나\"}", true).statusCode())
+          .isEqualTo(200);
+      String longest = "가".repeat(10);
+      assertThat(
+              session
+                  .patch("/api/buyer/profile", "{\"displayName\":\"" + longest + "\"}", true)
+                  .statusCode())
+          .isEqualTo(200);
+      for (String invalid : List.of("가", "가".repeat(11), "가 나", "별명!", " 가나 ")) {
+        HttpResponse<String> rejected =
+            session.patch("/api/buyer/profile", "{\"displayName\":\"" + invalid + "\"}", true);
+        assertThat(rejected.statusCode()).as(invalid).isEqualTo(400);
+        assertThat(session.json(rejected).get("code").asString()).isEqualTo("INVALID_INPUT");
+      }
+      HttpResponse<String> missing = session.patch("/api/buyer/profile", "{}", true);
+      assertThat(missing.statusCode()).isEqualTo(400);
+      assertThat(session.json(missing).get("code").asString()).isEqualTo("INVALID_INPUT");
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT display_name FROM accounts WHERE id = ?", String.class, accountId))
+          .isEqualTo(longest);
+    }
+  }
+
+  @Test
+  void displayNameChangeRequiresBuyerRoleAndAuthentication() throws Exception {
+    // 미인증은 401이다.
+    try (HttpSessionClient anonymous = new HttpSessionClient(port)) {
+      anonymous.refreshCsrf();
+      HttpResponse<String> unauthorized =
+          anonymous.patch("/api/buyer/profile", "{\"displayName\":\"새별명\"}", true);
+      assertThat(unauthorized.statusCode()).isEqualTo(401);
+      assertThat(anonymous.json(unauthorized).get("code").asString()).isEqualTo("UNAUTHENTICATED");
+    }
+
+    // 판매자는 403이며 판매자·다른 구매자의 이름은 바뀌지 않는다.
+    String sellerId = uniqueId();
+    String buyerId = uniqueId();
+    accounts.ensureDemoAccount(sellerId, "Pass1234!", "판매자", sellerId + "@example.com", "SELLER");
+    accounts.signup(buyerId, "Pass1234!", "구매자손", buyerId + "@example.com");
+    try (HttpSessionClient seller = new HttpSessionClient(port)) {
+      seller.refreshCsrf();
+      assertThat(seller.login(sellerId, "Pass1234!").statusCode()).isEqualTo(200);
+      HttpResponse<String> forbidden =
+          seller.patch("/api/buyer/profile", "{\"displayName\":\"새별명\"}", true);
+      assertThat(forbidden.statusCode()).isEqualTo(403);
+      assertThat(seller.json(forbidden).get("code").asString()).isEqualTo("FORBIDDEN");
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_name FROM accounts WHERE login_id = ?", String.class, sellerId))
+        .isEqualTo("판매자");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT display_name FROM accounts WHERE login_id = ?", String.class, buyerId))
+        .isEqualTo("구매자손");
+  }
+
+  @Test
   void defaultProfileMigratesWithoutDemoCredentials() {
     assertThat(
             jdbc.queryForObject(

@@ -113,13 +113,33 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#userSummaryDisplayName")).toHaveText(testName);
     await expect(page.locator("#userSummaryLoginId")).toHaveText(testLoginId);
     await expect(page.locator("#userSummaryRole")).toHaveText("구매자");
+    await expect(page.locator("#userSummaryEmail")).toHaveText(testEmail);
 
-    // 페이지 새로고침 시에도 세션 유지 확인
+    // 잘못된 표시 이름 입력 차단 (클라이언트 유효성 검증: 1자 또는 특수문자)
+    await page.locator("#inputChangeDisplayName").fill("김");
+    await page.locator("#btnSubmitChangeDisplayName").click();
+    await expect(page.locator("#changeDisplayNameError")).toHaveText(
+      "한글·영문·숫자를 사용하여 2~10자로 입력해 주세요.",
+    );
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText(testName);
+
+    // 정상적인 새 표시 이름 저장
+    const updatedName = `새이름${uniqueSuffix.slice(-3)}`;
+    await page.locator("#inputChangeDisplayName").fill(updatedName);
+    await page.locator("#btnSubmitChangeDisplayName").click();
+    await expect(page.locator("#changeDisplayNameStatus")).toHaveText(
+      "표시 이름이 변경되었습니다.",
+    );
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText(updatedName);
+
+    // 페이지 새로고침 시에도 변경된 표시 이름 및 세션 유지 확인
     await page.reload();
     await expect(page.locator("#heading-buyer-summary")).toBeVisible();
     await expect(page.locator("#userSummaryLoginId")).toHaveText(testLoginId);
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText(updatedName);
 
     // 로그아웃 수행
+    await expect(page.locator("#userSummaryEmail")).toHaveText(testEmail);
     await buyerHeaderAction(page, "로그아웃");
     await expect(page.locator("#heading-login")).toBeVisible();
   });

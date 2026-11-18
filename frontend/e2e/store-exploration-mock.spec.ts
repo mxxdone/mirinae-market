@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { OfferView, LocatedMarketView } from "../src/api/types";
+import { buyerHeaderAction } from "./buyerHeader";
 
 // 모든 API 응답을 대체하는 UI 회귀다. 실제 서버·DB E2E와 구분한다.
 async function mockMarket(page: Page) {
@@ -56,6 +57,8 @@ async function mockMarket(page: Page) {
         };
       else if (path === "/api/auth/refresh")
         body = { authenticated: true, accessToken: "mock-access-token", expiresIn: 600 };
+      else if (path === "/api/buyer/cart") body = { version: 0, items: [] };
+      else if (path === "/api/buyer/orders") body = [];
       else if (path.endsWith("/product-images")) body = [];
       else if (path === "/api/auth/csrf") body = { token: "test-csrf", headerName: "X-CSRF-TOKEN" };
       else if (path === "/api/market-regions") {
@@ -114,6 +117,71 @@ async function mockMarket(page: Page) {
   );
   return calls;
 }
+
+test("구매자 화면과 상품 결과가 바뀌어도 바깥 좌우 기준선을 유지한다", async ({ page }) => {
+  await mockMarket(page);
+  await page.setViewportSize({ width: 2560, height: 1100 });
+  await page.goto("/");
+
+  const edges = (selector: string) =>
+    page.locator(selector).evaluate((element) => {
+      const { left, right } = element.getBoundingClientRect();
+      return { left, right };
+    });
+  const marketSelection = ".buyer-market-selection";
+  const marketHeader = ".market-header";
+  const accountCard = "#screen-buyer-summary > .hybrid-card";
+  const checkoutCard = ".checkout-workspace";
+  await expect(page.locator(marketSelection)).toBeVisible();
+  const expectedEdges = await edges(marketSelection);
+  expect(await edges(marketHeader)).toEqual(expectedEdges);
+
+  await page.getByRole("button", { name: /통인시장/ }).click();
+  await expect(page.locator(".offer-card")).toHaveCount(20);
+  expect(await edges(marketHeader)).toEqual(expectedEdges);
+  await page.getByRole("button", { name: "2페이지", exact: true }).click();
+  await expect(page.locator(".offer-card")).toHaveCount(1);
+  expect(await edges(marketHeader)).toEqual(expectedEdges);
+  await page.getByRole("button", { name: "사과 21", exact: true }).click();
+  await expect(page.locator(".product-detail")).toBeVisible();
+  expect(await edges(".product-detail")).toEqual(expectedEdges);
+
+  await page.locator("#btnChangeBuyerMarket").click();
+  await page.getByRole("button", { name: /둘째시장/ }).click();
+  await expect(page.locator("#buyerOfferEmpty")).toBeVisible();
+  expect(await edges(marketHeader)).toEqual(expectedEdges);
+  expect(await edges("#panelMarketOffers > .market-empty")).toEqual(expectedEdges);
+
+  await page.getByRole("button", { name: "장바구니", exact: true }).click();
+  await expect(page.locator("#checkout-heading")).toBeVisible();
+  expect(await edges(checkoutCard)).toEqual(expectedEdges);
+  await buyerHeaderAction(page, "주문 내역");
+  await expect(page.locator("#orders-heading")).toBeVisible();
+  expect(await edges(checkoutCard)).toEqual(expectedEdges);
+  await buyerHeaderAction(page, "내 계정");
+  await expect(page.locator(accountCard)).toBeVisible();
+  expect(await edges(accountCard)).toEqual(expectedEdges);
+  const content = await edges(`${accountCard} > .summary-card-body`);
+  expect(content.right - content.left).toBeLessThanOrEqual(760);
+  expect(content.left - expectedEdges.left).toBeCloseTo(expectedEdges.right - content.right);
+  expect(await edges(".buyer-account-heading")).toEqual(content);
+
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const accountEdges = await edges(accountCard);
+    await page.getByRole("button", { name: "장보기로 돌아가기" }).click();
+    await expect(page.locator(marketHeader)).toBeVisible();
+    expect(await edges(marketHeader)).toEqual(accountEdges);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
+    await buyerHeaderAction(page, "내 계정");
+    await expect(page.locator(accountCard)).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
+  }
+});
 
 test("상세의 다른 상품은 본 상품을 제외한 네 개이며 상세 전환·매장 전체 보기로 이어진다", async ({
   page,

@@ -119,6 +119,13 @@ test("지역 선택과 시장명 입력은 결과를 유지하고 검색·Enter�
           provinceShortName: "부산",
           districtName: "중구",
         },
+        {
+          code: "48125",
+          provinceCode: "48",
+          provinceName: "경상남도",
+          provinceShortName: "경남",
+          districtName: "창원시 마산합포구",
+        },
       ],
     }),
   );
@@ -131,9 +138,20 @@ test("지역 선택과 시장명 입력은 결과를 유지하고 검색·Enter�
   const rows = page.locator("#marketResults button");
   await expect(rows).toHaveCount(10);
   await page.waitForLoadState("networkidle");
+  const province = page.locator("#buyerSelectProvince");
+  const district = page.locator("#buyerSelectDistrict");
+  const filterBounds = () =>
+    page.locator(".filter-controls-row > .field-group").evaluateAll((fields) =>
+      fields.map((field) => {
+        const { x, y, width } = field.getBoundingClientRect();
+        return { x, y, width };
+      }),
+    );
+  const initialBounds = await filterBounds();
   const initial = searches.length;
-  await page.locator("#buyerSelectProvince").selectOption("11");
-  await page.locator("#buyerSelectDistrict").selectOption("11110");
+  await province.selectOption("11");
+  await district.selectOption("11110");
+  expect(await filterBounds()).toEqual(initialBounds);
   await expect(rows).toHaveCount(10);
   await page.waitForLoadState("networkidle");
   expect(searches).toHaveLength(initial);
@@ -153,9 +171,12 @@ test("지역 선택과 시장명 입력은 결과를 유지하고 검색·Enter�
     regionCode: "11110",
     query: "하늘",
   });
-  await page.locator("#buyerSelectProvince").selectOption("26");
-  await expect(page.locator("#buyerSelectDistrict")).toHaveValue("");
-  await expect(page.locator("#buyerSelectDistrict option")).toHaveText(["전체 시군구", "중구"]);
+  await province.selectOption("26");
+  await expect(district).toHaveValue("");
+  await expect(district.locator("option")).toHaveText(["전체 시군구", "중구"]);
+  await province.selectOption("48");
+  await expect(district.locator("option")).toHaveText(["전체 시군구", "창원시 마산합포구"]);
+  expect(await filterBounds()).toEqual(initialBounds);
   await expect(rows).toHaveCount(1);
   expect(searches).toHaveLength(initial + 2);
 });

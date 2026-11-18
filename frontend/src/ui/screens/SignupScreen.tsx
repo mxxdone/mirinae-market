@@ -8,6 +8,7 @@ import {
   validatePassword,
   validatePasswordConfirmation,
 } from "../../validation/signupValidation";
+import { focusAuthHeading, focusFirstInvalidField } from "../authFocus";
 import { BrandIntroPanel } from "../components/BrandIntroPanel";
 import { StatusAlert } from "../components/StatusAlert";
 import { SignupPolicyNotice } from "../components/PolicyLinks";
@@ -78,7 +79,7 @@ export function SignupScreen({
   const idHint =
     idError ??
     (idUnavailable
-      ? "이미 사용 중인 아이디입니다."
+      ? "이미 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요."
       : idCheckFailed
         ? "아이디 중복 확인에 실패했습니다. 다시 시도해 주세요."
         : currentIdCheck?.status === "checking"
@@ -108,10 +109,12 @@ export function SignupScreen({
     setConfirmationError(errConfirmation);
 
     if (errId || idUnavailable || errEmail || errName || errPw || errConfirmation) {
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
     if (currentIdCheck?.status !== "available") {
       setIdError("아이디 중복 확인을 해 주세요.");
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
@@ -133,7 +136,9 @@ export function SignupScreen({
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 409) {
-          setServerAlert(err.message || "이미 등록된 아이디 또는 이메일입니다.");
+          setServerAlert(
+            "이미 사용 중인 아이디 또는 이메일입니다. 다른 아이디나 이메일로 다시 시도해 주세요. 이미 가입했다면 로그인해 주세요.",
+          );
         } else if (err.status === 400) {
           setServerAlert(err.message || "입력 정보가 올바르지 않습니다. 다시 확인해 주세요.");
         } else if (err.status === 403) {
@@ -175,7 +180,12 @@ export function SignupScreen({
 
         <div className="form-card-panel">
           <div className="form-header-area">
-            <h2 id="heading-signup" className="form-title-heading">
+            <h2
+              id="heading-signup"
+              className="form-title-heading"
+              ref={focusAuthHeading}
+              tabIndex={-1}
+            >
               회원가입
             </h2>
           </div>

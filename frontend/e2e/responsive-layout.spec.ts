@@ -48,7 +48,7 @@ async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
-test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기 폭을 유지한다", async ({
+test("작업 화면과 폼의 폭을 유지하고 상품 수에 따라 구매자 화면이 움직이지 않는다", async ({
   page,
   browser,
 }) => {
@@ -265,14 +265,16 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
     path: "../output/playwright/responsive-products-qhd.png",
     fullPage: true,
   });
+  const workspace = page.locator(".market-workspace");
+  const workspaceWidth = await workspace.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
   await page.locator("#productSearch").fill(`단일상품_${suffix}`);
   await page.getByRole("button", { name: "상품 검색", exact: true }).click();
   await expect(page.locator(".offer-card")).toHaveCount(1);
-  expect(
-    await page
-      .locator(".market-workspace")
-      .evaluate((element) => element.getBoundingClientRect().width),
-  ).toBeLessThanOrEqual(1152);
+  expect(await workspace.evaluate((element) => element.getBoundingClientRect().width)).toBe(
+    workspaceWidth,
+  );
   expect(
     await page.locator(".offer-card").evaluate((element) => element.getBoundingClientRect().width),
   ).toBeLessThan(420);
@@ -283,6 +285,9 @@ test("큰 작업 화면은 확장하고 적은 상품·폼·빈 결과는 읽기
   await page.locator("#productSearch").fill(`빈결과_${suffix}`);
   await page.getByRole("button", { name: "상품 검색", exact: true }).click();
   await expect(page.locator("#buyerOfferEmpty")).toBeVisible();
+  expect(await workspace.evaluate((element) => element.getBoundingClientRect().width)).toBe(
+    workspaceWidth,
+  );
   expect(
     await page
       .locator(".market-empty")

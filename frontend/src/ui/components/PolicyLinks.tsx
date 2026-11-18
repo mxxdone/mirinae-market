@@ -41,9 +41,7 @@ export function AppFooter(): ReactElement {
 export function SignupPolicyNotice(): ReactElement {
   return (
     <div className="signup-policy-notice">
-      <p className="signup-policy-text">
-        가입 전에 이용안내와 개인정보 처리 내용을 확인해 주세요.
-      </p>
+      <p className="signup-policy-text">가입 전에 이용안내와 개인정보 처리 내용을 확인해 주세요.</p>
       <PolicyLinks />
     </div>
   );

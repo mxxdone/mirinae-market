@@ -33,6 +33,7 @@
   --color-border: #dfe1e4;
   --color-border-subtle: #e9ebee;
   --color-border-strong: #a7a9ac;
+  --color-input-border: #838689;
 
   /* 상태 색상 */
   --color-error: #ad281e;
@@ -181,6 +182,10 @@ textarea.input-box {
 .screen-container {
   width: 100%;
   min-width: 0;
+}
+
+:root:has(.screen-container[data-screen^="buyer-"]) {
+  scrollbar-gutter: stable both-edges;
 }
 
 /* 카드 및 스플릿 레이아웃 */
@@ -523,9 +528,20 @@ textarea.input-box {
   font-family: var(--font-sans);
   color: var(--color-text-main);
   background-color: #ffffff;
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-full);
-  transition: var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+@media (max-width: 860px) {
+  #screen-login .input-box,
+  #screen-signup .input-box,
+  #screen-oauth-signup .input-box {
+    font-size: 16px;
+  }
 }
 
 .input-box::placeholder {
@@ -610,7 +626,10 @@ textarea.input-box {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
   box-shadow: none;
   margin-top: 6px;
 }
@@ -807,6 +826,20 @@ textarea.input-box {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.buyer-account-card > .summary-card-header {
+  padding-inline: 0;
+}
+
+.buyer-account-heading,
+.buyer-account-card > .summary-card-body {
+  max-width: 47.5rem;
+  margin-inline: auto;
+}
+
+.buyer-account-heading {
+  padding-inline: 20px;
 }
 
 .info-data-table {
@@ -1202,19 +1235,11 @@ textarea.input-box {
   box-shadow: none;
   overflow: visible;
 }
-.market-workspace:has(> .market-header)[data-layout] {
-  max-width: 80rem;
-}
-.market-workspace:has(> .market-header)[data-layout="compact"] {
-  max-width: 72rem;
-}
 .market-header {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  max-width: 80rem;
   width: 100%;
-  margin-inline: auto;
   padding: 12px 16px;
 }
 .market-body {
@@ -2280,6 +2305,10 @@ textarea.input-box {
   flex: 1 1 auto;
 }
 
+.filter-controls-row .field-group:has(> select) {
+  flex-basis: 140px;
+}
+
 .filter-controls-row .location-action-group {
   min-width: 0;
   flex: 0 0 auto;
@@ -2965,23 +2994,11 @@ textarea.input-box {
 .screen-container[data-screen="signup"] {
   max-width: 65rem;
 }
-.screen-container[data-screen="buyer-summary"] {
-  max-width: 47.5rem;
-}
 .screen-container[data-screen="signup-complete"] {
   max-width: 38.75rem;
 }
-.screen-container[data-screen="buyer-cart"],
-.screen-container[data-screen="buyer-orders"] {
-  max-width: 72rem;
-}
-.market-workspace[data-layout="selection"],
-.market-workspace[data-layout="detail"],
-.market-workspace[data-layout="compact"] {
-  max-width: 72rem;
-}
-.market-workspace[data-layout="medium"] {
-  max-width: 96rem;
+.screen-container[data-screen^="buyer-"] {
+  max-width: 80rem;
 }
 .market-workspace .summary-tag-row {
   justify-content: flex-start;
@@ -2994,8 +3011,6 @@ textarea.input-box {
 .market-workspace .market-empty {
   padding: 24px;
   min-height: 0;
-  max-width: 48rem;
-  margin-inline: auto;
 }
 .market-workspace .market-empty h2 {
   font-size: 20px;
@@ -5189,7 +5204,7 @@ form.review-editor-panel,
 }
 
 .product-detail {
-  max-width: 1100px;
+  max-width: none;
 }
 .product-detail > .text-action-link {
   align-self: flex-start;
@@ -5199,6 +5214,7 @@ form.review-editor-panel,
   grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
   align-items: start;
   gap: 20px;
+  max-width: 66rem;
 }
 .store-other-offers {
   border-top: 1px solid var(--color-border);
@@ -5247,12 +5263,6 @@ form.review-editor-panel,
   }
 }
 
-/* 탭·검색·결과를 같은 콘텐츠 폭에 맞춘다. */
-.buyer-product-browse {
-  width: 100%;
-  max-width: 80rem;
-  margin-inline: auto;
-}
 .market-workspace .buyer-product-browse .market-search-bar {
   max-width: none;
 }

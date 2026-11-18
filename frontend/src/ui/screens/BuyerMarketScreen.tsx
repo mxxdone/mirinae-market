@@ -124,22 +124,6 @@ export function BuyerMarketScreen(props: Props) {
     props.onSessionExpired,
   );
 
-  const layout = props.choosingMarket
-    ? "selection"
-    : props.selected || props.selectedStore
-      ? "detail"
-      : props.tab === "stores"
-        ? props.stores.length <= 3
-          ? "compact"
-          : props.stores.length <= 6
-            ? "medium"
-            : "wide"
-        : props.offers.length <= 3
-          ? "compact"
-          : props.offers.length <= 6
-            ? "medium"
-            : "wide";
-
   const marketHeading = useRef<HTMLHeadingElement>(null);
   const currentMarket = props.markets.find((market) => market.id === props.marketId);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -289,11 +273,7 @@ export function BuyerMarketScreen(props: Props) {
   const districts = props.regions.filter((r) => r.provinceCode === props.selectedProvince);
 
   return (
-    <section
-      className="hybrid-card market-workspace"
-      data-layout={layout}
-      aria-labelledby="heading-market"
-    >
+    <section className="hybrid-card market-workspace" aria-labelledby="heading-market">
       <header className="summary-card-header market-header">
         <div className="summary-tag-row buyer-heading-row">
           <h1 id="heading-market" ref={marketHeading} tabIndex={-1} className="summary-heading">

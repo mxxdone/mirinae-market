@@ -336,7 +336,8 @@ test("SIGNUP에서 이름·이메일이 누락된 경우 직접 입력 안내를
   );
 
   await page.goto("/#oauth");
-  await expect(page.locator("#heading-oauth-signup")).toBeVisible();
+  await expect(page.locator("#heading-oauth-signup")).toBeFocused();
+  await expect(page).toHaveTitle("소셜 회원가입 · 미리내 마켓");
 
   await expect(page.locator("#oauthDisplayName")).toHaveValue("");
   await expect(page.locator("#oauthEmail")).toHaveValue("");
@@ -347,4 +348,13 @@ test("SIGNUP에서 이름·이메일이 누락된 경우 직접 입력 안내를
     "소셜 계정에서 이메일 정보를 전달받지 못했습니다. 직접 입력해 주세요.",
   );
   await expect(page.locator("#oauthEmailVerifiedNotice")).toHaveCount(0);
+  await expect(page.locator("#oauthDisplayName")).toHaveAccessibleDescription(/직접 입력해 주세요/);
+  await expect(page.locator("#oauthEmail")).toHaveAccessibleDescription(/직접 입력해 주세요/);
+
+  await page.locator("#btnOAuthSignupSubmit").click();
+  await expect(page.locator("#oauthDisplayName")).toBeFocused();
+  await expect(page.locator("#oauthDisplayName")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator("#oauthDisplayName")).toHaveAccessibleDescription(/표시할 이름/);
+  await expect(page.locator("#oauthEmail")).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator("#oauthEmail")).toHaveAccessibleDescription(/이메일 주소를 입력/);
 });

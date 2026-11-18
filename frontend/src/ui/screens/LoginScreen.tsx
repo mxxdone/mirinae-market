@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from "react";
 import { getOAuthProviders, login, startOAuth } from "../../api/auth";
 import { ApiError } from "../../api/types";
+import { focusAuthHeading, focusFirstInvalidField } from "../authFocus";
 import { BrandIntroPanel } from "../components/BrandIntroPanel";
 import { StatusAlert } from "../components/StatusAlert";
 
@@ -94,6 +95,7 @@ export function LoginScreen({
     }
 
     if (hasError) {
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
@@ -152,7 +154,12 @@ export function LoginScreen({
 
         <div className="form-card-panel">
           <div className="form-header-area">
-            <h2 id="heading-login" className="form-title-heading">
+            <h2
+              id="heading-login"
+              className="form-title-heading"
+              ref={focusAuthHeading}
+              tabIndex={-1}
+            >
               로그인
             </h2>
             <p className="form-desc-text">

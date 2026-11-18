@@ -9,6 +9,7 @@ import {
 } from "../../api/auth";
 import { ApiError, type OAuthFlowResponse } from "../../api/types";
 import { validateDisplayName, validateEmail } from "../../validation/signupValidation";
+import { focusAuthHeading, focusFirstInvalidField } from "../authFocus";
 import { StatusAlert } from "../components/StatusAlert";
 import { SignupPolicyNotice } from "../components/PolicyLinks";
 
@@ -125,7 +126,7 @@ export function OAuthFlowScreen({
     };
   }, []);
 
-  async function handleSignupSubmit(e: FormEvent): Promise<void> {
+  async function handleSignupSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setAlertMessage(null);
 
@@ -136,6 +137,7 @@ export function OAuthFlowScreen({
     setSignupEmailError(emailErr);
 
     if (nameErr || emailErr) {
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
@@ -345,7 +347,13 @@ export function OAuthFlowScreen({
             <div className="summary-tag-row">
               <span className="pill-badge cold">오류 안내</span>
             </div>
-            <h1 id="heading-oauth-error" className="summary-heading">
+            <h1
+              key="oauth-retry-error"
+              id="heading-oauth-error"
+              className="summary-heading"
+              ref={focusAuthHeading}
+              tabIndex={-1}
+            >
               소셜 로그인 실패
             </h1>
             <p className="summary-subtext">연결 화면을 불러오지 못했습니다.</p>
@@ -378,6 +386,24 @@ export function OAuthFlowScreen({
   }
 
   if (flow?.status === "SIGNUP") {
+    const emailVerified =
+      flow.providerEmailVerified === true && Boolean(flow.email) && flow.email === signupEmail;
+    const nameDescription = [
+      signupNameError && "oauthDisplayNameError",
+      !flow.displayName && "oauthDisplayNameMissingNotice",
+      "oauthDisplayNameHelp",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const emailDescription = [
+      signupEmailError && "oauthEmailError",
+      !flow.email && "oauthEmailMissingNotice",
+      emailVerified && "oauthEmailVerifiedNotice",
+      "oauthEmailHelp",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     return (
       <section
         id="screen-oauth-signup"
@@ -392,7 +418,13 @@ export function OAuthFlowScreen({
             <div className="summary-tag-row">
               <span className="pill-badge primary">소셜 간편 가입</span>
             </div>
-            <h1 id="heading-oauth-signup" className="summary-heading">
+            <h1
+              key="oauth-signup"
+              id="heading-oauth-signup"
+              className="summary-heading"
+              ref={focusAuthHeading}
+              tabIndex={-1}
+            >
               소셜 회원가입
             </h1>
             <p className="summary-subtext">
@@ -416,6 +448,10 @@ export function OAuthFlowScreen({
                   type="text"
                   id="oauthDisplayName"
                   className="input-box"
+                  name="displayName"
+                  autoComplete="nickname"
+                  aria-invalid={Boolean(signupNameError)}
+                  aria-describedby={nameDescription}
                   value={signupDisplayName}
                   disabled={isSubmitting}
                   onChange={(e) => {
@@ -425,7 +461,7 @@ export function OAuthFlowScreen({
                   required
                 />
                 {signupNameError && (
-                  <div className="field-error-msg" role="alert">
+                  <div id="oauthDisplayNameError" className="field-error-msg" role="alert">
                     <span>{signupNameError}</span>
                   </div>
                 )}
@@ -434,7 +470,9 @@ export function OAuthFlowScreen({
                     소셜 계정에서 이름 정보를 전달받지 못했습니다. 직접 입력해 주세요.
                   </p>
                 )}
-                <span className="field-help-text">한글·영문·숫자 2~10자</span>
+                <span id="oauthDisplayNameHelp" className="field-help-text">
+                  한글·영문·숫자 2~10자
+                </span>
               </div>
 
               <div className="field-group">
@@ -448,6 +486,10 @@ export function OAuthFlowScreen({
                   type="email"
                   id="oauthEmail"
                   className="input-box"
+                  name="email"
+                  autoComplete="email"
+                  aria-invalid={Boolean(signupEmailError)}
+                  aria-describedby={emailDescription}
                   value={signupEmail}
                   disabled={isSubmitting}
                   onChange={(e) => {
@@ -457,7 +499,7 @@ export function OAuthFlowScreen({
                   required
                 />
                 {signupEmailError && (
-                  <div className="field-error-msg" role="alert">
+                  <div id="oauthEmailError" className="field-error-msg" role="alert">
                     <span>{signupEmailError}</span>
                   </div>
                 )}
@@ -466,22 +508,22 @@ export function OAuthFlowScreen({
                     소셜 계정에서 이메일 정보를 전달받지 못했습니다. 직접 입력해 주세요.
                   </p>
                 )}
-                {flow?.providerEmailVerified === true &&
-                  flow.email &&
-                  signupEmail === flow.email && (
-                    <p
-                      id="oauthEmailVerifiedNotice"
-                      className="field-help-text"
-                      style={{ color: "var(--color-primary, #2563eb)" }}
-                    >
-                      {(flow.provider === "kakao"
-                        ? "카카오"
-                        : flow.provider === "google"
-                          ? "구글"
-                          : "소셜 제공자") + "에서 확인된 이메일입니다."}
-                    </p>
-                  )}
-                <span className="field-help-text">계정에 연결할 이메일 주소입니다.</span>
+                {emailVerified && (
+                  <p
+                    id="oauthEmailVerifiedNotice"
+                    className="field-help-text"
+                    style={{ color: "var(--color-primary, #2563eb)" }}
+                  >
+                    {(flow.provider === "kakao"
+                      ? "카카오"
+                      : flow.provider === "google"
+                        ? "구글"
+                        : "소셜 제공자") + "에서 확인된 이메일입니다."}
+                  </p>
+                )}
+                <span id="oauthEmailHelp" className="field-help-text">
+                  계정에 연결할 이메일 주소입니다.
+                </span>
               </div>
 
               <SignupPolicyNotice />
@@ -760,7 +802,13 @@ export function OAuthFlowScreen({
           <div className="summary-tag-row">
             <span className="pill-badge cold">오류 안내</span>
           </div>
-          <h1 id="heading-oauth-error" className="summary-heading">
+          <h1
+            key="oauth-error"
+            id="heading-oauth-error"
+            className="summary-heading"
+            ref={focusAuthHeading}
+            tabIndex={-1}
+          >
             소셜 로그인 실패
           </h1>
           <p className="summary-subtext">소셜 로그인 처리를 완료하지 못했습니다.</p>

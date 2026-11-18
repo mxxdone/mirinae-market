@@ -41,7 +41,8 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     // 로그인 화면에서 회원가입으로 이동
     const toSignupBtn = page.locator('button:has-text("구매자 회원가입하기")');
     await toSignupBtn.click();
-    await expect(page.locator("#heading-signup")).toBeVisible();
+    await expect(page.locator("#heading-signup")).toBeFocused();
+    await expect(page).toHaveTitle(/회원가입 · 미리내 마켓$/);
 
     // 4필드 입력 (임의 trim 없음)
     let availabilityRequests = 0;
@@ -68,6 +69,7 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#signupPasswordConfirmationError")).toHaveCount(0);
     await page.locator("#btnSignupSubmit").click();
     await expect(page.locator("#signupPasswordConfirmationError")).toBeVisible();
+    await expect(page.locator("#signupPasswordConfirmation")).toBeFocused();
     await page.locator("#signupPasswordConfirmation").fill(testPassword);
     expect(svgErrors).toEqual([]);
 
@@ -76,11 +78,13 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
 
     // 간소화된 완료 화면과 자동 로그인 없는 실제 세션 상태를 확인한다.
     await expect(page.locator("#heading-complete")).toHaveText("회원가입이 완료되었습니다.");
+    await expect(page.locator("#heading-complete")).toBeFocused();
     expect((await page.request.get("/api/auth/me")).status()).toBe(401);
 
     // 가입 완료 화면에서 로그인 화면으로 이동
     await page.locator("#btnGoToLogin").click();
-    await expect(page.locator("#heading-login")).toBeVisible();
+    await expect(page.locator("#heading-login")).toBeFocused();
+    await expect(page).toHaveTitle("로그인 · 미리내 마켓");
 
     // 인계된 아이디 확인 및 비밀번호 입력
     await expect(page.locator("#loginUserId")).toHaveValue(testLoginId);
@@ -149,6 +153,8 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     const demoPassword = requireEnv("E2E_DEMO_PASSWORD");
 
     await page.goto("/");
+    // 초기 세션 확인이 발급하는 CSRF 쿠키와 테스트 준비 요청이 겹치지 않게 한다.
+    await expect(page.locator("#heading-login")).toBeVisible();
     const csrf = (await (await page.request.get("/api/auth/csrf")).json()) as {
       headerName: string;
       token: string;
@@ -175,7 +181,9 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await page.locator("#signupPassword").fill(demoPassword);
     await page.locator("#signupPasswordConfirmation").fill(demoPassword);
 
-    await expect(page.locator("#signupUserIdError")).toHaveText("이미 사용 중인 아이디입니다.");
+    await expect(page.locator("#signupUserIdError")).toHaveText(
+      "이미 사용 중인 아이디입니다. 다른 아이디를 입력해 주세요.",
+    );
     let signupRequests = 0;
     page.on("request", (request) => {
       if (request.method() === "POST" && new URL(request.url()).pathname === "/api/accounts")
@@ -183,6 +191,17 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     });
     await page.locator("#btnSignupSubmit").click();
     expect(signupRequests).toBe(0);
+    await expect(page.locator("#signupUserId")).toBeFocused();
+
+    // 새 아이디로 사전 확인을 통과해도 기존 이메일로 가입하면 복구 안내를 표시한다.
+    await page.locator("#signupUserId").fill(`new${Date.now()}`);
+    await page.getByRole("button", { name: "중복 확인", exact: true }).click();
+    await expect(page.locator("#signupUserIdHelp")).toHaveText("사용 가능한 아이디입니다.");
+    await page.locator("#signupEmail").fill(account.email);
+    await page.locator("#btnSignupSubmit").click();
+    await expect(page.locator("#signupAlertBox")).toContainText(
+      "다른 아이디나 이메일로 다시 시도해 주세요. 이미 가입했다면 로그인해 주세요.",
+    );
 
     // 사전 조회를 건너뛰어도 최종 서버 가입은 중복을 거절한다.
     const response = await page.request.post("/api/accounts", {

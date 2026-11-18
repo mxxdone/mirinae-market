@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { focusAuthHeading } from "../authFocus";
 
 interface SignupCompleteScreenProps {
   onNavigateLogin: () => void;
@@ -33,7 +34,7 @@ export function SignupCompleteScreen({ onNavigateLogin }: SignupCompleteScreenPr
             </svg>
           </div>
 
-          <h1 id="heading-complete" className="complete-title">
+          <h1 id="heading-complete" className="complete-title" ref={focusAuthHeading} tabIndex={-1}>
             회원가입이 완료되었습니다.
           </h1>
 

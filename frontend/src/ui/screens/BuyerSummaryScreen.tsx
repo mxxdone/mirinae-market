@@ -116,15 +116,17 @@ export function BuyerSummaryScreen({
       className="screen-panel active"
       aria-labelledby="heading-buyer-summary"
     >
-      <div className="hybrid-card summary-container-card">
+      <div className="hybrid-card buyer-account-card">
         <div className="summary-card-header">
-          <div className="summary-tag-row">
-            <span className="pill-badge primary">구매자 계정</span>
+          <div className="buyer-account-heading">
+            <div className="summary-tag-row">
+              <span className="pill-badge primary">구매자 계정</span>
+            </div>
+            <h1 id="heading-buyer-summary" className="summary-heading">
+              내 계정
+            </h1>
+            <p className="summary-subtext">내 계정 정보를 확인할 수 있습니다.</p>
           </div>
-          <h1 id="heading-buyer-summary" className="summary-heading">
-            내 계정
-          </h1>
-          <p className="summary-subtext">내 계정 정보를 확인할 수 있습니다.</p>
         </div>
 
         <div className="summary-card-body">

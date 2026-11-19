@@ -585,22 +585,25 @@ test("표시 이름 변경 시 지연 응답 중 중복 제출을 차단하고 5
   // 1) 500 오류 시 기존 이름 유지 및 오류 안내 (첫 번째 요청)
   statusToReturn = 500;
   isDeferred = false;
+  await page.locator("#btnEditBuyerDisplayName").click();
   await page.locator("#inputChangeDisplayName").fill("실패테스트");
-  await page.locator("#btnSubmitChangeDisplayName").click();
+  await page.locator("#btnSaveBuyerSettings").click();
   await expect(page.locator("#changeDisplayNameStatus")).toHaveText(
     "서버 처리 오류가 발생했습니다.",
   );
+  await page.getByRole("button", { name: "표시 이름 변경 취소" }).click();
   await expect(page.locator("#userSummaryDisplayName")).toHaveText("구매자");
   expect(patchCalls).toBe(1);
 
   // 2) 지연 응답 중 중복 제출 차단 검증 (결정적 deferred promise 해제)
   statusToReturn = 200;
   isDeferred = true;
+  await page.locator("#btnEditBuyerDisplayName").click();
   await page.locator("#inputChangeDisplayName").fill("지연테스트");
-  await page.locator("#btnSubmitChangeDisplayName").click();
+  await page.locator("#btnSaveBuyerSettings").click();
 
   // 버튼 비활성화 및 로딩 문구 확인
-  const submitBtn = page.locator("#btnSubmitChangeDisplayName");
+  const submitBtn = page.locator("#btnSaveBuyerSettings");
   await expect(submitBtn).toBeDisabled();
   await expect(submitBtn).toHaveText("저장 중…");
   await expect.poll(() => patchCalls).toBe(2);
@@ -619,10 +622,70 @@ test("표시 이름 변경 시 지연 응답 중 중복 제출을 차단하고 5
   // 3) 401 응답 시 세션 만료 전환
   isDeferred = false;
   statusToReturn = 401;
+  await page.locator("#btnEditBuyerDisplayName").click();
   await page.locator("#inputChangeDisplayName").fill("만료테스트");
-  await page.locator("#btnSubmitChangeDisplayName").click();
+  await page.locator("#btnSaveBuyerSettings").click();
   await expect(page.locator("#heading-login")).toBeVisible();
   expect(patchCalls).toBe(3);
+});
+
+test("계정 설정은 제출할 때 검증하고 이름과 비밀번호를 한 번에 저장한다", async ({ page }) => {
+  const requests: unknown[] = [];
+  await page.route("**/api/auth/csrf", (route) =>
+    route.fulfill({ json: { token: "test-csrf", headerName: "X-CSRF-TOKEN" } }),
+  );
+  await page.route("**/api/buyer/settings", (route) => {
+    requests.push(route.request().postDataJSON());
+    return route.fulfill({ json: { displayName: "새별명" } });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#account");
+  const form = page.getByRole("form", { name: "계정 설정" });
+  const save = form.getByRole("button", { name: "변경 사항 저장" });
+  const name = form.getByLabel("표시 이름", { exact: true });
+  const current = form.getByLabel("현재 비밀번호", { exact: true });
+  const next = form.getByLabel("변경할 비밀번호", { exact: true });
+  const confirmation = form.getByLabel("변경할 비밀번호 확인", { exact: true });
+  const withdrawal = page.getByRole("region", { name: "회원 탈퇴" });
+  const withdrawalButton = withdrawal.getByRole("button", { name: "회원 탈퇴", exact: true });
+  await expect(withdrawalButton).toBeVisible();
+  const right = (element: Element) => element.getBoundingClientRect().right;
+  expect(await withdrawalButton.evaluate(right)).toBeCloseTo(await withdrawal.evaluate(right));
+  await expect(name).toHaveCount(0);
+  await form.getByRole("button", { name: "표시 이름 변경", exact: true }).click();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue("구매자");
+  await name.fill("새별명");
+  await current.fill("Pass1234!");
+  await next.fill("plain");
+  await confirmation.focus();
+  await expect(next).toHaveAttribute("aria-invalid", "false");
+  await save.click();
+  await expect(next).toBeFocused();
+  await expect(next).toHaveAccessibleDescription(/영문·숫자·특수문자/);
+  expect(requests).toHaveLength(0);
+
+  await next.fill("Changed123!");
+  await confirmation.fill("Mismatch123!");
+  await save.click();
+  await expect(confirmation).toBeFocused();
+  await expect(confirmation).toHaveAccessibleDescription(/일치하지 않습니다/);
+  expect(requests).toHaveLength(0);
+
+  await confirmation.fill("Changed123!");
+  await save.click();
+  await expect(page.locator("#heading-login")).toBeVisible();
+  await expect(page.getByText(/모든 기기에서 로그아웃되었으니/).first()).toBeVisible();
+  expect(requests).toEqual([
+    {
+      displayName: "새별명",
+      password: {
+        currentPassword: "Pass1234!",
+        newPassword: "Changed123!",
+        confirmation: "Changed123!",
+      },
+    },
+  ]);
 });
 
 for (const delayedStatus of [200, 401]) {
@@ -670,9 +733,10 @@ for (const delayedStatus of [200, 401]) {
 
     await page.goto("/#account");
     await expect(page.locator("#userSummaryDisplayName")).toHaveText("이전구매자");
+    await page.locator("#btnEditBuyerDisplayName").click();
     await page.locator("#inputChangeDisplayName").fill("이전계정별명");
     const pendingRequest = page.waitForRequest("**/api/buyer/profile");
-    await page.locator("#btnSubmitChangeDisplayName").click();
+    await page.locator("#btnSaveBuyerSettings").click();
     await pendingRequest;
 
     await page.getByRole("button", { name: "계정 메뉴", exact: true }).click();

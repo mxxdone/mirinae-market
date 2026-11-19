@@ -50,10 +50,20 @@ export async function withdrawBuyer(password?: string): Promise<void> {
  * 활성 구매자 본인의 표시 이름만 변경하며, 응답으로 서버가 저장한 { displayName }을 반환합니다.
  * 편집값을 임의로 자르거나 trim하지 않습니다.
  */
-export async function changeBuyerDisplayName(displayName: string): Promise<BuyerProfileResponse> {
-  const result = await apiPatchJson<BuyerProfileResponse>("/api/buyer/profile", { displayName });
+export interface BuyerPasswordChange {
+  currentPassword: string;
+  newPassword: string;
+  confirmation: string;
+}
+
+export async function saveBuyerProfile(settings: {
+  displayName?: string;
+  password?: BuyerPasswordChange;
+}): Promise<BuyerProfileResponse> {
+  const path = settings.password ? "/api/buyer/settings" : "/api/buyer/profile";
+  const result = await apiPatchJson<BuyerProfileResponse>(path, settings);
   if (!result || typeof result.displayName !== "string") {
-    throw new Error("표시 이름 변경 응답이 올바르지 않습니다.");
+    throw new Error("계정 정보 변경 응답이 올바르지 않습니다.");
   }
   return result;
 }

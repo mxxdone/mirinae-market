@@ -423,6 +423,48 @@ class AccountHttpFlowTest {
   }
 
   @Test
+  void buyerProfileSaveChangesNameAndPasswordTogetherAndExpiresBothSessions() throws Exception {
+    String loginId = uniqueId();
+    try (HttpSessionClient session = new HttpSessionClient(port);
+        HttpSessionClient otherDevice = new HttpSessionClient(port)) {
+      session.refreshCsrf();
+      assertThat(session.signup(loginId, loginId + "@example.com").statusCode()).isEqualTo(201);
+      assertThat(session.login(loginId, "Pass1234!").statusCode()).isEqualTo(200);
+      otherDevice.refreshCsrf();
+      assertThat(otherDevice.login(loginId, "Pass1234!").statusCode()).isEqualTo(200);
+      session.refreshCsrf();
+
+      String request =
+          """
+          {"displayName":"새별명","password":{"currentPassword":"%s","newPassword":"Changed123!",
+          "confirmation":"%s"}}
+          """;
+      assertThat(
+              session
+                  .patch("/api/buyer/settings", request.formatted("Wrong123!", "Changed123!"), true)
+                  .statusCode())
+          .isEqualTo(400);
+      assertThat(
+              session
+                  .patch(
+                      "/api/buyer/settings", request.formatted("Pass1234!", "Mismatch123!"), true)
+                  .statusCode())
+          .isEqualTo(400);
+      assertThat(session.get("/api/auth/me").body()).contains("시장손님");
+
+      var saved =
+          session.patch("/api/buyer/settings", request.formatted("Pass1234!", "Changed123!"), true);
+      assertThat(saved.statusCode()).isEqualTo(200);
+      assertThat(session.json(saved).get("displayName").asString()).isEqualTo("새별명");
+      assertThat(session.get("/api/auth/me").statusCode()).isEqualTo(401);
+      assertThat(otherDevice.get("/api/auth/me").statusCode()).isEqualTo(401);
+      assertThat(session.login(loginId, "Pass1234!").statusCode()).isEqualTo(401);
+      assertThat(session.login(loginId, "Changed123!").statusCode()).isEqualTo(200);
+      assertThat(session.get("/api/auth/me").body()).contains("새별명");
+    }
+  }
+
+  @Test
   void displayNameChangeRequiresBuyerRoleAndAuthentication() throws Exception {
     // 미인증은 401이다.
     try (HttpSessionClient anonymous = new HttpSessionClient(port)) {

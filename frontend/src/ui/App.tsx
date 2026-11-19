@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import { bootstrapAuth, getMe, logout } from "../api/auth";
+import { bootstrapAuth, getMe, handleAuthTerminated, logout } from "../api/auth";
 import { registerLogoutListener } from "../api/client";
 import { ApiError, type UserMe } from "../api/types";
 import type { Checkout } from "../api/checkout";
@@ -292,7 +292,7 @@ export function App(): ReactElement {
       setSessionExpiredMessage(customMsg || "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.");
       setCompletedOrder(null);
       setCurrentScreen("login");
-      showToast("세션이 만료되어 로그인 화면으로 이동합니다.");
+      showToast(customMsg || "세션이 만료되어 로그인 화면으로 이동합니다.");
     },
     [showToast],
   );
@@ -538,6 +538,13 @@ export function App(): ReactElement {
               reauthConfirmed={socialReauthConfirmed}
               onWithdrawn={handleWithdrawn}
               onSessionExpired={handleSessionExpired}
+              onPasswordChanged={() => {
+                handleAuthTerminated();
+                window.history.replaceState(null, "", "#");
+                handleSessionExpired(
+                  "비밀번호가 변경되었습니다. 모든 기기에서 로그아웃되었으니 새 비밀번호로 로그인해 주세요.",
+                );
+              }}
               onDisplayNameUpdated={handleDisplayNameUpdated}
             />
           )}

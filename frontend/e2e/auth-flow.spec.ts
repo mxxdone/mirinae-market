@@ -6,6 +6,30 @@ test.beforeEach(async ({ page }) => {
   await installTestClock(page);
 });
 
+test("로그인 제목의 자동 포커스는 테두리 없이 유지하고 입력란은 키보드 포커스를 표시한다", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname.startsWith("/api/"),
+    (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/api/auth/csrf") {
+        return route.fulfill({ json: { token: "mock-csrf", headerName: "X-CSRF-TOKEN" } });
+      }
+      return route.fulfill({ status: 401, json: { code: "UNAUTHENTICATED" } });
+    },
+  );
+  await page.goto("/");
+  const heading = page.locator("#heading-login");
+  await expect(heading).toBeFocused();
+  await expect(heading).toHaveCSS("outline-style", "none");
+
+  await page.keyboard.press("Tab");
+  const loginId = page.locator("#loginUserId");
+  await expect(loginId).toBeFocused();
+  await expect(loginId).toHaveCSS("outline-style", "solid");
+});
+
 /**
  * 환경 변수 필수 검증 헬퍼
  * 기본값을 제공하지 않으며, 미설정 시 skip하지 않고 명확하게 실패시킵니다.
@@ -120,17 +144,18 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#userSummaryEmail")).toHaveText(testEmail);
 
     // 잘못된 표시 이름 입력 차단 (클라이언트 유효성 검증: 1자 또는 특수문자)
+    await page.locator("#btnEditBuyerDisplayName").click();
     await page.locator("#inputChangeDisplayName").fill("김");
-    await page.locator("#btnSubmitChangeDisplayName").click();
+    await page.locator("#btnSaveBuyerSettings").click();
     await expect(page.locator("#changeDisplayNameError")).toHaveText(
       "한글·영문·숫자를 사용하여 2~10자로 입력해 주세요.",
     );
-    await expect(page.locator("#userSummaryDisplayName")).toHaveText(testName);
+    await expect(page.locator("#inputChangeDisplayName")).toBeFocused();
 
     // 정상적인 새 표시 이름 저장
     const updatedName = `새이름${uniqueSuffix.slice(-3)}`;
     await page.locator("#inputChangeDisplayName").fill(updatedName);
-    await page.locator("#btnSubmitChangeDisplayName").click();
+    await page.locator("#btnSaveBuyerSettings").click();
     await expect(page.locator("#changeDisplayNameStatus")).toHaveText(
       "표시 이름이 변경되었습니다.",
     );
@@ -142,8 +167,27 @@ test.describe("미리내 마켓 Phase 2 실제 인증 및 인가 흐름", () => 
     await expect(page.locator("#userSummaryLoginId")).toHaveText(testLoginId);
     await expect(page.locator("#userSummaryDisplayName")).toHaveText(updatedName);
 
-    // 로그아웃 수행
     await expect(page.locator("#userSummaryEmail")).toHaveText(testEmail);
+
+    // 이름과 비밀번호를 함께 저장하면 새 비밀번호로 다시 로그인해야 한다.
+    const nextName = `변경이름${uniqueSuffix.slice(-3)}`;
+    const nextPassword = "NextPassword123!";
+    await page.locator("#btnEditBuyerDisplayName").click();
+    await page.locator("#inputChangeDisplayName").fill(nextName);
+    await page.locator("#buyer-currentPassword").fill(testPassword);
+    await page.locator("#buyer-newPassword").fill(nextPassword);
+    await page.locator("#buyer-confirmation").fill(nextPassword);
+    await page.locator("#btnSaveBuyerSettings").click();
+    await expect(page.locator("#heading-login")).toBeVisible();
+    await expect(page.locator("#loginAlertBox")).toContainText("새 비밀번호로 로그인해 주세요.");
+    await page.locator("#loginUserId").fill(testLoginId);
+    await page.locator("#loginPassword").fill(nextPassword);
+    await page.locator("#btnLoginSubmit").click();
+    await expect(page.locator("#heading-market")).toBeVisible();
+    await buyerHeaderAction(page, "내 계정");
+    await expect(page.locator("#userSummaryDisplayName")).toHaveText(nextName);
+
+    // 로그아웃 수행
     await buyerHeaderAction(page, "로그아웃");
     await expect(page.locator("#heading-login")).toBeVisible();
   });

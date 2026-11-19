@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { changeBuyerDisplayName, withdrawBuyer } from "./accounts";
+import { saveBuyerProfile, withdrawBuyer } from "./accounts";
 import {
   bootstrapAuth,
   getMe,
@@ -603,26 +603,26 @@ describe("auth API and in-memory JWT management", () => {
     });
   });
 
-  describe("changeBuyerDisplayName", () => {
+  describe("saveBuyerProfile", () => {
     it("PATCH /api/buyer/profile로 유효한 이름을 전달하고 서버가 반환한 이름을 검증하여 반환한다", async () => {
       const patchSpy = vi
         .spyOn(client, "apiPatchJson")
         .mockResolvedValue({ displayName: "새별명" });
 
-      const result = await changeBuyerDisplayName("새별명");
+      const result = await saveBuyerProfile({ displayName: "새별명" });
       expect(patchSpy).toHaveBeenCalledWith("/api/buyer/profile", { displayName: "새별명" });
       expect(result).toEqual({ displayName: "새별명" });
     });
 
     it("응답이 없거나 displayName이 문자열이 아니면 오류를 던진다", async () => {
       vi.spyOn(client, "apiPatchJson").mockResolvedValue(null);
-      await expect(changeBuyerDisplayName("별명")).rejects.toThrow(
-        "표시 이름 변경 응답이 올바르지 않습니다.",
+      await expect(saveBuyerProfile({ displayName: "별명" })).rejects.toThrow(
+        "계정 정보 변경 응답이 올바르지 않습니다.",
       );
 
       vi.spyOn(client, "apiPatchJson").mockResolvedValue({ displayName: 123 });
-      await expect(changeBuyerDisplayName("별명")).rejects.toThrow(
-        "표시 이름 변경 응답이 올바르지 않습니다.",
+      await expect(saveBuyerProfile({ displayName: "별명" })).rejects.toThrow(
+        "계정 정보 변경 응답이 올바르지 않습니다.",
       );
     });
 
@@ -630,7 +630,9 @@ describe("auth API and in-memory JWT management", () => {
       vi.spyOn(client, "apiPatchJson").mockRejectedValue(
         new ApiError(401, "UNAUTHENTICATED", "인증이 만료되었습니다."),
       );
-      await expect(changeBuyerDisplayName("별명")).rejects.toThrow("인증이 만료되었습니다.");
+      await expect(saveBuyerProfile({ displayName: "별명" })).rejects.toThrow(
+        "인증이 만료되었습니다.",
+      );
     });
   });
 });

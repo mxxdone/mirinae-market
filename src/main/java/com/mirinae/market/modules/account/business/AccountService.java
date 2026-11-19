@@ -93,14 +93,29 @@ public class AccountService implements AccountAuthGateway {
    */
   @org.springframework.transaction.annotation.Transactional
   public String changeBuyerDisplayName(String loginId, String displayName) {
+    return updateBuyerProfile(loginId, displayName, null);
+  }
+
+  /** 구매자 본인의 표시 이름과 비밀번호를 하나의 트랜잭션에서 갱신한다. */
+  @org.springframework.transaction.annotation.Transactional
+  public String updateBuyerProfile(String loginId, String displayName, PasswordChange password) {
     AccountView account = current(loginId);
     var locked = data.lockMember(account.id());
     // 잠금 이후 상태를 다시 확인해 탈퇴·역할 변경 경합에서 다른 계정을 수정하지 않는다.
     requireActive(loginId);
     if (!"BUYER".equals(locked.role()))
       throw new org.springframework.security.access.AccessDeniedException(
-          "구매자만 표시 이름을 변경할 수 있습니다.");
-    SignupRules.displayName(displayName);
+          "구매자만 계정 정보를 변경할 수 있습니다.");
+    if (displayName == null && password == null)
+      throw new IllegalArgumentException("저장할 변경 사항을 입력해 주세요.");
+    if (displayName != null) SignupRules.displayName(displayName);
+    if (password != null) {
+      if (!java.util.Objects.equals(password.newPassword(), password.confirmation()))
+        throw new IllegalArgumentException("변경할 비밀번호와 확인이 일치하지 않습니다.");
+      changeLockedPassword(
+          account.id(), loginId, password.currentPassword(), password.newPassword());
+    }
+    if (displayName == null) return locked.displayName();
     if (!data.changeBuyerDisplayName(account.id(), displayName))
       throw new AccountInactiveException();
     return displayName;
@@ -110,6 +125,11 @@ public class AccountService implements AccountAuthGateway {
   public void changePassword(String loginId, String currentPassword, String newPassword) {
     MemberView account = profile(loginId);
     data.lockMember(account.id());
+    changeLockedPassword(account.id(), loginId, currentPassword, newPassword);
+  }
+
+  private void changeLockedPassword(
+      long accountId, String loginId, String currentPassword, String newPassword) {
     var credentials = data.findByLoginId(loginId).orElseThrow();
     if (!credentials.hasLocalPassword()
         || currentPassword == null
@@ -118,10 +138,12 @@ public class AccountService implements AccountAuthGateway {
     SignupRules.password(newPassword);
     if (encoder.matches(newPassword, credentials.passwordHash()))
       throw new IllegalArgumentException("새 비밀번호는 현재 비밀번호와 달라야 합니다.");
-    data.password(account.id(), encoder.encode(newPassword));
+    data.password(accountId, encoder.encode(newPassword));
     // 비밀번호 변경은 모든 기기의 기존 access/refresh를 이후 요청부터 거절한다.
-    data.bumpAuthVersion(account.id());
+    data.bumpAuthVersion(accountId);
   }
+
+  public record PasswordChange(String currentPassword, String newPassword, String confirmation) {}
 
   @org.springframework.transaction.annotation.Transactional
   public void bootstrapAdministrator(String loginId, String password, String email) {

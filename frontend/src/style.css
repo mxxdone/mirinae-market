@@ -842,6 +842,61 @@ textarea.input-box {
   padding-inline: 20px;
 }
 
+.buyer-account-caption {
+  margin-bottom: 10px;
+  color: var(--color-text-main);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: start;
+}
+
+.buyer-settings-form,
+.buyer-password-fields {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.buyer-name-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.buyer-name-control .input-box {
+  flex: 1 1 10rem;
+  min-inline-size: 0;
+}
+
+.buyer-name-control .text-action-link {
+  min-block-size: 24px;
+}
+
+.buyer-password-fields legend {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.buyer-password-fields {
+  border: 0;
+  margin-top: 8px;
+}
+
+.buyer-password-fields legend {
+  margin-bottom: 8px;
+}
+
+.buyer-settings-form .input-box {
+  font-size: 16px;
+}
+
+.buyer-settings-form .btn-submit-primary {
+  justify-self: end;
+  width: auto;
+  padding-inline: 20px;
+}
+
 .info-data-table {
   width: 100%;
   border-collapse: collapse;
@@ -2763,6 +2818,7 @@ textarea.input-box {
   line-height: 1.3;
 }
 /* 화면 전환 안내용 제목의 포커스는 유지하고 조작 대상처럼 테두리를 표시하지 않는다. */
+#heading-login:focus-visible,
 #heading-market:focus-visible {
   outline: none;
 }
@@ -5646,8 +5702,10 @@ form.review-editor-panel,
   font-size: 14px;
 }
 .withdrawal-link {
+  display: block;
   min-height: 44px;
   margin-top: 4px;
+  margin-inline-start: auto;
   padding: 4px 0;
   border: 0;
   background: transparent;

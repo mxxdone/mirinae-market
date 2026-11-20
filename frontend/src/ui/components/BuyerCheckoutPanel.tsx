@@ -19,6 +19,7 @@ import { purchaseQuantity } from "../../validation/checkoutValidation";
 import type { DirectPurchaseLocation } from "../purchaseLocation";
 import { StatusAlert } from "./StatusAlert";
 import { QuantityPicker } from "./QuantityPicker";
+import { OperationOverlay } from "./OperationOverlay";
 
 function parsePositiveInteger(input: string): number | null {
   try {
@@ -114,11 +115,16 @@ export function BuyerCheckoutPanel({
   const [unknown, setUnknown] = useState(false);
   const [notReceived, setNotReceived] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [refreshingCart, setRefreshingCart] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reviewingChangedConditions, setReviewingChangedConditions] = useState(false);
+  const [needsCartRefresh, setNeedsCartRefresh] = useState(false);
 
   const mounted = useRef(true);
   const active = useRef(false);
+  const checkingResult = useRef(false);
   const loadVersion = useRef(0);
   const hasInitializedSelection = useRef(false);
   const modalRef = useRef<HTMLDialogElement>(null);
@@ -194,6 +200,7 @@ export function BuyerCheckoutPanel({
         const [next, history] = await Promise.all([getCart(), getOrders()]);
         if (!mounted.current || version !== loadVersion.current) return;
         applyCart(next, true);
+        setNeedsCartRefresh(false);
         setReady(true);
         const pending = history.find((item) => item.status === "PENDING");
         if (pending) {
@@ -240,15 +247,49 @@ export function BuyerCheckoutPanel({
     }
   };
 
+  const refreshChangedCart = useCallback(
+    async (code: string | null) => {
+      if (
+        isDirect ||
+        !["CART_CHANGED", "CONDITIONS_CHANGED", "OUT_OF_STOCK", "OFFER_UNAVAILABLE"].includes(
+          code ?? "",
+        )
+      ) {
+        return false;
+      }
+      setReviewingChangedConditions(true);
+      setNeedsCartRefresh(true);
+      setResult(null);
+      setRequest(null);
+      await load();
+      return true;
+    },
+    [isDirect, load],
+  );
+
+  function refreshCart() {
+    return act(async () => {
+      setRefreshingCart(true);
+      try {
+        await load();
+      } finally {
+        if (mounted.current) setRefreshingCart(false);
+      }
+    });
+  }
+
   const refreshResult = useCallback(
     async (key: string) => {
+      if (checkingResult.current) return;
+      checkingResult.current = true;
       try {
         const next = await getCheckout(key);
         if (!mounted.current) return;
-        setResult(next);
         setUnknown(false);
         setNotReceived(false);
         setError(null);
+        if (next.status === "FAILED" && (await refreshChangedCart(next.errorCode))) return;
+        setResult(next);
         if (next.status === "CONFIRMED") {
           try {
             const freshCart = await getCart();
@@ -270,9 +311,11 @@ export function BuyerCheckoutPanel({
           setNotReceived(true);
           setError("서버에 처리 기록이 없습니다. 같은 요청으로 재시도할 수 있습니다.");
         } else failure(value);
+      } finally {
+        checkingResult.current = false;
       }
     },
-    [load, failure, onConfirmed, onCartChanged, onSessionExpired],
+    [load, failure, onConfirmed, onCartChanged, onSessionExpired, refreshChangedCart],
   );
 
   useEffect(() => {
@@ -284,12 +327,14 @@ export function BuyerCheckoutPanel({
   }, [result, refreshResult]);
 
   async function pay(input: PaymentInput) {
+    setSubmittingPayment(true);
     setRequest(input);
     setUnknown(false);
     setNotReceived(false);
     try {
       const next = await startCheckout(input);
       if (!mounted.current) return;
+      if (next.status === "FAILED" && (await refreshChangedCart(next.errorCode))) return;
       setResult(next);
       if (next.status === "CONFIRMED") {
         try {
@@ -307,6 +352,13 @@ export function BuyerCheckoutPanel({
       await load();
     } catch (value) {
       if (!mounted.current) return;
+      if (
+        value instanceof ApiError &&
+        value.status === 409 &&
+        (await refreshChangedCart(value.code))
+      ) {
+        return;
+      }
       if (value instanceof ApiError && [400, 403, 409].includes(value.status)) {
         failure(value);
         setRequest(null);
@@ -314,6 +366,8 @@ export function BuyerCheckoutPanel({
         setUnknown(true);
         failure(value);
       }
+    } finally {
+      if (mounted.current) setSubmittingPayment(false);
     }
   }
 
@@ -330,6 +384,7 @@ export function BuyerCheckoutPanel({
   }
 
   const pending = result?.status === "PENDING" || unknown;
+  const showingPaymentProgress = submittingPayment || result?.status === "PENDING";
 
   // 바로 구매는 장바구니 수량과 별도로 계산한다.
   const directQtyNumber = parsePositiveInteger(directQuantity);
@@ -351,20 +406,22 @@ export function BuyerCheckoutPanel({
   }, 0n);
 
   const distinctMarketCount = new Set(selectedItems.map((item) => item.offer.marketId)).size;
+  const showChangedConditions =
+    reviewingChangedConditions || selectedItems.some((item) => item.changed);
 
   const isCartCheckoutInvalid =
     selectedItems.length === 0 ||
     selectedItems.length > 100 ||
     selectedItems.some((item) => {
       if (!item.available) return true;
-      if (item.changed) return true;
       if (quantities[item.offer.id] !== String(item.quantity)) return true;
       const q = parsePositiveInteger(quantities[item.offer.id] ?? "");
       if (q === null) return true;
       return q > item.offer.onlineQuantity;
     });
 
-  const cartCheckoutDisabled = !ready || busy || pending || isCartCheckoutInvalid;
+  const cartCheckoutDisabled =
+    !ready || busy || pending || needsCartRefresh || isCartCheckoutInvalid;
 
   const directCheckoutDisabled =
     !ready ||
@@ -422,6 +479,14 @@ export function BuyerCheckoutPanel({
       cartVersion: cart.version,
       mode,
       offerIds,
+      itemConditions: selectedItems.map(({ offer, quantity }) => ({
+        offerId: offer.id,
+        quantity,
+        expectedPrice: offer.priceWon,
+        startTime: offer.startTime,
+        endTime: offer.endTime,
+        orderDeadline: offer.orderDeadline,
+      })),
     });
   }
 
@@ -467,11 +532,14 @@ export function BuyerCheckoutPanel({
         {isDirect && ready && (
           <button
             type="button"
-            className="text-action-link"
+            className="text-action-link refresh-order-button"
             disabled={busy || pending}
-            onClick={() => void act(load)}
+            onClick={() => void refreshCart()}
           >
             상품 정보 새로고침
+            {refreshingCart && (
+              <span className="spinner-icon spinner-on-light" aria-hidden="true" />
+            )}
           </button>
         )}
 
@@ -525,7 +593,7 @@ export function BuyerCheckoutPanel({
             )}
 
             {ready && directOffer && (
-              <div className="checkout-payment">
+              <div className="checkout-payment operation-region">
                 <p>
                   총 결제금액 {directTotalWon.toLocaleString()}원 · 모의 결제이며 실제 금액은
                   청구하지 않습니다.
@@ -565,6 +633,7 @@ export function BuyerCheckoutPanel({
                 >
                   통합 모의 결제
                 </button>
+                {showingPaymentProgress && <OperationOverlay label="결제 처리 중" />}
               </div>
             )}
           </>
@@ -573,11 +642,14 @@ export function BuyerCheckoutPanel({
           <>
             <div className="checkout-actions">
               <button
-                className="text-action-link"
+                className="text-action-link refresh-order-button"
                 disabled={busy || pending}
-                onClick={() => void act(load)}
+                onClick={() => void refreshCart()}
               >
                 장바구니 새로고침
+                {refreshingCart && (
+                  <span className="spinner-icon spinner-on-light" aria-hidden="true" />
+                )}
               </button>
               <button
                 className="text-action-link"
@@ -747,13 +819,6 @@ export function BuyerCheckoutPanel({
                                 </>
                               )}
 
-                              {item.changed && (
-                                <p role="alert">
-                                  가격·수령 조건이 변경되었습니다. 현재 조건을 확인한 뒤 아래 버튼을
-                                  눌러 주세요.
-                                </p>
-                              )}
-
                               <label
                                 className="field-label"
                                 htmlFor={`cart-quantity-${item.offer.id}`}
@@ -785,7 +850,7 @@ export function BuyerCheckoutPanel({
                                     !isInputValid ||
                                     parsedItemQty > item.offer.onlineQuantity ||
                                     item.offer.onlineQuantity === 0 ||
-                                    (!isQuantityUnapplied && !item.changed)
+                                    !isQuantityUnapplied
                                   }
                                   onClick={() =>
                                     void act(async () => {
@@ -802,7 +867,7 @@ export function BuyerCheckoutPanel({
                                     })
                                   }
                                 >
-                                  {item.changed ? "변경 조건 확인·수량 적용" : "수량 적용"}
+                                  수량 적용
                                 </button>
                                 <button
                                   className="text-action-link"
@@ -836,12 +901,11 @@ export function BuyerCheckoutPanel({
               );
             })}
 
+            {cart.items.length === 0 && showChangedConditions && (
+              <p role="status">결제 조건이 변경되었습니다. 장바구니에 결제할 상품이 없습니다.</p>
+            )}
             {cart.items.length > 0 && (
-              <div className="checkout-payment">
-                <p>
-                  총 결제금액 {selectedTotalWon.toLocaleString()}원 · 모의 결제이며 실제 금액은
-                  청구하지 않습니다.
-                </p>
+              <div className="checkout-payment operation-region">
                 <p>결제한 가격과 매장별 수령 조건은 주문에 고정됩니다.</p>
                 <div className="checkout-notice-box" role="note" id="checkoutPickupNotice">
                   <p>
@@ -870,14 +934,28 @@ export function BuyerCheckoutPanel({
                   <option value="DELAY">3초 지연 후 처리</option>
                   <option value="LOST_RESPONSE">성공 후 응답 유실</option>
                 </select>
+                {showChangedConditions && (
+                  <p role="status">
+                    {needsCartRefresh
+                      ? error
+                        ? "결제 조건이 변경되었습니다. 장바구니를 새로고침해 주세요."
+                        : "결제 조건이 변경되었습니다. 최신 정보를 불러오고 있습니다."
+                      : "결제 조건이 변경되었습니다. 최신 상품 정보와 결제금액을 확인해 주세요."}
+                  </p>
+                )}
+                <p className="checkout-payment-total">
+                  총 결제금액 {selectedTotalWon.toLocaleString()}원
+                </p>
                 <button
                   ref={payButton}
                   className="btn-query-store"
                   disabled={cartCheckoutDisabled}
                   onClick={handleCartCheckoutClick}
                 >
-                  통합 모의 결제
+                  {showChangedConditions ? "변경된 조건으로 결제" : "통합 모의 결제"}
                 </button>
+                <p>모의 결제이며 실제 금액은 청구하지 않습니다.</p>
+                {showingPaymentProgress && <OperationOverlay label="결제 처리 중" />}
               </div>
             )}
           </>
@@ -886,6 +964,9 @@ export function BuyerCheckoutPanel({
         {(unknown || result?.status === "PENDING") && (
           <p role="status">결제 결과 확인 중입니다. 새 결제를 시작하지 마세요.</p>
         )}
+        <span className="sr-only" role="status">
+          {refreshingCart && (isDirect ? "상품 정보 새로고침 중" : "장바구니 새로고침 중")}
+        </span>
         {(unknown || result?.status === "PENDING") && (
           <button
             className="btn-query-store"

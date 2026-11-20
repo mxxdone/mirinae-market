@@ -45,7 +45,7 @@ public class CheckoutService {
   }
 
   public CheckoutAttempt start(String loginId, String key, Long version, String mode) {
-    return start(loginId, key, version, mode, null, null);
+    return start(loginId, key, version, mode, null, null, null);
   }
 
   public CheckoutAttempt start(
@@ -54,8 +54,10 @@ public class CheckoutService {
       Long version,
       String mode,
       List<Long> offerIds,
-      DirectPurchaseItem direct) {
-    var prepared = transactions.prepare(loginId, key, version, mode, offerIds, direct);
+      CheckoutItemConditions direct,
+      List<CheckoutItemConditions> itemConditions) {
+    var prepared =
+        transactions.prepare(loginId, key, version, mode, offerIds, direct, itemConditions);
     var result = transactions.finish(transactions.buyerId(loginId), key);
     return new CheckoutAttempt(
         result, prepared.loseResponse() && result.status().equals("CONFIRMED"));

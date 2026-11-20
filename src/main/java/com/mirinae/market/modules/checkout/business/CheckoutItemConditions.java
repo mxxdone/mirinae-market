@@ -2,7 +2,7 @@ package com.mirinae.market.modules.checkout.business;
 
 import java.time.LocalTime;
 
-public record DirectPurchaseItem(
+public record CheckoutItemConditions(
     Long offerId,
     Integer quantity,
     Integer expectedPrice,

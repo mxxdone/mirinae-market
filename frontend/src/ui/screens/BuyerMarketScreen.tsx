@@ -29,7 +29,6 @@ interface Props {
   choosingMarket: boolean;
   onChangeMarket: () => void;
   onConfirmMarket: (marketId: number) => void;
-  onCheckout: () => void;
   onAdd: (offer: OfferView, quantity?: number) => void;
   onBuyNow: (offer: OfferView, quantity: number) => void;
   adding: boolean;
@@ -85,8 +84,6 @@ interface Props {
   onStoreOfferPage: (page: number) => void;
   onStoreBack: () => void;
   onAddStoreOffer: (offer: OfferView) => void;
-  storeCartNotice: { offerName: string } | null;
-  onClearStoreCartNotice: () => void;
 }
 
 export function BuyerMarketScreen(props: Props) {
@@ -293,11 +290,6 @@ export function BuyerMarketScreen(props: Props) {
       </header>
 
       <div className="summary-card-body market-body">
-        {props.storeCartNotice && !props.selectedStore && (
-          <p role="status" className="cart-added-notice">
-            {props.storeCartNotice.offerName}이(가) 장바구니에 담겼습니다.
-          </p>
-        )}
         <div hidden={!props.choosingMarket} className="buyer-market-selection">
           {/* 1. 지역별 선택 및 내 주변 필터 영역 */}
           <div className="market-filter-panel" aria-label="지역 및 위치 필터">
@@ -465,32 +457,6 @@ export function BuyerMarketScreen(props: Props) {
                 </button>
               </div>
 
-              {props.storeCartNotice && (
-                <div className="store-cart-banner" role="status" aria-live="polite">
-                  <p className="store-cart-message">
-                    <strong>{props.storeCartNotice.offerName}</strong>이(가) 장바구니에 담겼습니다.
-                  </p>
-                  <div className="store-cart-actions">
-                    <button
-                      type="button"
-                      id="btnStoreKeepShopping"
-                      className="btn-secondary-sm"
-                      onClick={props.onClearStoreCartNotice}
-                    >
-                      계속 담기
-                    </button>
-                    <button
-                      type="button"
-                      id="btnStoreGoToCart"
-                      className="btn-query-store"
-                      onClick={props.onCheckout}
-                    >
-                      장바구니로 이동
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {props.storeOfferLoading ? (
                 <p role="status" className="market-empty">
                   매장 상품을 불러오고 있습니다.
@@ -596,7 +562,7 @@ export function BuyerMarketScreen(props: Props) {
                   <p className="comparison-price">
                     {props.selected.comparisonUnit}당{" "}
                     {props.selected.comparisonPriceWon.toLocaleString("ko-KR", {
-                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
                     })}
                     원
                   </p>

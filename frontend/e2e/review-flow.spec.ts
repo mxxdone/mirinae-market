@@ -41,15 +41,16 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   await page.locator("#btnSearchStore").click();
   await page.getByRole("button", { name: /매장 둘러보기.*리뷰검증매장/ }).click();
   await expect(page.locator("#heading-store-page")).toHaveText("리뷰검증매장");
-  for (const name of ["리뷰 사과", "리뷰 배"]) {
+  for (const [index, name] of ["리뷰 사과", "리뷰 배"].entries()) {
     const card = page
       .locator(".offer-card")
       .filter({ has: page.getByRole("heading", { name, exact: true }) });
     await card.getByRole("button", { name: "장바구니 담기", exact: true }).click();
     await expect(page.locator("#heading-store-page")).toBeVisible();
-    await expect(page.locator("#btnStoreGoToCart")).toBeVisible();
+    await expect(page.getByTestId("cart-count")).toHaveText(String(index + 1));
+    await expect(page.locator(".toast-region")).toHaveText("장바구니에 담았습니다.");
   }
-  await page.locator("#btnStoreGoToCart").click();
+  await page.getByRole("button", { name: "장바구니", exact: true }).click();
   await expect(page.locator(".checkout-item")).toHaveCount(2);
   await page.getByRole("button", { name: "통합 모의 결제", exact: true }).click();
   await expect(page.locator("#orders-heading")).toBeVisible();
@@ -154,7 +155,7 @@ test("한 매장에서 계속 담기·구매자 리뷰·답글·삭제 요청·�
   // 새 문서 로드(URL 직접 접근과 동일)로 진입해 저장된 위치를 실제로 복원시킨다.
   await page.reload();
   await expect(page.locator(".store-reviews")).toContainText("찾아주셔서 감사합니다");
-  await expect(page.locator(".toast-region")).toHaveCount(0);
+  await expect(page.locator(".toast-region .toast-message-pill")).toHaveCount(0);
   await page.screenshot({
     path: "../.local/verification/review-store-desktop.png",
     fullPage: true,

@@ -25,13 +25,13 @@ import { BuyerMarketScreen } from "./BuyerMarketScreen";
 import { useStoreRatings } from "../useStoreRatings";
 
 export function BuyerMarketContainer({
-  onCart,
   onCartChanged,
+  onItemAdded,
   onBuyNow,
   onSessionExpired,
 }: {
-  onCart: () => void;
   onCartChanged: (cart: Cart) => void;
+  onItemAdded: () => void;
   onBuyNow: (offer: OfferView, quantity: number) => void;
   onSessionExpired: () => void;
 }) {
@@ -72,7 +72,6 @@ export function BuyerMarketContainer({
   const [storeOfferPage, setStoreOfferPage] = useState(0);
   const [storeOfferTotal, setStoreOfferTotal] = useState(0);
   const [storeOfferLoading, setStoreOfferLoading] = useState(false);
-  const [storeCartNotice, setStoreCartNotice] = useState<{ offerName: string } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +145,6 @@ export function BuyerMarketContainer({
       );
       setSelected(null);
       setSelectedStore(null);
-      setStoreCartNotice(null);
       setError(null);
       setLoading(true);
       try {
@@ -192,7 +190,6 @@ export function BuyerMarketContainer({
       );
       setSelected(null);
       setSelectedStore(null);
-      setStoreCartNotice(null);
       setError(null);
       setLoading(true);
       try {
@@ -227,7 +224,6 @@ export function BuyerMarketContainer({
       const current = ++request.current;
       setSelected(null);
       setSelectedStore(null);
-      setStoreCartNotice(null);
       setLoading(true);
       setError(null);
       try {
@@ -263,7 +259,6 @@ export function BuyerMarketContainer({
       setSelected(null);
       setSelectedStore(null);
       setStoreOffers([]);
-      setStoreCartNotice(null);
       setError(null);
       setLoading(true);
       setStoreOfferLoading(true);
@@ -566,7 +561,6 @@ export function BuyerMarketContainer({
     setLoading(false);
     setStoreOfferLoading(false);
     setError(null);
-    setStoreCartNotice(null);
     setTab(nextTab);
     setSelected(null);
     setSelectedStore(null);
@@ -642,7 +636,7 @@ export function BuyerMarketContainer({
       .then((cart) => {
         if (mounted.current) onCartChanged(cart);
         if (mounted.current && generation === request.current) {
-          setStoreCartNotice({ offerName: offer.productName });
+          onItemAdded();
         }
       })
       .catch((failure: unknown) => {
@@ -703,7 +697,6 @@ export function BuyerMarketContainer({
         setStorePage(0);
         if (reload) void loadOffers(id, "", 0, false);
       }}
-      onCheckout={onCart}
       adding={adding}
       onAdd={handleStoreOfferAdd}
       onBuyNow={onBuyNow}
@@ -794,8 +787,6 @@ export function BuyerMarketContainer({
       }}
       onStoreBack={handleStoreBack}
       onAddStoreOffer={handleStoreOfferAdd}
-      storeCartNotice={storeCartNotice}
-      onClearStoreCartNotice={() => setStoreCartNotice(null)}
     />
   );
 }

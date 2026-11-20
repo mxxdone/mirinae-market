@@ -1,9 +1,9 @@
 package com.mirinae.market.modules.checkout.presentation;
 
 import com.mirinae.market.modules.checkout.business.CartView;
+import com.mirinae.market.modules.checkout.business.CheckoutItemConditions;
 import com.mirinae.market.modules.checkout.business.CheckoutService;
 import com.mirinae.market.modules.checkout.business.CheckoutView;
-import com.mirinae.market.modules.checkout.business.DirectPurchaseItem;
 import com.mirinae.market.modules.checkout.business.StatementView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -26,20 +26,26 @@ public class CheckoutController {
 
   public record CartRequest(Long marketId, Integer quantity) {}
 
-  public record DirectItemRequest(
+  public record ItemConditionsRequest(
       Long offerId,
       Integer quantity,
       Integer expectedPrice,
       java.time.LocalTime startTime,
       java.time.LocalTime endTime,
-      java.time.LocalTime orderDeadline) {}
+      java.time.LocalTime orderDeadline) {
+    CheckoutItemConditions toBusiness() {
+      return new CheckoutItemConditions(
+          offerId, quantity, expectedPrice, startTime, endTime, orderDeadline);
+    }
+  }
 
   public record PaymentRequest(
       String requestKey,
       Long cartVersion,
       String mode,
       List<Long> offerIds,
-      DirectItemRequest directItem) {}
+      ItemConditionsRequest directItem,
+      List<ItemConditionsRequest> itemConditions) {}
 
   @Operation(
       summary = "본인 장바구니 조회",
@@ -89,9 +95,10 @@ public class CheckoutController {
   @Operation(
       summary = "통합 모의 결제",
       description =
-          "요청 키·장바구니 버전·모의 유형 SUCCESS/FAIL/DELAY/LOST_RESPONSE를 제출합니다. offerIds는 본인 장바구니의 선택 상품이며 생략 시 전체, 빈 배열은 거절합니다. directItem은 현재 상품과 수량·확인한 가격/시간이며 장바구니를 변경하지 않습니다. 둘은 함께 요청할 수 없습니다. 여러 시장을 지원하고 CART 성공 시 선택 항목만 제거합니다. 품절·조건 변경·마감은 FAILED 결과와 원인 코드로 반환하며 전체 미적용합니다. DELAY는 3초 후 재검사하며 재고 선점은 없습니다. LOST_RESPONSE는 성공 저장 후 첫 응답만 503으로 유실을 재현합니다. 같은 키·같은 요청은 기존 결과이며 다른 내용은 409입니다.")
+          "요청 키·장바구니 버전·모의 유형 SUCCESS/FAIL/DELAY/LOST_RESPONSE를 제출합니다. offerIds는 본인 장바구니의 선택 상품이며 생략 시 전체, 빈 배열은 거절합니다. itemConditions가 있으면 모든 선택 상품의 화면에 표시된 수량·가격·시간을 검증합니다. 생략 시 장바구니에 저장한 조건을 사용합니다. directItem은 바로 구매 조건이며 offerIds·itemConditions와 함께 요청할 수 없습니다. 여러 시장을 지원하고 CART 성공 시 선택 항목만 제거합니다. 품절·조건 변경·마감은 FAILED 결과와 원인 코드로 반환하며 전체 미적용합니다. DELAY는 3초 후 재검사하며 재고 선점은 없습니다. LOST_RESPONSE는 성공 저장 후 첫 응답만 503으로 유실을 재현합니다. 같은 키·같은 요청은 기존 결과이며 다른 내용은 409입니다.")
   @SecurityRequirement(name = "csrfToken")
   @ApiResponse(responseCode = "200", description = "PENDING/CONFIRMED/FAILED 결제 상태")
+  @ApiResponse(responseCode = "400", description = "INVALID_INPUT: 선택 상품과 조건이 일치하지 않거나 입력 형식이 잘못됨")
   @ApiResponse(
       responseCode = "409",
       description = "CART_CHANGED/CHECKOUT_PENDING/REQUEST_KEY_CONFLICT: 상태 재확인 필요")
@@ -99,6 +106,7 @@ public class CheckoutController {
   @PostMapping("/checkouts")
   public ResponseEntity<?> start(Principal principal, @RequestBody PaymentRequest request) {
     var direct = request.directItem();
+    var conditions = request.itemConditions();
     var attempt =
         service.start(
             principal.getName(),
@@ -106,15 +114,12 @@ public class CheckoutController {
             request.cartVersion(),
             request.mode(),
             request.offerIds(),
-            direct == null
+            direct == null ? null : direct.toBusiness(),
+            conditions == null
                 ? null
-                : new DirectPurchaseItem(
-                    direct.offerId(),
-                    direct.quantity(),
-                    direct.expectedPrice(),
-                    direct.startTime(),
-                    direct.endTime(),
-                    direct.orderDeadline()));
+                : conditions.stream()
+                    .map(item -> item == null ? null : item.toBusiness())
+                    .toList());
     if (attempt.loseResponse())
       return ResponseEntity.status(503)
           .body(

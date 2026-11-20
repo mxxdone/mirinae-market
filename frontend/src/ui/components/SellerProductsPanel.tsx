@@ -353,7 +353,11 @@ export function SellerProductsPanel({
                   else void refreshAll();
                 }}
               >
-                ↻
+                {loading ? (
+                  <span className="spinner-icon spinner-on-light" aria-hidden="true" />
+                ) : (
+                  "↻"
+                )}
               </button>
             </div>
           </div>

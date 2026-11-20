@@ -157,10 +157,7 @@ test("두 매장 통합 결제·응답 유실 결과 확인·새로고침 주문
     await second.close();
   }
 });
-test("모의 결제 실패와 가격 변경 재확인은 재고를 차감하지 않고 성공 안내도 하지 않음", async ({
-  page,
-  browser,
-}) => {
+test("모의 결제 실패와 최신 가격 재결제까지 재고를 차감하지 않는다", async ({ page, browser }) => {
   test.setTimeout(60000);
   const seller = await browser.newContext();
   try {
@@ -193,14 +190,36 @@ test("모의 결제 실패와 가격 변경 재확인은 재고를 차감하지 
         )
       ).status(),
     ).toBe(200);
-    await page.getByRole("button", { name: "장바구니 새로고침", exact: true }).click();
-    await expect(page.getByRole("button", { name: "통합 모의 결제", exact: true })).toBeDisabled();
-    await page.getByRole("button", { name: "변경 조건 확인·수량 적용", exact: true }).click();
     await page.locator("#payment-mode").selectOption("SUCCESS");
     await page.getByRole("button", { name: "통합 모의 결제", exact: true }).click();
+    await expect(
+      page.getByText("결제 조건이 변경되었습니다. 최신 상품 정보와 결제금액을 확인해 주세요."),
+    ).toBeVisible();
+    await expect(page.getByText("총 결제금액 1,500원", { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/#cart$/);
+    await expect(page.getByText(/결제가 완료되었습니다/)).toHaveCount(0);
+    const updatedOffer = await seller.request.get(
+      `/api/markets/${item.marketId}/offers/${item.offerId}`,
+      { headers: item.headers },
+    );
+    expect(updatedOffer.status()).toBe(200);
+    const { onlineQuantity, inventoryVersion } = (await updatedOffer.json()) as {
+      onlineQuantity: number;
+      inventoryVersion: number;
+    };
+    expect(onlineQuantity).toBe(10);
+    const changedAgain = await seller.request.put(
+      `/api/seller/stores/${item.id}/products/${item.productId}/offers/${required("E2E_FIXED_INSTANT").slice(0, 10)}`,
+      { headers: item.headers, data: { priceWon: 1800, onlineQuantity, inventoryVersion } },
+    );
+    expect(changedAgain.status()).toBe(200);
+    await page.getByRole("button", { name: "변경된 조건으로 결제", exact: true }).click();
+    await expect(page.getByText("총 결제금액 1,800원", { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/#cart$/);
+    await page.getByRole("button", { name: "변경된 조건으로 결제", exact: true }).click();
     await expect(page.getByText(/결제가 완료되었습니다/)).toBeVisible();
     await expect(page.locator(".checkout-order").filter({ hasText: name })).toContainText(
-      "1,500원",
+      "1,800원",
     );
   } finally {
     await seller.close();

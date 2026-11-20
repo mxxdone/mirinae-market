@@ -788,10 +788,12 @@ function AdminList({
         <button
           type="button"
           id="btnAdminRefresh"
+          className="refresh-order-button"
           disabled={busy}
           onClick={() => setVersion((v) => v + 1)}
         >
           새로고침
+          {busy && <span className="spinner-icon spinner-on-light" aria-hidden="true" />}
         </button>
       </div>
 

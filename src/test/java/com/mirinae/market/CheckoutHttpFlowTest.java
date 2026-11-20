@@ -346,6 +346,55 @@ class CheckoutHttpFlowTest {
   }
 
   @Test
+  void selectedCheckoutRechecksTheConditionsShownToTheBuyer() throws Exception {
+    try (var client = session(buyer)) {
+      long version = add(client, offer, 1);
+      var mapper = new tools.jackson.databind.json.JsonMapper();
+      var payment = new java.util.HashMap<String, Object>();
+      payment.put("requestKey", "selected-stale");
+      payment.put("cartVersion", version);
+      payment.put("mode", "SUCCESS");
+      payment.put("offerIds", List.of(offer));
+      payment.put("itemConditions", List.of(direct(1, 999)));
+      var stale =
+          client.json(
+              client.post(
+                  "/api/buyer/checkouts",
+                  mapper.writeValueAsString(payment),
+                  "application/json",
+                  true));
+      assertThat(stale.get("status").asString()).isEqualTo("FAILED");
+      assertThat(stale.get("errorCode").asString()).isEqualTo("CONDITIONS_CHANGED");
+      assertThat(stock(offer)).isEqualTo(10);
+
+      payment.put("itemConditions", List.of(direct(1, 1000)));
+      assertThat(
+              client
+                  .post(
+                      "/api/buyer/checkouts",
+                      mapper.writeValueAsString(payment),
+                      "application/json",
+                      true)
+                  .statusCode())
+          .isEqualTo(409);
+
+      var cart = client.json(client.get("/api/buyer/cart"));
+      assertThat(cart.get("items").size()).isEqualTo(1);
+      payment.put("requestKey", "selected-reviewed");
+      payment.put("cartVersion", cart.get("version").asLong());
+      var confirmed =
+          client.json(
+              client.post(
+                  "/api/buyer/checkouts",
+                  mapper.writeValueAsString(payment),
+                  "application/json",
+                  true));
+      assertThat(confirmed.get("status").asString()).isEqualTo("CONFIRMED");
+      assertThat(stock(offer)).isEqualTo(9);
+    }
+  }
+
+  @Test
   void directConditionFailurePreservesCartAndLostResponseIsNotRepeated() throws Exception {
     try (var client = session(buyer)) {
       long version = add(client, otherOffer, 1);

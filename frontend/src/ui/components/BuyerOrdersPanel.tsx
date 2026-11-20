@@ -12,6 +12,7 @@ import { BuyerStoreReportModal } from "./BuyerStoreReportModal";
 import { OrderStatementModal } from "./OrderStatementModal";
 import { StatusAlert } from "./StatusAlert";
 import { BuyerReviewEditor } from "./BuyerReviewEditor";
+import { OperationOverlay } from "./OperationOverlay";
 
 interface Props {
   completedOrder: Checkout | null;
@@ -33,6 +34,8 @@ export function BuyerOrdersPanel({
 }: Props): ReactElement {
   const [orders, setOrders] = useState<Checkout[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedOrders, setLoadedOrders] = useState(false);
+  const [refreshSource, setRefreshSource] = useState<"orders" | "status" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -43,7 +46,7 @@ export function BuyerOrdersPanel({
     kind: CancellationKind;
     requestKey: string;
   } | null>(null);
-  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancellingStoreId, setCancellingStoreId] = useState<number | null>(null);
   const [failedCancel, setFailedCancel] = useState<FailedCancellation | null>(null);
 
   // 매장 제보 모달 상태
@@ -56,26 +59,44 @@ export function BuyerOrdersPanel({
   const [viewingStatementId, setViewingStatementId] = useState<number | null>(null);
 
   const request = useRef(0);
+  const reading = useRef(false);
   const mutating = useRef(false);
   const mounted = useRef(true);
+  const cancelDialog = useRef<HTMLDialogElement>(null);
+  const isCancelling = cancellingStoreId !== null;
 
-  const load = useCallback(async () => {
-    if (mutating.current) return;
-    const current = ++request.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const history = await getOrders();
-      if (!mounted.current || current !== request.current) return;
-      setOrders(history.filter((order) => order.status === "CONFIRMED"));
-    } catch (value) {
-      if (!mounted.current || current !== request.current) return;
-      if (value instanceof ApiError && value.status === 401) onSessionExpired();
-      else setError(value instanceof Error ? value.message : "주문 내역을 불러오지 못했습니다.");
-    } finally {
-      if (mounted.current && current === request.current) setLoading(false);
-    }
-  }, [onSessionExpired]);
+  const load = useCallback(
+    async (source: "orders" | "status" | null = null) => {
+      if (mutating.current || (source !== null && reading.current)) return;
+      reading.current = true;
+      const current = ++request.current;
+      setLoading(true);
+      setRefreshSource(source);
+      setError(null);
+      try {
+        const history = await getOrders();
+        if (!mounted.current || current !== request.current) return;
+        setOrders(history.filter((order) => order.status === "CONFIRMED"));
+        setLoadedOrders(true);
+      } catch (value) {
+        if (!mounted.current || current !== request.current) return;
+        if (value instanceof ApiError && value.status === 401) onSessionExpired();
+        else
+          setError(
+            source === null
+              ? "주문 내역을 불러오지 못했습니다. 다시 시도해 주세요."
+              : "주문 내역을 새로고침하지 못했습니다. 다시 시도해 주세요.",
+          );
+      } finally {
+        if (mounted.current && current === request.current) {
+          reading.current = false;
+          setLoading(false);
+          setRefreshSource(null);
+        }
+      }
+    },
+    [onSessionExpired],
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -86,11 +107,22 @@ export function BuyerOrdersPanel({
     };
   }, [load]);
 
+  useEffect(() => {
+    const dialog = cancelDialog.current;
+    if (confirmingCancel && dialog && !dialog.open) dialog.showModal();
+  }, [confirmingCancel]);
+
+  function closeCancellation() {
+    cancelDialog.current?.close();
+    setConfirmingCancel(null);
+  }
+
   async function executeCancel(storeOrderId: number, requestKey: string, kind: CancellationKind) {
+    if (reading.current || mutating.current) return;
     mutating.current = true;
     request.current += 1;
     setLoading(false);
-    setIsCancelling(true);
+    setCancellingStoreId(storeOrderId);
     setError(null);
     setNotice(null);
     setFailedCancel(null);
@@ -112,7 +144,7 @@ export function BuyerOrdersPanel({
           ? "매장 주문이 취소되었습니다. 환불 진행 내역을 확인해 주세요."
           : "남은 상품 취소가 완료되었습니다. 환불 진행 내역을 확인해 주세요.",
       );
-      setConfirmingCancel(null);
+      closeCancellation();
     } catch (err: unknown) {
       if (!mounted.current) return;
       if (err instanceof ApiError && err.status === 401) {
@@ -123,7 +155,6 @@ export function BuyerOrdersPanel({
         err instanceof Error
           ? err.message
           : "취소 요청을 전송하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.";
-      setError(msg);
       // 명시적 재시도를 위해 같은 requestKey와 kind를 보존
       setFailedCancel({
         storeOrderId,
@@ -133,11 +164,12 @@ export function BuyerOrdersPanel({
       });
     } finally {
       mutating.current = false;
-      if (mounted.current) setIsCancelling(false);
+      if (mounted.current) setCancellingStoreId(null);
     }
   }
 
   function startCancel(store: StoreOrderView, kind: CancellationKind) {
+    if (reading.current || mutating.current) return;
     setError(null);
     setNotice(null);
     setFailedCancel(null);
@@ -172,9 +204,9 @@ export function BuyerOrdersPanel({
             {notice}
           </p>
         )}
-        <StatusAlert message={error} onRetry={() => void load()} />
+        <StatusAlert message={error} onRetry={() => void load("orders")} />
 
-        {failedCancel && (
+        {failedCancel && !confirmingCancel && (
           <div className="status-alert-box alert-warning" role="alert">
             <p>취소 요청 처리 중 오류가 발생했습니다: {failedCancel.errorMessage}</p>
             <div className="checkout-actions">
@@ -182,7 +214,7 @@ export function BuyerOrdersPanel({
                 type="button"
                 className="btn-query-store"
                 id="btnRetryCancellation"
-                disabled={isCancelling}
+                disabled={loading || isCancelling}
                 onClick={() =>
                   void executeCancel(
                     failedCancel.storeOrderId,
@@ -195,27 +227,36 @@ export function BuyerOrdersPanel({
               </button>
               <button
                 type="button"
-                className="text-action-link"
-                disabled={isCancelling}
-                onClick={() => void load()}
+                className="text-action-link refresh-order-button"
+                disabled={loading || isCancelling}
+                onClick={() => void load("status")}
               >
                 주문 상태 새로고침
+                {refreshSource === "status" && (
+                  <span className="spinner-icon spinner-on-light" aria-hidden="true" />
+                )}
               </button>
             </div>
           </div>
         )}
 
         <button
-          className="text-action-link"
+          className="text-action-link refresh-order-button"
           disabled={loading || isCancelling}
-          onClick={() => void load()}
+          onClick={() => void load("orders")}
           id="btnRefreshOrders"
         >
           주문 내역 새로고침
+          {refreshSource === "orders" && (
+            <span className="spinner-icon spinner-on-light" aria-hidden="true" />
+          )}
         </button>
 
-        {loading && <p role="status">주문 내역을 불러오고 있습니다.</p>}
-        {!loading && !error && orders.length === 0 && (
+        <span className="sr-only" role="status">
+          {refreshSource && "주문 내역 새로고침 중"}
+        </span>
+        {loading && !refreshSource && <p role="status">주문 내역을 불러오고 있습니다.</p>}
+        {loadedOrders && !error && orders.length === 0 && (
           <div className="market-empty">
             <h2>아직 확정된 주문이 없습니다.</h2>
             <p>시장 상품을 둘러보고 장바구니에서 결제해 주세요.</p>
@@ -242,7 +283,11 @@ export function BuyerOrdersPanel({
               </button>
             </div>
             {order.storeOrders.map((store) => (
-              <section key={store.id} className="store-order-card" data-store-order-id={store.id}>
+              <section
+                key={store.id}
+                className="store-order-card operation-region"
+                data-store-order-id={store.id}
+              >
                 <div className="store-order-header">
                   <h3>
                     {store.marketName && `${store.marketName} · `}
@@ -347,7 +392,7 @@ export function BuyerOrdersPanel({
                       type="button"
                       className="btn-danger-outline"
                       id={`btnCancelOrder-${store.id}`}
-                      disabled={isCancelling}
+                      disabled={loading || isCancelling}
                       onClick={() => startCancel(store, "GENERAL")}
                     >
                       주문 취소
@@ -358,13 +403,16 @@ export function BuyerOrdersPanel({
                       type="button"
                       className="btn-danger-outline"
                       id={`btnCancelRemaining-${store.id}`}
-                      disabled={isCancelling}
+                      disabled={loading || isCancelling}
                       onClick={() => startCancel(store, "REMAINDER")}
                     >
                       남은 상품 전체 취소
                     </button>
                   )}
                 </div>
+                {cancellingStoreId === store.id && !confirmingCancel && (
+                  <OperationOverlay label="주문 취소 처리 중" />
+                )}
               </section>
             ))}
           </article>
@@ -372,13 +420,16 @@ export function BuyerOrdersPanel({
 
         {/* 취소 확인 대화상자 */}
         {confirmingCancel && (
-          <div
-            className="modal-backdrop"
-            role="dialog"
-            aria-modal="true"
+          <dialog
+            className="hybrid-card multi-market-confirm-modal operation-region"
             aria-labelledby="cancel-dialog-title"
+            ref={cancelDialog}
+            onCancel={(event) => {
+              event.preventDefault();
+              if (!mutating.current) closeCancellation();
+            }}
           >
-            <div className="modal-content hybrid-card cancel-confirm-modal">
+            <div inert={isCancelling}>
               <header className="summary-card-header">
                 <h3 id="cancel-dialog-title">
                   {confirmingCancel.kind === "GENERAL"
@@ -392,12 +443,13 @@ export function BuyerOrdersPanel({
                     ? "주문 마감 전입니다. 해당 매장 주문의 유효 상품 전체를 취소하시겠습니까? 결제 금액은 환불 처리됩니다."
                     : "일부 상품의 판매 실패로 인해 남은 상품 전체를 취소하시겠습니까? 남은 유효 상품 전체가 취소 및 환불 처리됩니다."}
                 </p>
+                <StatusAlert message={failedCancel?.errorMessage ?? null} />
                 <div className="checkout-actions">
                   <button
                     type="button"
                     className="btn-query-store btn-danger"
                     id="btnConfirmCancellation"
-                    disabled={isCancelling}
+                    disabled={loading || isCancelling}
                     onClick={() =>
                       void executeCancel(
                         confirmingCancel.storeOrderId,
@@ -412,14 +464,16 @@ export function BuyerOrdersPanel({
                     type="button"
                     className="text-action-link"
                     disabled={isCancelling}
-                    onClick={() => setConfirmingCancel(null)}
+                    onClick={closeCancellation}
+                    autoFocus
                   >
                     닫기
                   </button>
                 </div>
               </div>
             </div>
-          </div>
+            {isCancelling && <OperationOverlay label="주문 취소 처리 중" />}
+          </dialog>
         )}
 
         {/* 매장 제보 모달 */}

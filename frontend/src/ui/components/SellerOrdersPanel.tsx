@@ -494,12 +494,13 @@ export function SellerOrdersPanel({ store, onSessionExpired }: Props): ReactElem
               />
               <button
                 type="button"
-                className="text-action-link"
+                className="text-action-link refresh-order-button"
                 disabled={loading}
                 onClick={() => setVersion((v) => v + 1)}
                 id="btnRefreshSellerOrders"
               >
                 새로고침
+                {loading && <span className="spinner-icon spinner-on-light" aria-hidden="true" />}
               </button>
             </div>
 

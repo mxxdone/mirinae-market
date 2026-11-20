@@ -8,7 +8,7 @@ import { useCartSummary } from "./useCartSummary";
 import { readDirectPurchaseLocation } from "./purchaseLocation";
 import { BuyerCheckoutPanel } from "./components/BuyerCheckoutPanel";
 import { BuyerOrdersPanel } from "./components/BuyerOrdersPanel";
-import { Toast } from "./components/Toast";
+import { Toast, type ToastNotice } from "./components/Toast";
 import { BrandHeader } from "./components/BrandHeader";
 import { BuyerHeaderActions } from "./components/BuyerHeaderActions";
 import { StatusAlert } from "./components/StatusAlert";
@@ -63,7 +63,7 @@ export function App(): ReactElement {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>("login");
   const [isRestoringSession, setIsRestoringSession] = useState<boolean>(true);
   const [registeredLoginId, setRegisteredLoginId] = useState<string>("");
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastNotice | null>(null);
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState<string | null>(null);
   const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -79,14 +79,15 @@ export function App(): ReactElement {
     offerId: null,
   });
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastSequence = useRef(0);
 
-  const showToast = useCallback((msg: string): void => {
+  const showToast = useCallback((message: string, kind: ToastNotice["kind"] = "default"): void => {
     if (toastTimeoutRef.current) {
       clearTimeout(toastTimeoutRef.current);
     }
-    setToastMessage(msg);
+    setToast({ id: ++toastSequence.current, message, kind });
     toastTimeoutRef.current = setTimeout(() => {
-      setToastMessage(null);
+      setToast(null);
     }, 2400);
   }, []);
 
@@ -435,6 +436,7 @@ export function App(): ReactElement {
         {currentUser?.role === "BUYER" && (
           <BuyerHeaderActions
             cartCount={cartCount}
+            cartFeedbackId={toast?.kind === "cart" ? toast.id : 0}
             isLoggingOut={isLoggingOut}
             activePage={
               currentScreen === "buyer-summary"
@@ -554,7 +556,7 @@ export function App(): ReactElement {
               onCartChanged={onCartChanged}
               onBuyNow={buyNow}
               key={currentUser.id}
-              onCart={() => navigatePurchase("buyer-cart")}
+              onItemAdded={() => showToast("장바구니에 담았습니다.", "cart")}
               onSessionExpired={handleSessionExpired}
             />
           )}
@@ -624,7 +626,7 @@ export function App(): ReactElement {
 
       <AppFooter />
 
-      <Toast message={toastMessage} />
+      <Toast notice={toast} />
     </div>
   );
 }

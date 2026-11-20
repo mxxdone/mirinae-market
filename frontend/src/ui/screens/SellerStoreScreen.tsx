@@ -200,7 +200,8 @@ export function SellerStoreScreen({
               disabled={isLoading}
               onClick={() => setRefreshVersion((version) => version + 1)}
             >
-              {isLoading ? "매장 정보를 불러오는 중..." : "매장 정보 새로고침"}
+              매장 정보 새로고침
+              {isLoading && <span className="spinner-icon" aria-hidden="true" />}
             </button>
           )}
           {isLoading && <p role="status">담당 매장 정보를 불러오고 있습니다.</p>}

@@ -170,7 +170,7 @@ public class CheckoutTransactions {
 
   @Transactional
   public CheckoutAttempt prepare(String loginId, String key, Long version, String mode) {
-    return prepare(loginId, key, version, mode, null, null);
+    return prepare(loginId, key, version, mode, null, null, null);
   }
 
   @Transactional
@@ -180,10 +180,11 @@ public class CheckoutTransactions {
       Long version,
       String mode,
       List<Long> offerIds,
-      DirectPurchaseItem direct) {
+      CheckoutItemConditions direct,
+      List<CheckoutItemConditions> itemConditions) {
     CheckoutRules.key(key);
     CheckoutRules.mode(mode);
-    String fingerprint = CheckoutRules.fingerprint(offerIds, direct);
+    String fingerprint = CheckoutRules.fingerprint(offerIds, direct, itemConditions);
     String source = direct == null ? "CART" : "DIRECT";
     if (version == null || version < 0) throw new IllegalArgumentException("장바구니 버전을 확인해 주세요.");
     long buyer = buyer(loginId);
@@ -205,15 +206,7 @@ public class CheckoutTransactions {
       throw new CheckoutConflictException("CHECKOUT_PENDING", "같은 장바구니의 결제 결과를 먼저 확인해 주세요.");
     List<LineRow> lines;
     if (direct != null) {
-      lines =
-          List.of(
-              new LineRow(
-                  direct.offerId(),
-                  direct.quantity(),
-                  direct.expectedPrice(),
-                  direct.startTime(),
-                  direct.endTime(),
-                  direct.orderDeadline()));
+      lines = List.of(checkoutLine(direct));
     } else {
       var cart = data.cart(buyer);
       lines =
@@ -222,6 +215,15 @@ public class CheckoutTransactions {
               : cart.stream().filter(line -> offerIds.contains(line.offerId())).toList();
       if (offerIds != null && lines.size() != offerIds.size())
         throw new CheckoutConflictException("CART_CHANGED", "선택한 상품이 장바구니에 없습니다. 다시 확인해 주세요.");
+      if (itemConditions != null) {
+        var savedQuantities =
+            lines.stream()
+                .collect(java.util.stream.Collectors.toMap(LineRow::offerId, LineRow::quantity));
+        if (itemConditions.stream()
+            .anyMatch(item -> !item.quantity().equals(savedQuantities.get(item.offerId()))))
+          throw new CheckoutConflictException("CART_CHANGED", "장바구니 수량이 변경되었습니다. 다시 확인해 주세요.");
+        lines = itemConditions.stream().map(CheckoutTransactions::checkoutLine).toList();
+      }
     }
     CheckoutRules.items(lines.stream().map(LineRow::offerId).toList());
     CheckoutRules.amount(
@@ -229,6 +231,16 @@ public class CheckoutTransactions {
         lines.stream().map(LineRow::quantity).toList());
     var row = data.prepare(buyer, key, version, mode, clock.instant(), lines, source, fingerprint);
     return new CheckoutAttempt(view(row), mode.equals("LOST_RESPONSE"));
+  }
+
+  private static LineRow checkoutLine(CheckoutItemConditions conditions) {
+    return new LineRow(
+        conditions.offerId(),
+        conditions.quantity(),
+        conditions.expectedPrice(),
+        conditions.startTime(),
+        conditions.endTime(),
+        conditions.orderDeadline());
   }
 
   @Transactional

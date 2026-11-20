@@ -1,9 +1,11 @@
 export function CartButton({
   count,
+  feedbackId,
   onClick,
   disabled = false,
 }: {
   count: number | null;
+  feedbackId: number;
   onClick: () => void;
   disabled?: boolean;
 }) {
@@ -31,7 +33,12 @@ export function CartButton({
         <circle cx="18" cy="21" r="1" />
       </svg>
       {count !== null && count > 0 && (
-        <span className="cart-count" aria-hidden="true" data-testid="cart-count">
+        <span
+          key={feedbackId}
+          className={feedbackId ? "cart-count cart-count--feedback" : "cart-count"}
+          aria-hidden="true"
+          data-testid="cart-count"
+        >
           {count}
         </span>
       )}

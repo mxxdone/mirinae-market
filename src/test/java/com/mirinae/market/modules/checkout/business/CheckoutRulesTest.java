@@ -3,41 +3,61 @@ package com.mirinae.market.modules.checkout.business;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CheckoutRulesTest {
   @Test
   void selectionFingerprintIsCanonicalAndExplicitEmptyIsNotAll() {
-    assertThat(CheckoutRules.fingerprint(null, null)).isEqualTo("ALL");
-    assertThat(CheckoutRules.fingerprint(List.of(2L, 1L), null)).isEqualTo("1,2");
+    assertThat(CheckoutRules.fingerprint(null, null, null)).isEqualTo("ALL");
+    assertThat(CheckoutRules.fingerprint(List.of(2L, 1L), null, null)).isEqualTo("1,2");
     for (List<Long> ids :
         List.of(List.<Long>of(), List.of(1L, 1L), List.of(0L), java.util.Arrays.asList(1L, null)))
-      assertThatThrownBy(() -> CheckoutRules.fingerprint(ids, null))
+      assertThatThrownBy(() -> CheckoutRules.fingerprint(ids, null, null))
           .isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
   void directFingerprintIncludesQuantityPriceAndTimesAndRejectsMixedInput() {
     var item =
-        new DirectPurchaseItem(
+        new CheckoutItemConditions(
             1L,
             2,
             1000,
             java.time.LocalTime.of(14, 0),
             java.time.LocalTime.of(18, 0),
             java.time.LocalTime.of(13, 0));
-    assertThat(CheckoutRules.fingerprint(null, item))
+    assertThat(CheckoutRules.fingerprint(null, item, null))
         .isEqualTo("DIRECT:1:2:1000:14:00:18:00:13:00");
-    assertThatThrownBy(() -> CheckoutRules.fingerprint(List.of(1L), item))
+    assertThatThrownBy(() -> CheckoutRules.fingerprint(List.of(1L), item, null))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () ->
                 CheckoutRules.fingerprint(
                     null,
-                    new DirectPurchaseItem(
-                        1L, 0, 1000, item.startTime(), item.endTime(), item.orderDeadline())))
+                    new CheckoutItemConditions(
+                        1L, 0, 1000, item.startTime(), item.endTime(), item.orderDeadline()),
+                    null))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void selectedConditionsAreCanonicalAndPreserveTimeBoundaries() {
+    var deadline = LocalTime.of(13, 0);
+    var first =
+        new CheckoutItemConditions(
+            1L, 1, 1000, LocalTime.of(14, 0, 15), LocalTime.of(18, 1), deadline);
+    var changed =
+        new CheckoutItemConditions(
+            1L, 1, 1000, LocalTime.of(14, 0), LocalTime.of(15, 18, 1), deadline);
+    var second =
+        new CheckoutItemConditions(2L, 1, 1000, LocalTime.of(14, 0), LocalTime.of(18, 0), deadline);
+    String fingerprint = CheckoutRules.fingerprint(List.of(1L, 2L), null, List.of(first, second));
+    assertThat(CheckoutRules.fingerprint(List.of(2L, 1L), null, List.of(second, first)))
+        .isEqualTo(fingerprint);
+    assertThat(CheckoutRules.fingerprint(List.of(1L, 2L), null, List.of(changed, second)))
+        .isNotEqualTo(fingerprint);
   }
 
   @Test

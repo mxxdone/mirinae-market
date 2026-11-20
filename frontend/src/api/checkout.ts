@@ -27,19 +27,21 @@ export interface Checkout {
   storeOrders: StoreOrder[];
 }
 export type PaymentMode = "SUCCESS" | "FAIL" | "DELAY" | "LOST_RESPONSE";
+interface ItemConditions {
+  offerId: number;
+  quantity: number;
+  expectedPrice: number;
+  startTime: string;
+  endTime: string;
+  orderDeadline: string;
+}
 export interface PaymentInput {
   requestKey: string;
   cartVersion: number;
   mode: PaymentMode;
   offerIds?: number[];
-  directItem?: {
-    offerId: number;
-    quantity: number;
-    expectedPrice: number;
-    startTime: string;
-    endTime: string;
-    orderDeadline: string;
-  };
+  itemConditions?: ItemConditions[];
+  directItem?: ItemConditions;
 }
 export function getCart(): Promise<Cart> {
   return apiGet("/api/buyer/cart");

@@ -3,6 +3,7 @@ import { CartButton } from "./CartButton";
 
 interface BuyerHeaderActionsProps {
   cartCount: number | null;
+  cartFeedbackId: number;
   isLoggingOut: boolean;
   activePage: "account" | "orders" | null;
   onCart: () => void;
@@ -13,6 +14,7 @@ interface BuyerHeaderActionsProps {
 
 export function BuyerHeaderActions({
   cartCount,
+  cartFeedbackId,
   isLoggingOut,
   activePage,
   onCart,
@@ -53,6 +55,7 @@ export function BuyerHeaderActions({
     <nav className="buyer-utility-nav" aria-label="구매자 메뉴">
       <CartButton
         count={cartCount}
+        feedbackId={cartFeedbackId}
         onClick={() => {
           setOpen(false);
           onCart();

@@ -180,7 +180,8 @@ export function SellerDashboardPanel({ store, onSessionExpired }: Props): ReactE
           disabled={loading}
           onClick={() => setVersion((v) => v + 1)}
         >
-          {loading ? "조회 중..." : "새로고침"}
+          새로고침
+          {loading && <span className="spinner-icon" aria-hidden="true" />}
         </button>
       </div>
 

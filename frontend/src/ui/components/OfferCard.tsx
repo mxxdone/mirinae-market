@@ -85,7 +85,6 @@ export function OfferCard({
             <p className="comparison-price">
               {offer.comparisonUnit}당{" "}
               {offer.comparisonPriceWon.toLocaleString("ko-KR", {
-                minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
               원

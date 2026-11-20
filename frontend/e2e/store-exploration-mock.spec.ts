@@ -34,7 +34,7 @@ async function mockMarket(page: Page) {
     endTime: "18:00:00",
     orderDeadline: "13:00:00",
     comparisonUnit: "1개",
-    comparisonPriceWon: 1000,
+    comparisonPriceWon: index === 2 ? 1300.5 : 1000,
   });
   const store = { id: 10, marketId: 1, name: "효자동 청과" };
   await page.clock.install({ time: new Date("2026-10-13T03:00:00Z") });
@@ -286,6 +286,7 @@ test("시장 상품은 카드형·목록형 모두 담은 뒤 목록과 종류 �
       .getByRole("button", { name: "장바구니 담기" })
       .click();
     expect((await request).postDataJSON()).toEqual({ marketId: 1, quantity: 1 });
+    await expect(page.locator(".toast-region")).toHaveText("장바구니에 담았습니다.");
     await expect(page.locator(".offer-card")).toHaveCount(20);
     await expect(page.getByTestId("cart-count")).toHaveText("1");
     await expect(page).not.toHaveURL(/#cart$/);
@@ -295,10 +296,55 @@ test("시장 상품은 카드형·목록형 모두 담은 뒤 목록과 종류 �
   }
 });
 
+test("매장 담기 토스트는 모바일에 맞으며 실패하면 담기 안내를 표시하지 않는다", async ({
+  page,
+}) => {
+  await mockMarket(page);
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const response = page.waitForResponse(
+    (value) => new URL(value.url()).pathname === "/api/markets/1/stores/10/offers",
+  );
+  await page.goto("/#market?market=1&tab=stores&store=10");
+  const offer = ((await (await response).json()) as { items: OfferView[] }).items[0]!;
+  let fail = false;
+  await page.route("**/api/buyer/cart/items/101", (route) =>
+    route.fulfill(
+      fail
+        ? { status: 409, json: { code: "CART_LIMIT_EXCEEDED", message: "상품을 담지 못했습니다." } }
+        : {
+            json: {
+              version: 1,
+              items: [{ offer, quantity: 1, expectedPrice: offer.priceWon, available: true }],
+            },
+          },
+    ),
+  );
+  const add = page.locator(".offer-card").first().getByRole("button", { name: "장바구니 담기" });
+  await add.click();
+  const toast = page.locator(".toast-region--cart .toast-message-pill");
+  await expect(toast).toHaveText("장바구니에 담았습니다.");
+  const box = await toast.boundingBox();
+  expect(box?.x).toBeGreaterThan(0);
+  expect(box!.x + box!.width).toBeLessThan(320);
+  await expect(page.getByTestId("cart-count")).toHaveCSS("animation-name", "none");
+  await expect(page.locator("#heading-store-page")).toBeVisible();
+
+  await page.clock.fastForward(2400);
+  await expect(toast).toHaveCount(0);
+  fail = true;
+  await add.click();
+  await expect(page.getByText("상품을 담지 못했습니다.", { exact: true })).toBeVisible();
+  await expect(toast).toHaveCount(0);
+  await expect(page.getByTestId("cart-count")).toHaveText("1");
+});
+
 test("검색·탭 전환이 초기 시장·지역 조회를 반복하지 않는다", async ({ page }) => {
   const calls = await mockMarket(page);
   await page.goto("/#market?market=1");
   await expect(page.locator(".offer-card")).toHaveCount(20);
+  await expect(page.locator(".comparison-price").first()).toHaveText("1개당 1,000원");
+  await expect(page.locator(".comparison-price").nth(1)).toHaveText("1개당 1,300.5원");
   await page.waitForLoadState("networkidle");
   const initial = { ...calls };
   expect(initial.markets).toBeGreaterThan(0);
@@ -491,6 +537,29 @@ test("상품 보기 전환은 재조회 없이 같은 상품을 배치하고 매
   await page.getByRole("button", { name: "2페이지", exact: true }).click();
   await expect(page.getByRole("heading", { name: "사과 21", exact: true })).toBeVisible();
   await expect(list).toHaveAttribute("aria-pressed", "true");
+});
+
+test("상품 상세 수량 조절기는 화면 폭과 관계없이 버튼과 입력칸 크기만 차지한다", async ({
+  page,
+}) => {
+  await mockMarket(page);
+  await page.goto("/#market?market=1&offer=101");
+  const picker = page.locator(".detail-purchase .quantity-picker");
+  await expect(picker).toBeVisible();
+
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const controlWidths = await picker.evaluate((element) => ({
+      outer: element.getBoundingClientRect().width,
+      inner: element.clientWidth,
+      children: Array.from(element.querySelectorAll("button, input")).map(
+        (control) => control.getBoundingClientRect().width,
+      ),
+    }));
+    expect(controlWidths.children).toEqual([44, 52, 44]);
+    expect(controlWidths.inner).toBe(140);
+    expect(controlWidths.outer).toBe(142);
+  }
 });
 
 test("상품 상세는 PC에서 사진과 정보를 나란히 두고 기본 그림은 여백 안에 작게 표시한다", async ({

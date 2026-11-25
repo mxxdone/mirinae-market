@@ -144,22 +144,30 @@ test.describe.serial("Phase 5 실제 주문 운영", () => {
     await expect(card.locator(".pickup-code-box")).toContainText(
       order.pickupCode ?? "missing-code",
     );
-    const stale = await holdFirstResponse(page, "**/api/buyer/orders");
+    const cancel = page.locator(`#btnCancelOrder-${order.id}`);
+    const refresh = await holdFirstResponse(page, "**/api/buyer/orders");
     await page.locator("#btnRefreshOrders").click();
-    await stale.arrived;
+    await refresh.arrived;
+    try {
+      await expect(cancel).toBeDisabled();
+    } finally {
+      await refresh.release();
+    }
+    await expect(cancel).toBeEnabled();
     const keys = await loseFirstMutationResponse(
       page,
       `**/api/buyer/store-orders/${order.id}/cancellations`,
     );
-    await page.locator(`#btnCancelOrder-${order.id}`).click();
-    await page.locator("#btnConfirmCancellation").click();
-    await expect(page.locator("#btnRetryCancellation")).toBeVisible();
-    await expect(page.locator("#btnConfirmCancellation")).toBeEnabled();
-    await page.locator("#btnConfirmCancellation").click();
+    await cancel.click();
+    const dialog = page.getByRole("dialog");
+    const confirm = dialog.locator("#btnConfirmCancellation");
+    await confirm.click();
+    await expect(dialog.getByRole("alert")).toBeVisible();
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+    await expect(page.locator(`#storeOrderStatus-${order.id}`)).toHaveText("취소 완료");
     expect(keys).toHaveLength(2);
     expect(keys[1]).toBe(keys[0]);
-    await stale.release();
-    await expect(page.locator(`#storeOrderStatus-${order.id}`)).toHaveText("취소 완료");
     await refundCompleted(page, order, "2000");
     await card.screenshot({ path: "../.local/verification/phase5-general-cancelled.png" });
   });

@@ -322,7 +322,7 @@
 - GET /api/markets: 시장 목록. GET /api/markets/{marketId}/offers?query=&page=0&size=20: 오늘 판매 검색. GET /api/markets/{marketId}/offers/{offerId}: 공개 상세.
 - POST /api/seller/stores/{storeId}/products: 상품 등록(201). GET /api/seller/stores/{storeId}/products?page=0&size=20: 본인 상품 목록. GET /api/seller/stores/{storeId}/products/{productId}: 본인 미삭제 상품 조회, 없는 상품·삭제 상품은 404. PUT /api/seller/stores/{storeId}/products/{productId}: 상품 수정. DELETE 같은 경로: 이력을 보존하는 단건 삭제(204).
 - GET /api/seller/stores/{storeId}/pickup-windows/{pickupDate}: 오늘의 저장된 본인 매장 수령 시간(미등록 404). PUT /api/seller/stores/{storeId}/pickup-windows/{pickupDate}: 매장 수령 시간 등록·수정. PUT /api/seller/stores/{storeId}/products/{productId}/offers/{pickupDate}: 날짜별 판매 조건 등록·수정(200).
-- Given 양파 3kg 상품과 별도 WEIGHT·3000 입력 / When 9,000원·20포장으로 오늘 판매 등록 / Then 실제 DB에 저장되고 해당 시장에서 포장 가격 9,000원·100g당 300.00원이 표시된다.
+- Given 양파 3kg 상품과 별도 WEIGHT·3000 입력 / When 9,000원·20포장으로 오늘 판매 등록 / Then 실제 DB에 저장되고 해당 시장에서 포장 가격 9,000원·100g당 300원이 표시된다.
 - Given 1kg 10,000원과 100g 1,500원 상품 / When 검색 / Then 각 보조 가격은 100g당 1,000원과 1,500원이며 상품을 자동 묶거나 가격순 정렬하지 않는다. 비교 가격의 소수는 반올림한 값에서 필요한 자리만 표시한다.
 - Given 서로 다른 시장의 상품 / When 한 시장에서 검색·상세 조회 / Then 타 시장 상품은 목록에 없고 타 시장 상세는 404다.
 - Given 매장 주문 마감 직전·정각 / When 당일 판매 조건을 등록·수정 / Then 직전은 허용하고 정각부터 400으로 거절하며 공개 검색·상세에서 제외된다. 자정부터 검색 날짜는 새 오늘로 바뀌지만 기존 상품은 자동 재공개되지 않는다.

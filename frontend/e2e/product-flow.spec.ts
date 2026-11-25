@@ -190,7 +190,7 @@ test("판매자 kg 입력→일괄 공개→구매자 시장 검색·상세·타
     await buyerPage.getByRole("button", { name: "상품 검색", exact: true }).click();
     const card = buyerPage.locator(".offer-card").filter({ hasText: name });
     await expect(card).toContainText("9,000");
-    await expect(card).toContainText("100g당 300.00원");
+    await expect(card).toContainText("100g당 300원");
     await card.locator(".offer-product-name").click();
     await expect(buyerPage.getByRole("heading", { name, exact: true })).toBeVisible();
     await expect(buyerPage.getByText("15:00~19:00", { exact: false })).toBeVisible();

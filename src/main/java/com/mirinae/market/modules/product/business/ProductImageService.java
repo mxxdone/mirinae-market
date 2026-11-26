@@ -11,16 +11,18 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-@Transactional(readOnly = true)
 public class ProductImageService {
   private final ProductImageData data;
   private final ProductImageFiles files;
   private final ProductData products;
   private final StoreService stores;
   private final Clock clock;
+  private final TransactionTemplate staging;
   private final Semaphore processing = new Semaphore(2);
 
   public ProductImageService(
@@ -28,15 +30,17 @@ public class ProductImageService {
       ProductImageFiles files,
       ProductData products,
       StoreService stores,
-      Clock clock) {
+      Clock clock,
+      PlatformTransactionManager transactions) {
     this.data = data;
     this.files = files;
     this.products = products;
     this.stores = stores;
     this.clock = clock;
+    this.staging = new TransactionTemplate(transactions);
   }
 
-  @Transactional
+  /** 파일 처리 중 JDBC 연결을 보유하지 않도록 소유권 확인과 메타데이터 저장을 짧게 수행한다. */
   public ProductImageView upload(String actor, long store, byte[] bytes) {
     stores.ownedStore(actor, store);
     ProductImageRules.validate(1, 1, bytes.length);
@@ -47,14 +51,20 @@ public class ProductImageService {
       ProductImageRules.validate(size[0], size[1], bytes.length);
       String id = UUID.randomUUID().toString();
       int[] oriented = files.store(id, bytes);
-      var now = clock.instant();
-      data.stage(id, store, oriented[0], oriented[1], now, now.plus(Duration.ofHours(24)));
-      return view(data.lock(id).orElseThrow());
+      // 커밋 결과가 불명확하면 미사용 파일 정리에서 DB 상태를 확인한 뒤 삭제한다.
+      staging.executeWithoutResult(
+          status -> {
+            stores.ownedStore(actor, store);
+            var now = clock.instant();
+            data.stage(id, store, oriented[0], oriented[1], now, now.plus(Duration.ofHours(24)));
+          });
+      return view(id, oriented[0], oriented[1]);
     } finally {
       processing.release();
     }
   }
 
+  @Transactional(readOnly = true)
   public ProductImageView current(String actor, long store, long product) {
     stores.ownedStore(actor, store);
     products.product(store, product).orElseThrow(ProductNotFoundException::new);
@@ -63,6 +73,7 @@ public class ProductImageService {
 
   public record PublicImage(long productId, ProductImageView image) {}
 
+  @Transactional(readOnly = true)
   public List<PublicImage> publicImages(long market, List<Long> ids) {
     if (ids == null
         || ids.isEmpty()
@@ -102,6 +113,7 @@ public class ProductImageService {
     data.retire(product, clock.instant().plus(Duration.ofHours(24)));
   }
 
+  @Transactional(readOnly = true)
   public byte[] content(String id, int edge) {
     ProductImageRules.key(id);
     if (edge != 256 && edge != 768 && edge != 1600) throw new ProductNotFoundException();
@@ -129,14 +141,18 @@ public class ProductImageService {
   }
 
   private static ProductImageView view(ProductImageRow row) {
+    return view(row.id(), row.width(), row.height());
+  }
+
+  private static ProductImageView view(String id, int width, int height) {
     return new ProductImageView(
-        row.id(),
+        id,
         java.util.stream.Stream.of(256, 768, 1600)
             .map(
                 edge -> {
-                  var size = ProductImageRules.scaled(row.width(), row.height(), edge);
+                  var size = ProductImageRules.scaled(width, height, edge);
                   return new ProductImageView.Variant(
-                      edge, size[0], size[1], "/media/products/" + row.id() + "/" + edge + ".jpg");
+                      edge, size[0], size[1], "/media/products/" + id + "/" + edge + ".jpg");
                 })
             .toList());
   }

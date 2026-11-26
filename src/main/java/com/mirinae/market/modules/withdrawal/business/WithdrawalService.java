@@ -1,8 +1,9 @@
 package com.mirinae.market.modules.withdrawal.business;
 
-import com.mirinae.market.modules.account.business.AccountService;
-import com.mirinae.market.modules.auth.business.OAuthService;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
 
 /**
  * 구매자 탈퇴 오케스트레이터다. 트랜잭션 경계는 {@link WithdrawalTransaction}이 소유하고, 이 클래스는 비트랜잭션으로 남아 commit 시점 실패까지
@@ -15,37 +16,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class WithdrawalService {
   private final WithdrawalTransaction transaction;
-  private final AccountService accounts;
-  private final OAuthService oauth;
 
-  public WithdrawalService(
-      WithdrawalTransaction transaction, AccountService accounts, OAuthService oauth) {
+  public WithdrawalService(WithdrawalTransaction transaction) {
     this.transaction = transaction;
-    this.accounts = accounts;
-    this.oauth = oauth;
   }
 
   /** 트랜잭션 밖에서 호출해 commit 실패를 잡는다. 잠금 순서·검증은 트랜잭션 빈이 보존한다. */
   public void withdraw(String loginId, String password, String reauthFlowId, String sid) {
-    boolean externalConnectionRemoved =
-        accounts.linkedIdentities(accounts.current(loginId).id()).stream()
-            .anyMatch(identity -> "kakao".equals(identity.provider()));
+    var externalConnectionRemoved = new AtomicBoolean();
     try {
-      transaction.withdraw(loginId, password, reauthFlowId, sid);
-    } catch (org.springframework.dao.DataAccessException failure) {
-      // JpaSystemException을 포함한 모든 DB 접근 실패가 이 상위 타입으로 잡힌다.
-      throw partialIfExternal(externalConnectionRemoved, failure);
-    } catch (org.springframework.transaction.TransactionException failure) {
-      throw partialIfExternal(externalConnectionRemoved, failure);
+      transaction.withdraw(
+          loginId, password, reauthFlowId, sid, () -> externalConnectionRemoved.set(true));
+    } catch (DataAccessException | TransactionException failure) {
+      if (externalConnectionRemoved.get()) throw new WithdrawalPartialFailureException(failure);
+      throw failure;
     }
-  }
-
-  /** 외부 연결 해제가 이미 성공했으면 부분 실패로 변환하고, 아니면 원래 저장 실패를 그대로 전달한다. */
-  private static RuntimeException partialIfExternal(
-      boolean externalConnectionRemoved, RuntimeException failure) {
-    if (externalConnectionRemoved) {
-      return new WithdrawalPartialFailureException(failure);
-    }
-    return failure;
   }
 }

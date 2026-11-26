@@ -1,16 +1,25 @@
 package com.mirinae.market.modules.checkout.data;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class FulfillmentData {
+  private static final String CONFIRMED_ORDERS =
+      "SELECT s.*,c.buyer_id FROM store_orders s JOIN checkouts c ON c.id=s.checkout_id WHERE c.status='CONFIRMED' ";
   private final JdbcTemplate jdbc;
 
   public FulfillmentData(JdbcTemplate jdbc) {
@@ -18,42 +27,24 @@ public class FulfillmentData {
   }
 
   public Optional<StoreOrderRow> order(long id) {
-    return jdbc
-        .query(
-            "SELECT s.*,c.buyer_id FROM store_orders s JOIN checkouts c ON c.id=s.checkout_id WHERE s.id=? AND c.status='CONFIRMED'",
-            (rs, n) ->
-                new StoreOrderRow(
-                    rs.getLong("id"),
-                    rs.getLong("checkout_id"),
-                    rs.getLong("buyer_id"),
-                    rs.getLong("store_id"),
-                    rs.getString("store_name"),
-                    rs.getObject("pickup_date", LocalDate.class),
-                    rs.getObject("start_time", LocalTime.class),
-                    rs.getObject("end_time", LocalTime.class),
-                    rs.getObject("order_deadline", LocalTime.class),
-                    rs.getString("pickup_code"),
-                    instant(rs.getTimestamp("picked_up_at")),
-                    rs.getLong("market_id"),
-                    rs.getString("market_name")),
-            id)
-        .stream()
-        .findFirst();
+    return orders(CONFIRMED_ORDERS + "AND s.id=?", id).stream().findFirst();
   }
 
   public void lockOrder(long id) {
     jdbc.queryForObject("SELECT id FROM store_orders WHERE id=? FOR UPDATE", Long.class, id);
   }
 
-  public List<Long> checkoutOrders(long checkoutId) {
-    return jdbc.queryForList(
-        "SELECT id FROM store_orders WHERE checkout_id=? ORDER BY id", Long.class, checkoutId);
+  public List<StoreOrderRow> checkoutOrders(List<Long> checkoutIds) {
+    if (checkoutIds.isEmpty()) return List.of();
+    return orders(
+        CONFIRMED_ORDERS + "AND s.checkout_id IN (" + placeholders(checkoutIds) + ") ORDER BY s.id",
+        checkoutIds.toArray());
   }
 
-  public List<Long> sellerOrders(long store, LocalDate date, int page) {
-    return jdbc.queryForList(
-        "SELECT id FROM store_orders WHERE store_id=? AND pickup_date=? ORDER BY id DESC LIMIT 51 OFFSET ?",
-        Long.class,
+  public List<StoreOrderRow> sellerOrders(long store, LocalDate date, int page) {
+    return orders(
+        CONFIRMED_ORDERS
+            + "AND s.store_id=? AND s.pickup_date=? ORDER BY s.id DESC LIMIT 51 OFFSET ?",
         store,
         date,
         page * 50);
@@ -62,19 +53,12 @@ public class FulfillmentData {
   public List<OrderItemRow> items(long order) {
     return jdbc.query(
         "SELECT * FROM order_items WHERE store_order_id=? ORDER BY id",
-        (rs, n) ->
-            new OrderItemRow(
-                rs.getLong("id"),
-                rs.getLong("offer_id"),
-                rs.getString("product_name"),
-                rs.getString("unit_type"),
-                rs.getInt("unit_amount"),
-                rs.getInt("price_won"),
-                rs.getInt("quantity"),
-                instant(rs.getTimestamp("cancelled_at")),
-                rs.getString("cancellation_type"),
-                rs.getString("cancellation_reason")),
+        (rs, n) -> itemRow(rs),
         order);
+  }
+
+  public Map<Long, List<OrderItemRow>> itemsByOrder(List<Long> orderIds) {
+    return groupByOrder("order_items", orderIds, (rs, n) -> itemRow(rs));
   }
 
   public Optional<OperationRow> operation(long actor, String key) {
@@ -129,6 +113,10 @@ public class FulfillmentData {
 
   public List<RefundRow> refunds(long order) {
     return refundRows("SELECT * FROM refunds WHERE store_order_id=? ORDER BY id", order);
+  }
+
+  public Map<Long, List<RefundRow>> refundsByOrder(List<Long> orderIds) {
+    return groupByOrder("refunds", orderIds, (rs, n) -> refundRow(rs));
   }
 
   public List<RefundRow> managedRefunds(int page) {
@@ -206,21 +194,82 @@ public class FulfillmentData {
   }
 
   private List<RefundRow> refundRows(String sql, Object... args) {
+    return jdbc.query(sql, (rs, n) -> refundRow(rs), args);
+  }
+
+  private List<StoreOrderRow> orders(String sql, Object... args) {
     return jdbc.query(
         sql,
         (rs, n) ->
-            new RefundRow(
+            new StoreOrderRow(
                 rs.getLong("id"),
-                rs.getLong("store_order_id"),
-                rs.getLong("amount_won"),
-                rs.getString("status"),
-                rs.getString("mode"),
-                rs.getInt("attempts"),
-                rs.getString("last_error"),
-                instant(rs.getTimestamp("due_at")),
-                instant(rs.getTimestamp("created_at")),
-                instant(rs.getTimestamp("completed_at"))),
+                rs.getLong("checkout_id"),
+                rs.getLong("buyer_id"),
+                rs.getLong("store_id"),
+                rs.getString("store_name"),
+                rs.getObject("pickup_date", LocalDate.class),
+                rs.getObject("start_time", LocalTime.class),
+                rs.getObject("end_time", LocalTime.class),
+                rs.getObject("order_deadline", LocalTime.class),
+                rs.getString("pickup_code"),
+                instant(rs.getTimestamp("picked_up_at")),
+                rs.getLong("market_id"),
+                rs.getString("market_name")),
         args);
+  }
+
+  private static OrderItemRow itemRow(ResultSet rs) throws SQLException {
+    return new OrderItemRow(
+        rs.getLong("id"),
+        rs.getLong("offer_id"),
+        rs.getString("product_name"),
+        rs.getString("unit_type"),
+        rs.getInt("unit_amount"),
+        rs.getInt("price_won"),
+        rs.getInt("quantity"),
+        instant(rs.getTimestamp("cancelled_at")),
+        rs.getString("cancellation_type"),
+        rs.getString("cancellation_reason"));
+  }
+
+  private static RefundRow refundRow(ResultSet rs) throws SQLException {
+    return new RefundRow(
+        rs.getLong("id"),
+        rs.getLong("store_order_id"),
+        rs.getLong("amount_won"),
+        rs.getString("status"),
+        rs.getString("mode"),
+        rs.getInt("attempts"),
+        rs.getString("last_error"),
+        instant(rs.getTimestamp("due_at")),
+        instant(rs.getTimestamp("created_at")),
+        instant(rs.getTimestamp("completed_at")));
+  }
+
+  private <T> Map<Long, List<T>> groupByOrder(
+      String table, List<Long> orderIds, RowMapper<T> mapper) {
+    if (orderIds.isEmpty()) return Map.of();
+    return jdbc.query(
+        "SELECT * FROM "
+            + table
+            + " WHERE store_order_id IN ("
+            + placeholders(orderIds)
+            + ") ORDER BY id",
+        rs -> {
+          var groups = new HashMap<Long, List<T>>();
+          int row = 0;
+          while (rs.next()) {
+            groups
+                .computeIfAbsent(rs.getLong("store_order_id"), id -> new ArrayList<>())
+                .add(mapper.mapRow(rs, row++));
+          }
+          return groups;
+        },
+        orderIds.toArray());
+  }
+
+  private static String placeholders(List<Long> ids) {
+    return String.join(",", Collections.nCopies(ids.size(), "?"));
   }
 
   private static Instant instant(Timestamp value) {

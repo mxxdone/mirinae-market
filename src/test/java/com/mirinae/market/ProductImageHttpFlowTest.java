@@ -1,10 +1,18 @@
 package com.mirinae.market;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.product.business.ProductImageService;
 import com.mirinae.market.modules.product.business.ProductService;
+import com.mirinae.market.modules.product.data.ProductImageData;
+import com.mirinae.market.modules.product.data.ProductImageFiles;
 import com.mirinae.market.modules.store.business.StoreService;
 import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
@@ -30,6 +38,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -53,6 +63,8 @@ class ProductImageHttpFlowTest {
   @Autowired private ProductService products;
   @Autowired private ProductImageService images;
   @Autowired private JdbcTemplate jdbc;
+  @MockitoSpyBean private ProductImageFiles files;
+  @MockitoSpyBean private ProductImageData metadata;
   private String seller;
   private long store;
   private long market;
@@ -120,6 +132,38 @@ class ProductImageHttpFlowTest {
     return "{\"name\":\"사진 상품\",\"unitType\":\"COUNT\",\"unitAmount\":1,\"description\":\"\",\"imageId\":\""
         + image
         + "\"}";
+  }
+
+  @Test
+  void uploadWritesImageOutsideTransactionAndStagesMetadataInsideTransaction() throws Exception {
+    doAnswer(
+            invocation -> {
+              assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+              assertThat(TransactionSynchronizationManager.isSynchronizationActive()).isFalse();
+              return invocation.callRealMethod();
+            })
+        .when(files)
+        .store(anyString(), any(byte[].class));
+    doAnswer(
+            invocation -> {
+              assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+              return invocation.callRealMethod();
+            })
+        .when(metadata)
+        .stage(anyString(), eq(store), anyInt(), anyInt(), any(Instant.class), any(Instant.class));
+
+    try (var session = login()) {
+      var upload = upload(session, png(20, 10), true);
+      assertThat(upload.statusCode()).isEqualTo(200);
+      String id = session.json(upload).get("id").asString();
+      verify(files).store(eq(id), any(byte[].class));
+      verify(metadata)
+          .stage(eq(id), eq(store), eq(20), eq(10), any(Instant.class), any(Instant.class));
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT state FROM product_images WHERE id=?", String.class, UUID.fromString(id)))
+          .isEqualTo("STAGED");
+    }
   }
 
   @Test

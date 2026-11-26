@@ -1,11 +1,16 @@
 package com.mirinae.market.modules.checkout.business;
 
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionException;
 
 @Service
 public class CheckoutService {
+  private static final Logger LOG = LoggerFactory.getLogger(CheckoutService.class);
   private final CheckoutTransactions transactions;
 
   public CheckoutService(CheckoutTransactions transactions) {
@@ -78,8 +83,12 @@ public class CheckoutService {
   @Scheduled(fixedDelay = 500, initialDelay = 500)
   public void recover() {
     for (var row : transactions.due()) {
-      transactions.attempted(row.id());
-      transactions.finish(row.buyerId(), row.requestKey());
+      try {
+        transactions.attempted(row.id());
+        transactions.finish(row.buyerId(), row.requestKey());
+      } catch (DataAccessException | TransactionException failure) {
+        LOG.error("결제 요청 {}의 저장 상태를 다음 복구에서 다시 확인합니다.", row.id(), failure);
+      }
     }
   }
 }

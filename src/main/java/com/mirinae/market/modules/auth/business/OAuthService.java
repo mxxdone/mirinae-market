@@ -422,15 +422,19 @@ public class OAuthService {
     }
   }
 
-  /** 탈퇴 시 제공자 연결을 해제한다. 카카오 외 제공자는 서비스 내 연결 삭제만 한다. */
-  public void unlinkIdentities(long accountId) {
+  /** 탈퇴 시 카카오 연결 해제가 확인되면 true를 반환한다. 다른 제공자는 서비스 내 연결만 삭제한다. */
+  public boolean unlinkIdentities(long accountId) {
+    boolean kakaoUnlinked = false;
     for (var identity : accounts.linkedIdentities(accountId)) {
+      if (!"kakao".equals(identity.provider())) continue;
       try {
         providers.unlink(identity.provider(), identity.subject());
+        kakaoUnlinked = true;
       } catch (OAuthProviderUnavailableException exception) {
         throw AuthException.providerError();
       }
     }
+    return kakaoUnlinked;
   }
 
   private OAuthFlowRecord saveFlow(OAuthFlowRecord flow, AuthPolicy policy) {

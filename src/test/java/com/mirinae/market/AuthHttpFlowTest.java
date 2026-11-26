@@ -275,6 +275,8 @@ class AuthHttpFlowTest {
               true);
       assertThat(socialSignup.statusCode()).isEqualTo(200);
       client.captureAccess(socialSignup);
+      long accountId =
+          jdbc.queryForObject("SELECT id FROM accounts WHERE email=?", Long.class, email);
 
       // 재인증 없이는 소셜 전용 계정 탈퇴가 거부된다.
       client.refreshCsrf();
@@ -288,6 +290,12 @@ class AuthHttpFlowTest {
       startFlow(client, "kakao", "withdraw");
       callback(client, "kakao", reauthCode);
       assertThat(flow(client).body()).contains("REAUTH");
+
+      assertWithdrawalCommitFailure(client, accountId, subject);
+
+      client.refreshCsrf();
+      startFlow(client, "kakao", "withdraw");
+      callback(client, "kakao", provider.issueCode("kakao", subject, "탈퇴손님", email));
       HttpResponse<String> withdrawn =
           client.post("/api/buyer/withdrawal", "{}", "application/json", true);
       assertThat(withdrawn.statusCode()).isEqualTo(204);
@@ -295,10 +303,50 @@ class AuthHttpFlowTest {
       assertThat(provider.unlinkCount(subject)).isEqualTo(1);
       assertThat(
               jdbc.queryForObject(
-                  "SELECT withdrawn_at FROM accounts WHERE email LIKE '%@example.invalid' AND withdrawn_at IS NOT NULL ORDER BY id DESC LIMIT 1",
-                  java.sql.Timestamp.class))
+                  "SELECT withdrawn_at FROM accounts WHERE id=?",
+                  java.sql.Timestamp.class,
+                  accountId))
           .isNotNull();
       assertThat(client.get("/api/auth/me").statusCode()).isEqualTo(401);
+    }
+  }
+
+  private void assertWithdrawalCommitFailure(
+      HttpSessionClient client, long accountId, String subject) throws Exception {
+    String trigger = "withdrawal_commit_" + accountId;
+    jdbc.execute(
+        "CREATE FUNCTION "
+            + trigger
+            + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'withdrawal commit failed'; END $$");
+    jdbc.execute(
+        "CREATE CONSTRAINT TRIGGER "
+            + trigger
+            + " AFTER UPDATE ON accounts DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.id="
+            + accountId
+            + " AND NEW.withdrawn_at IS NOT NULL) EXECUTE FUNCTION "
+            + trigger
+            + "()");
+    try {
+      var failed = client.post("/api/buyer/withdrawal", "{}", "application/json", true);
+      assertThat(failed.statusCode()).isEqualTo(500);
+      assertThat(failed.body()).contains("WITHDRAWAL_INCOMPLETE");
+      assertThat(provider.unlinkCount(subject)).isEqualTo(1);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT withdrawn_at FROM accounts WHERE id=?",
+                  java.sql.Timestamp.class,
+                  accountId))
+          .isNull();
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT count(*) FROM social_identities WHERE account_id=?",
+                  Long.class,
+                  accountId))
+          .isEqualTo(1);
+      assertThat(client.get("/api/auth/me").statusCode()).isEqualTo(200);
+    } finally {
+      jdbc.execute("DROP TRIGGER " + trigger + " ON accounts");
+      jdbc.execute("DROP FUNCTION " + trigger + "()");
     }
   }
 

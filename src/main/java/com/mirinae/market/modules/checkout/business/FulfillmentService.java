@@ -1,8 +1,13 @@
 package com.mirinae.market.modules.checkout.business;
 
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
+
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.checkout.data.FulfillmentData;
 import com.mirinae.market.modules.checkout.data.OrderItemRow;
+import com.mirinae.market.modules.checkout.data.RefundRow;
 import com.mirinae.market.modules.checkout.data.StoreOrderRow;
 import com.mirinae.market.modules.product.business.InventoryService;
 import com.mirinae.market.modules.product.business.ProductNotFoundException;
@@ -12,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
@@ -47,12 +53,21 @@ public class FulfillmentService {
   }
 
   public List<StoreOrderView> checkoutOrders(long checkoutId) {
-    return data.checkoutOrders(checkoutId).stream().map(id -> view(id, true)).toList();
+    return views(data.checkoutOrders(List.of(checkoutId)), true);
+  }
+
+  Map<Long, List<StoreOrderView>> checkoutOrderGroups(List<Long> checkoutIds) {
+    var orders = data.checkoutOrders(checkoutIds);
+    var details = details(orders);
+    return orders.stream()
+        .collect(
+            groupingBy(
+                StoreOrderRow::checkoutId, mapping(row -> view(row, details, true), toList())));
   }
 
   public List<StoreOrderView> managedOrders(String actor, long checkoutId) {
     accounts.requireAdministrator(actor);
-    return data.checkoutOrders(checkoutId).stream().map(id -> view(id, false)).toList();
+    return views(data.checkoutOrders(List.of(checkoutId)), false);
   }
 
   public StoreOrderView buyerOrder(String actor, long id) {
@@ -68,11 +83,11 @@ public class FulfillmentService {
 
   public StoreOrderPage sellerOrders(String actor, long store, LocalDate date, int page) {
     stores.ownedStore(actor, store);
-    var ids =
+    var orders =
         data.sellerOrders(
             store, date == null ? now().toLocalDate() : date, FulfillmentRules.page(page));
-    return new StoreOrderPage(
-        ids.stream().limit(50).map(id -> view(id, false)).toList(), page, ids.size() > 50);
+    var pageOrders = orders.subList(0, Math.min(orders.size(), 50));
+    return new StoreOrderPage(views(pageOrders, false), page, orders.size() > 50);
   }
 
   @Transactional
@@ -245,15 +260,38 @@ public class FulfillmentService {
   }
 
   private StoreOrderView view(long id, boolean buyer) {
-    var row = order(id);
-    var items = data.items(id);
-    var refunds = data.refunds(id);
+    return view(order(id), data.items(id), data.refunds(id), buyer);
+  }
+
+  private List<StoreOrderView> views(List<StoreOrderRow> orders, boolean buyer) {
+    var details = details(orders);
+    return orders.stream().map(row -> view(row, details, buyer)).toList();
+  }
+
+  private OrderDetails details(List<StoreOrderRow> orders) {
+    var ids = orders.stream().map(StoreOrderRow::id).toList();
+    return new OrderDetails(data.itemsByOrder(ids), data.refundsByOrder(ids));
+  }
+
+  private record OrderDetails(
+      Map<Long, List<OrderItemRow>> items, Map<Long, List<RefundRow>> refunds) {}
+
+  private StoreOrderView view(StoreOrderRow row, OrderDetails details, boolean buyer) {
+    return view(
+        row,
+        details.items().getOrDefault(row.id(), List.of()),
+        details.refunds().getOrDefault(row.id(), List.of()),
+        buyer);
+  }
+
+  private StoreOrderView view(
+      StoreOrderRow row, List<OrderItemRow> items, List<RefundRow> refunds, boolean buyer) {
     boolean remaining = hasRemaining(items),
         failure = hasFailure(items),
         pickedUp = row.pickedUpAt() != null;
     var current = now();
     return new StoreOrderView(
-        id,
+        row.id(),
         row.storeId(),
         row.storeName(),
         row.pickupDate(),

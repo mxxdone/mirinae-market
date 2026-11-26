@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.mirinae.market.modules.account.business.AccountService;
 import com.mirinae.market.modules.checkout.business.CheckoutService;
+import com.mirinae.market.modules.checkout.business.FulfillmentService;
 import com.mirinae.market.modules.checkout.business.RefundService;
 import com.mirinae.market.modules.checkout.business.StoreOrderView;
 import com.mirinae.market.modules.store.business.StoreService;
@@ -11,16 +12,25 @@ import com.mirinae.market.support.HttpSessionClient;
 import com.mirinae.market.support.PostgresTestConfig;
 import com.mirinae.market.support.RedisTestConfig;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementSetter;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(
@@ -30,18 +40,24 @@ import tools.jackson.databind.json.JsonMapper;
       "admin.bootstrap.login-id=fulfillment_admin", "admin.bootstrap.password=Admin1234!",
       "admin.bootstrap.email=fulfillment-admin@example.com"
     })
-@Import({PostgresTestConfig.class, RedisTestConfig.class, ProductHttpFlowTest.TimeConfig.class})
+@Import({
+  PostgresTestConfig.class,
+  RedisTestConfig.class,
+  ProductHttpFlowTest.TimeConfig.class,
+  FulfillmentHttpFlowTest.OrderQueryCountConfig.class
+})
 class FulfillmentHttpFlowTest {
   @Autowired private AccountService accounts;
   @Autowired private StoreService stores;
   @Autowired private CheckoutService checkout;
+  @Autowired private FulfillmentService fulfillment;
   @Autowired private RefundService refunds;
 
   @Autowired
   private com.mirinae.market.modules.checkout.business.RefundTransactions refundTransactions;
 
   @Autowired private com.mirinae.market.modules.checkout.business.MockRefundService mockRefunds;
-  @Autowired private JdbcTemplate jdbc;
+  @Autowired private OrderQueryJdbcTemplate jdbc;
   @Autowired private ProductHttpFlowTest.TestClock clock;
 
   @Value("${local.server.port}")
@@ -85,6 +101,78 @@ class FulfillmentHttpFlowTest {
         store,
         product);
   }
+
+  @Test
+  void orderListQueryCountsStayConstantAsResultsGrow() {
+    var first = order();
+    var date = LocalDate.parse("2026-10-13");
+    var initialSeller =
+        jdbc.measure(() -> fulfillment.sellerOrders(seller, store, date, 0).items());
+    var initialBuyer = jdbc.measure(() -> checkout.history(buyer));
+    assertThat(initialSeller.result()).hasSize(1);
+    assertThat(initialBuyer.result()).hasSize(1);
+
+    var second = order();
+    var third = order();
+    var sellerOrders = jdbc.measure(() -> fulfillment.sellerOrders(seller, store, date, 0).items());
+    assertThat(sellerOrders.result())
+        .extracting(StoreOrderView::id)
+        .containsExactly(third.id(), second.id(), first.id());
+    assertThat(sellerOrders.result()).allMatch(order -> order.pickupCode() == null);
+    assertThat(sellerOrders.count()).isEqualTo(initialSeller.count()).isEqualTo(3);
+
+    var buyerOrders = jdbc.measure(() -> checkout.history(buyer));
+    assertThat(buyerOrders.result())
+        .flatExtracting(view -> view.storeOrders())
+        .containsExactly(third, second, first);
+    assertThat(buyerOrders.count()).isEqualTo(initialBuyer.count()).isEqualTo(4);
+  }
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class OrderQueryCountConfig {
+    @Bean
+    OrderQueryJdbcTemplate jdbcTemplate(DataSource dataSource) {
+      return new OrderQueryJdbcTemplate(dataSource);
+    }
+  }
+
+  private static final class OrderQueryJdbcTemplate extends JdbcTemplate {
+    private final ThreadLocal<List<String>> queriesByCaller = new ThreadLocal<>();
+
+    OrderQueryJdbcTemplate(DataSource dataSource) {
+      super(dataSource);
+    }
+
+    <T> MeasuredResult<T> measure(Supplier<T> query) {
+      var queries = new ArrayList<String>();
+      queriesByCaller.set(queries);
+      try {
+        T result = query.get();
+        long count =
+            queries.stream()
+                .filter(
+                    sql ->
+                        sql.contains("FROM store_orders")
+                            || sql.contains("FROM order_items")
+                            || sql.contains("FROM refunds")
+                            || sql.contains("FROM checkouts WHERE buyer_id="))
+                .count();
+        return new MeasuredResult<>(result, count);
+      } finally {
+        queriesByCaller.remove();
+      }
+    }
+
+    @Override
+    public <T> T query(
+        String sql, PreparedStatementSetter parameters, ResultSetExtractor<T> extractor) {
+      var queries = queriesByCaller.get();
+      if (queries != null) queries.add(sql);
+      return super.query(sql, parameters, extractor);
+    }
+  }
+
+  private record MeasuredResult<T>(T result, long count) {}
 
   @Test
   void providerErrorsStopAfterFourAttemptsAndDoNotBlockOtherRefunds() throws Exception {

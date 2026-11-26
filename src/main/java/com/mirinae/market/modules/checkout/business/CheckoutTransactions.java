@@ -345,7 +345,11 @@ public class CheckoutTransactions {
 
   @Transactional(readOnly = true)
   public List<CheckoutView> history(String loginId) {
-    return data.history(buyer(loginId)).stream().map(this::view).toList();
+    var history = data.history(buyer(loginId));
+    var orders = fulfillment.checkoutOrderGroups(history.stream().map(CheckoutRow::id).toList());
+    return history.stream()
+        .map(row -> view(row, orders.getOrDefault(row.id(), List.of())))
+        .toList();
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -377,6 +381,10 @@ public class CheckoutTransactions {
   }
 
   private CheckoutView view(CheckoutRow row) {
+    return view(row, fulfillment.checkoutOrders(row.id()));
+  }
+
+  private static CheckoutView view(CheckoutRow row, List<StoreOrderView> orders) {
     return new CheckoutView(
         row.id(),
         row.requestKey(),
@@ -384,6 +392,6 @@ public class CheckoutTransactions {
         row.errorCode(),
         row.message(),
         Long.toString(row.totalWon()),
-        fulfillment.checkoutOrders(row.id()));
+        orders);
   }
 }

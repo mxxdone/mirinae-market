@@ -58,6 +58,8 @@ DB 스키마는 Flyway가 생성하고 Hibernate는 검증만 한다. PostgreSQL
 
 Linux 검사 명령은 `bash ./gradlew check build`다. CI는 [GitHub Actions](https://github.com/mxxdone/mirinae-market/actions/workflows/backend.yml)에서 동일한 gate를 실행한다. 실행별 결과와 JUnit·PMD 보고서는 Actions에서 확인한다.
 
+백엔드 검사와 프런트엔드 E2E의 CI는 Java4Shell(CVE-2026-114938) 수정이 포함된 Temurin 패치 버전을 지정한다. 패치 버전을 올릴 때 두 워크플로의 JDK 설정을 함께 갱신하고 CI 결과를 확인한다. [Eclipse Adoptium 보안 공지](https://adoptium.net/news/2026/11/temurin-november-2026-cspu-java4shell)
+
 ## 데모
 
 `demo` 프로필에서만 아래 계정과 시장·매장이 생성된다. 비밀번호는 모두 `Demo1234!`다. 생성은 재기동 시 중복되지 않으며 기존 계정과 충돌하면 해당 계정을 변경하지 않고 기동이 실패한다. 데모 프로필을 끄는 것은 이미 저장한 데이터를 삭제하는 기능이 아니다.
